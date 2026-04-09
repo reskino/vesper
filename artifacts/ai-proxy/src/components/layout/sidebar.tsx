@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Code2, TerminalSquare, Bot, Database, History, Moon, Sun, Zap } from "lucide-react";
+import { MessageSquare, Code2, TerminalSquare, Bot, Database, History, Moon, Sun } from "lucide-react";
+import { VesperLogo } from "@/components/vesper-logo";
 
 const NAV = [
   { href: "/",         label: "Chat",     icon: MessageSquare },
@@ -31,12 +32,10 @@ export function Sidebar() {
       <aside className="hidden sm:flex w-60 shrink-0 flex-col border-r border-border bg-sidebar h-screen">
         <div className="px-4 pt-5 pb-4 border-b border-border/50">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center shrink-0">
-              <Zap className="h-4 w-4 text-primary-foreground" />
-            </div>
+            <VesperLogo size={34} />
             <div>
-              <p className="font-bold text-sm text-sidebar-foreground">AI Proxy</p>
-              <p className="text-[10px] text-muted-foreground font-mono">v0.1.0</p>
+              <p className="font-bold text-sm text-sidebar-foreground tracking-tight">Vesper</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">by Skinopro Tech Solutions</p>
             </div>
           </div>
         </div>

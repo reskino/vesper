@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
-  ChevronUp, Cpu, RefreshCw, AlertCircle, Check, Zap,
+  ChevronUp, Cpu, RefreshCw, AlertCircle, Check,
 } from "lucide-react";
+import { VesperLogo } from "@/components/vesper-logo";
 import { useQueryClient } from "@tanstack/react-query";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
@@ -227,11 +228,9 @@ export function Home() {
         {/* Mobile header */}
         <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="h-4 w-4 text-primary-foreground" />
-            </div>
+            <VesperLogo size={32} />
             <div>
-              <p className="font-bold text-sm">AI Proxy</p>
+              <p className="font-bold text-sm tracking-tight">Vesper</p>
               {currentAi && <p className="text-[10px] text-muted-foreground">{currentAi.name}{activeModel ? ` · ${activeModel.name}` : ""}</p>}
             </div>
           </div>
@@ -254,10 +253,9 @@ export function Home() {
         <div className="flex-1 overflow-y-auto" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4 py-12">
-              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
-                <Zap className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">Universal AI Proxy</h2>
+              <VesperLogo size={64} />
+              <h2 className="text-xl font-bold mt-5 mb-1 tracking-tight">Vesper</h2>
+              <p className="text-xs text-muted-foreground mb-3 font-medium">by Skinopro Tech Solutions</p>
               <p className="text-sm text-muted-foreground max-w-xs">
                 Route your coding prompts to ChatGPT, Grok, or Claude — pick a model and start chatting.
               </p>
@@ -273,8 +271,8 @@ export function Home() {
               {messages.map((msg, i) => (
                 <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role === "assistant" && (
-                    <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <Zap className="h-4 w-4 text-primary" />
+                    <div className="mt-0.5 shrink-0">
+                      <VesperLogo size={32} />
                     </div>
                   )}
                   <div className={`max-w-[85%] sm:max-w-[80%] ${
@@ -304,8 +302,8 @@ export function Home() {
 
               {isPending && (
                 <div className="flex gap-3 justify-start">
-                  <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <Zap className="h-4 w-4 text-primary" />
+                  <div className="shrink-0">
+                    <VesperLogo size={32} />
                   </div>
                   <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3.5 flex items-center gap-1.5">
                     <span className="h-2 w-2 bg-primary rounded-full animate-bounce" />

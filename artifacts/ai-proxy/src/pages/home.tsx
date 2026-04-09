@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
-  ChevronUp, Cpu, RefreshCw, AlertCircle, Check,
+  ChevronUp, RefreshCw, AlertCircle, Check,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { useQueryClient } from "@tanstack/react-query";
@@ -178,49 +178,59 @@ export function Home() {
               const isExp = expandedModelPicker === ai.id;
               const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
               return (
-                <div key={ai.id}>
-                  <div className={`flex items-center rounded-xl transition-all ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}>
-                    <button className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5 text-left" onClick={() => setSelectedAi(ai.id)}>
+                <div key={ai.id} className="space-y-0.5">
+                  <div className={`flex items-center gap-1 rounded-xl transition-all ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}>
+                    <button
+                      className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5 text-left"
+                      onClick={() => setSelectedAi(ai.id)}
+                    >
                       <StatusDot ai={ai} />
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium truncate ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
-                        {isSel && mdl && <p className="text-[10px] text-muted-foreground truncate font-mono">{mdl.name}</p>}
-                      </div>
+                      <p className={`text-sm font-medium truncate ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
                     </button>
                     {ai.models && ai.models.length > 0 && (
                       <button
-                        className="shrink-0 p-2 text-muted-foreground hover:text-foreground opacity-60 hover:opacity-100 transition-all"
+                        className={`shrink-0 flex items-center gap-1 mr-2 px-2 py-1 rounded-lg text-[10px] font-mono font-medium transition-all border
+                          ${isExp
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-muted/60 text-muted-foreground border-border hover:bg-muted hover:text-foreground"}`}
                         title="Switch model"
-                        onClick={() => setExpandedModelPicker(isExp ? null : ai.id)}
+                        onClick={(e) => { e.stopPropagation(); setExpandedModelPicker(isExp ? null : ai.id); }}
                       >
-                        {isExp ? <ChevronUp className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
+                        <span className="max-w-[60px] truncate">{mdl?.name ?? "Model"}</span>
+                        {isExp ? <ChevronUp className="h-2.5 w-2.5 shrink-0" /> : <ChevronDown className="h-2.5 w-2.5 shrink-0" />}
                       </button>
                     )}
                   </div>
 
                   {isExp && ai.models && (
-                    <div className="mx-2 mb-1 rounded-xl border border-border overflow-hidden bg-background">
+                    <div className="mx-2 rounded-xl border border-border overflow-hidden bg-card shadow-sm">
                       {ai.models.map(m => (
                         <button
                           key={m.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
-                            ${ai.currentModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}
-                          onClick={() => setModelMutation.mutate(
-                            { data: { aiId: ai.id, modelId: m.id } },
-                            {
-                              onSuccess: () => {
-                                queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
-                                setExpandedModelPicker(null);
-                                toast({ title: "Model updated", description: `Switched to ${m.name}` });
-                              },
-                              onError: () => {
-                                toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
+                            ${ai.currentModel === m.id
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModelMutation.mutate(
+                              { data: { aiId: ai.id, modelId: m.id } },
+                              {
+                                onSuccess: () => {
+                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
+                                  setExpandedModelPicker(null);
+                                  toast({ title: "Model updated", description: `Switched to ${m.name}` });
+                                },
+                                onError: () => {
+                                  toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
+                                }
                               }
-                            }
-                          )}
+                            );
+                          }}
                         >
-                          {ai.currentModel === m.id ? <Check className="h-3 w-3 shrink-0" /> : <span className="h-3 w-3 shrink-0" />}
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
                           {m.name}
+                          {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
                         </button>
                       ))}
                     </div>
@@ -406,27 +416,71 @@ export function Home() {
       <Dialog open={showMobileAiPicker} onOpenChange={setShowMobileAiPicker}>
         <DialogContent className="sm:hidden max-w-sm">
           <DialogHeader>
-            <DialogTitle>Select Model</DialogTitle>
+            <DialogTitle>Select AI & Model</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {aisData?.ais.map(ai => {
               const isSel = selectedAi === ai.id;
+              const isExp = expandedModelPicker === ai.id;
               const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
               return (
-                <button
-                  key={ai.id}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-left ${
-                    isSel ? "bg-primary/10 border border-primary/20" : "hover:bg-muted border border-transparent"
-                  }`}
-                  onClick={() => { setSelectedAi(ai.id); setShowMobileAiPicker(false); }}
-                >
-                  <StatusDot ai={ai} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${isSel ? "text-primary" : ""}`}>{ai.name}</p>
-                    {mdl && <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>}
+                <div key={ai.id} className="space-y-1">
+                  <div className={`flex items-center gap-2 rounded-xl border transition-all ${
+                    isSel ? "bg-primary/10 border-primary/20" : "border-transparent hover:bg-muted"
+                  }`}>
+                    <button
+                      className="flex items-center gap-3 flex-1 min-w-0 px-3 py-3 text-left"
+                      onClick={() => { setSelectedAi(ai.id); setShowMobileAiPicker(false); setExpandedModelPicker(null); }}
+                    >
+                      <StatusDot ai={ai} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isSel ? "text-primary" : ""}`}>{ai.name}</p>
+                        {mdl && <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>}
+                      </div>
+                      {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
+                    </button>
+                    {ai.models && ai.models.length > 1 && (
+                      <button
+                        className="shrink-0 pr-3 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={(e) => { e.stopPropagation(); setExpandedModelPicker(isExp ? null : ai.id); }}
+                      >
+                        {isExp ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </button>
+                    )}
                   </div>
-                  {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
-                </button>
+                  {isExp && ai.models && (
+                    <div className="ml-4 rounded-xl border border-border overflow-hidden bg-card">
+                      {ai.models.map(m => (
+                        <button
+                          key={m.id}
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${
+                            ai.currentModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModelMutation.mutate(
+                              { data: { aiId: ai.id, modelId: m.id } },
+                              {
+                                onSuccess: () => {
+                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
+                                  setExpandedModelPicker(null);
+                                  toast({ title: "Model updated", description: `Switched to ${m.name}` });
+                                },
+                                onError: () => {
+                                  toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
+                                }
+                              }
+                            );
+                          }}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
+                          {m.name}
+                          {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

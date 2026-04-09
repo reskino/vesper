@@ -62,6 +62,62 @@ function MiniFileTreeItem({ node, depth = 0, onSelect }: { node: FileNode; depth
   );
 }
 
+// ── Typewriter ────────────────────────────────────────────────────────────────
+const TYPEWRITER_PHRASES = [
+  "Design anything using Vesper.",
+  "Create an app seamlessly with Vesper.",
+  "Debug your code in seconds with Vesper.",
+  "Build full-stack apps with AI assistance.",
+  "Write, review and ship code faster.",
+  "Explore any codebase with Vesper.",
+  "Automate your coding workflow with Vesper.",
+  "Generate beautiful UI components effortlessly.",
+  "Solve bugs instantly using Vesper.",
+  "Turn ideas into working code with Vesper.",
+  "Collaborate with ChatGPT, Grok and Claude at once.",
+  "Build your dream project — one prompt at a time.",
+];
+
+function TypewriterText() {
+  const [displayed, setDisplayed] = useState("");
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [typing, setTyping] = useState(true);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    const phrase = TYPEWRITER_PHRASES[phraseIdx];
+
+    if (paused) {
+      const t = setTimeout(() => { setPaused(false); setTyping(false); }, 1800);
+      return () => clearTimeout(t);
+    }
+
+    if (typing) {
+      if (displayed.length < phrase.length) {
+        const t = setTimeout(() => setDisplayed(phrase.slice(0, displayed.length + 1)), 45);
+        return () => clearTimeout(t);
+      } else {
+        setPaused(true);
+      }
+    } else {
+      if (displayed.length > 0) {
+        const t = setTimeout(() => setDisplayed(d => d.slice(0, -1)), 22);
+        return () => clearTimeout(t);
+      } else {
+        setPhraseIdx(i => (i + 1) % TYPEWRITER_PHRASES.length);
+        setTyping(true);
+      }
+    }
+  }, [displayed, typing, paused, phraseIdx]);
+
+  return (
+    <p className="text-sm text-muted-foreground max-w-xs min-h-[1.5rem]">
+      {displayed}
+      <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-middle animate-pulse" />
+    </p>
+  );
+}
+
 // ── AI status dot ─────────────────────────────────────────────────────────────
 function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }) {
   return (
@@ -292,10 +348,8 @@ export function Home() {
             <div className="h-full flex flex-col items-center justify-center text-center px-4 py-12">
               <VesperLogo size={64} />
               <h2 className="text-xl font-bold mt-5 mb-1 tracking-tight">Vesper</h2>
-              <p className="text-xs text-muted-foreground mb-3 font-medium">by Skinopro Tech Solutions</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Route your coding prompts to ChatGPT, Grok, or Claude — pick a model and start chatting.
-              </p>
+              <p className="text-xs text-muted-foreground mb-4 font-medium">by Skinopro Tech Solutions</p>
+              <TypewriterText />
               {currentAi && !currentAi.hasSession && (
                 <div className="mt-5 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />

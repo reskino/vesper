@@ -7,30 +7,45 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  Bot, Play, Square, RefreshCw, CheckCircle2, XCircle, 
+  Bot, Play, CheckCircle2, XCircle, 
   ChevronDown, ChevronRight, Terminal, FileCode, FolderPlus,
-  FileEdit, Trash2, List, Loader2, Sparkles, AlertCircle
+  FileEdit, Trash2, List, Loader2, Sparkles, AlertCircle,
+  Globe, Camera, Wifi, Clock, Server, Zap, WifiOff
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useQueryClient } from "@tanstack/react-query";
 
 const TOOL_ICONS: Record<string, React.JSX.Element> = {
-  execute: <Terminal className="h-3.5 w-3.5" />,
-  write_file: <FileEdit className="h-3.5 w-3.5" />,
-  read_file: <FileCode className="h-3.5 w-3.5" />,
-  create_dir: <FolderPlus className="h-3.5 w-3.5" />,
-  delete: <Trash2 className="h-3.5 w-3.5" />,
-  list_dir: <List className="h-3.5 w-3.5" />,
+  execute:          <Terminal className="h-3.5 w-3.5" />,
+  background_exec:  <Server className="h-3.5 w-3.5" />,
+  kill_process:     <WifiOff className="h-3.5 w-3.5" />,
+  write_file:       <FileEdit className="h-3.5 w-3.5" />,
+  read_file:        <FileCode className="h-3.5 w-3.5" />,
+  create_dir:       <FolderPlus className="h-3.5 w-3.5" />,
+  delete:           <Trash2 className="h-3.5 w-3.5" />,
+  list_dir:         <List className="h-3.5 w-3.5" />,
+  check_port:       <Wifi className="h-3.5 w-3.5" />,
+  http_get:         <Globe className="h-3.5 w-3.5" />,
+  http_post:        <Zap className="h-3.5 w-3.5" />,
+  screenshot_url:   <Camera className="h-3.5 w-3.5" />,
+  sleep:            <Clock className="h-3.5 w-3.5" />,
 };
 
 const TOOL_COLORS: Record<string, string> = {
-  execute: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  write_file: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  read_file: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  create_dir: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  delete: "bg-red-500/10 text-red-400 border-red-500/20",
-  list_dir: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  execute:          "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  background_exec:  "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+  kill_process:     "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  write_file:       "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  read_file:        "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  create_dir:       "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  delete:           "bg-red-500/10 text-red-400 border-red-500/20",
+  list_dir:         "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  check_port:       "bg-teal-500/10 text-teal-400 border-teal-500/20",
+  http_get:         "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  http_post:        "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  screenshot_url:   "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  sleep:            "bg-slate-500/10 text-slate-400 border-slate-500/20",
 };
 
 const EXAMPLE_TASKS = [
@@ -40,6 +55,25 @@ const EXAMPLE_TASKS = [
   "Build a simple calculator CLI in Python (add, sub, mul, div), write tests for it, then run the tests",
   "Create a markdown README for this AI Proxy project explaining what it does and how to use it",
 ];
+
+const SCREENSHOT_API_RE = /Screenshot API path: (\/api\/agent\/screenshot\/[^\s]+\.png)/;
+
+function parseScreenshotPath(result: string): string | null {
+  const m = result.match(SCREENSHOT_API_RE);
+  return m ? m[1] : null;
+}
+
+function getStepSummary(step: AgentStep): string {
+  const toolName = step.tool || "";
+  const p = step.params || {};
+  if (toolName === "execute" || toolName === "background_exec") return String((p as Record<string, unknown>).command ?? "").slice(0, 80);
+  if (toolName === "write_file" || toolName === "read_file") return String((p as Record<string, unknown>).path ?? "");
+  if (toolName === "http_get" || toolName === "http_post" || toolName === "screenshot_url") return String((p as Record<string, unknown>).url ?? "");
+  if (toolName === "check_port") return `port ${(p as Record<string, unknown>).port}`;
+  if (toolName === "sleep") return `${(p as Record<string, unknown>).seconds}s`;
+  if (toolName === "create_dir" || toolName === "delete" || toolName === "list_dir") return String((p as Record<string, unknown>).path ?? "");
+  return "";
+}
 
 function StepCard({ step, defaultOpen = false }: { step: AgentStep; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -53,6 +87,7 @@ function StepCard({ step, defaultOpen = false }: { step: AgentStep; defaultOpen?
         >
           <Bot className="h-4 w-4 text-primary shrink-0" />
           <span className="text-sm font-medium flex-1">Step {step.step} — AI Reasoning</span>
+          <span className="text-xs text-muted-foreground mr-1">{step.elapsedMs ? `${(step.elapsedMs/1000).toFixed(1)}s` : ""}</span>
           {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </button>
         {open && step.content && (
@@ -68,6 +103,9 @@ function StepCard({ step, defaultOpen = false }: { step: AgentStep; defaultOpen?
     const toolName = step.tool || "tool";
     const colorClass = TOOL_COLORS[toolName] || "bg-muted text-muted-foreground border-border";
     const icon = TOOL_ICONS[toolName] || <Terminal className="h-3.5 w-3.5" />;
+    const summary = getStepSummary(step);
+    const screenshotPath = step.result ? parseScreenshotPath(step.result) : null;
+    const isSuccess = step.result && !step.result.startsWith("ERROR");
 
     return (
       <div className="border border-border rounded-lg overflow-hidden">
@@ -75,36 +113,46 @@ function StepCard({ step, defaultOpen = false }: { step: AgentStep; defaultOpen?
           className="w-full flex items-center gap-2 px-3 py-2 bg-muted/20 hover:bg-muted/40 text-left"
           onClick={() => setOpen(!open)}
         >
-          <Badge variant="outline" className={`gap-1 font-mono text-xs px-1.5 py-0 h-5 border ${colorClass}`}>
+          <Badge variant="outline" className={`gap-1 font-mono text-xs px-1.5 py-0 h-5 shrink-0 border ${colorClass}`}>
             {icon}
             {toolName}
           </Badge>
-          {step.params?.command != null && (
-            <code className="text-xs text-muted-foreground font-mono truncate flex-1">
-              {String(step.params.command as string).slice(0, 80)}
-            </code>
+          {summary && (
+            <code className="text-xs text-muted-foreground font-mono truncate flex-1">{summary}</code>
           )}
-          {step.params?.path != null && step.params?.command == null && (
-            <code className="text-xs text-muted-foreground font-mono truncate flex-1">
-              {String(step.params.path as string)}
-            </code>
+          {step.result && (
+            <span className={`text-xs font-mono shrink-0 ${isSuccess ? "text-green-500" : "text-red-400"}`}>
+              {isSuccess ? "✓" : "✗"}
+            </span>
           )}
           {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
         </button>
         {open && (
           <div className="border-t border-border">
-            {step.params && (
+            {step.params && Object.keys(step.params).length > 0 && (
               <div className="px-3 py-2 bg-muted/10 border-b border-border">
-                <p className="text-xs text-muted-foreground mb-1">Parameters</p>
+                <p className="text-xs text-muted-foreground mb-1 font-medium">Parameters</p>
                 <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all">
                   {JSON.stringify(step.params, null, 2)}
                 </pre>
               </div>
             )}
             {step.result && (
-              <div className="px-3 py-2">
-                <p className="text-xs text-muted-foreground mb-1">Result</p>
-                <pre className="text-xs font-mono text-green-300 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+              <div className="px-3 py-2 space-y-2">
+                <p className="text-xs text-muted-foreground font-medium">Result</p>
+                {screenshotPath && (
+                  <div className="rounded-md overflow-hidden border border-border">
+                    <img
+                      src={screenshotPath}
+                      alt="Screenshot"
+                      className="w-full object-cover"
+                      style={{ maxHeight: 400 }}
+                    />
+                  </div>
+                )}
+                <pre className={`text-xs font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto ${
+                  step.result.startsWith("ERROR") ? "text-red-400" : "text-green-300"
+                }`}>
                   {step.result}
                 </pre>
               </div>

@@ -21,7 +21,7 @@ from file_manager import (
     rename_path, get_language, LANGUAGE_MAP
 )
 from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
-from agent import run_agent, get_status as get_agent_status
+from agent import run_agent, get_status as get_agent_status, get_screenshot_path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -474,6 +474,18 @@ def agent_status():
         return jsonify(status)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/agent/screenshot/<filename>", methods=["GET"])
+def agent_screenshot(filename: str):
+    from flask import send_file
+    # Security: only allow safe filenames
+    if not filename.endswith(".png") or "/" in filename or ".." in filename:
+        return jsonify({"error": "invalid filename"}), 400
+    path = get_screenshot_path(filename)
+    if not path:
+        return jsonify({"error": "screenshot not found"}), 404
+    return send_file(str(path), mimetype="image/png")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,27 @@
 {pkgs}: {
   deps = [
+    pkgs.expat
+    pkgs.xorg.libxcb
+    pkgs.mesa
+    pkgs.libdrm
+    pkgs.libxkbcommon
+    pkgs.xorg.libXtst
+    pkgs.xorg.libXi
+    pkgs.xorg.libXcursor
+    pkgs.xorg.libX11
+    pkgs.xorg.libXext
+    pkgs.xorg.libXfixes
+    pkgs.xorg.libXrandr
+    pkgs.xorg.libXdamage
+    pkgs.xorg.libXcomposite
+    pkgs.dbus
+    pkgs.alsa-lib
+    pkgs.cairo
+    pkgs.pango
+    pkgs.gtk3
+    pkgs.at-spi2-atk
+    pkgs.nss
+    pkgs.nspr
     pkgs.xvfb-run
     pkgs.playwright-driver
     pkgs.chromium

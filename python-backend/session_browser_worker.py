@@ -15,6 +15,22 @@ import time
 import signal
 import logging
 
+# Ensure Chrome can find its shared libraries in the Replit/NixOS environment.
+# REPLIT_LD_LIBRARY_PATH / REPLIT_PYTHON_LD_LIBRARY_PATH have all the Nix-store
+# library paths, but LD_LIBRARY_PATH itself is empty for the Chrome subprocess.
+_STUB_LIB_DIR = os.path.join(os.path.dirname(__file__), "lib")
+
+def _fix_ld_library_path():
+    parts = [_STUB_LIB_DIR]  # our stub libgbm.so.1 etc come first
+    for var in ("REPLIT_LD_LIBRARY_PATH", "REPLIT_PYTHON_LD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
+        val = os.environ.get(var, "")
+        if val:
+            parts.extend(val.split(":"))
+    unique = list(dict.fromkeys(p for p in parts if p))
+    os.environ["LD_LIBRARY_PATH"] = ":".join(unique)
+
+_fix_ld_library_path()
+
 from playwright.sync_api import sync_playwright
 
 logging.basicConfig(
@@ -58,11 +74,13 @@ def main():
 
     pw   = sync_playwright().start()
     browser = pw.chromium.launch(
-        headless=False,
+        headless=True,
         args=[
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-software-rasterizer",
         ],
     )
     context = browser.new_context(

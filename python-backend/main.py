@@ -344,11 +344,10 @@ def _launch_browser_worker(ai_id: str) -> tuple:
     if os.path.exists(cmd_path):
         os.remove(cmd_path)
 
+    log_path = os.path.join(work_dir, "worker.log")
+    log_file = open(log_path, "w")
     cmd = [sys.executable, WORKER_SCRIPT, ai_id, work_dir]
-    if XVFB_RUN:
-        cmd = [XVFB_RUN, "-a", "--"] + cmd
-
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
     with _workers_lock:
         _browser_workers[ai_id] = {"proc": proc, "work_dir": work_dir}
     return proc, work_dir

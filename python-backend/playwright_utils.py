@@ -9,6 +9,21 @@ import tempfile
 import base64
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
+
+# Fix LD_LIBRARY_PATH so Chromium can find its shared libs on Replit/NixOS
+_STUB_LIB_DIR = os.path.join(os.path.dirname(__file__), "lib")
+
+def _fix_ld_library_path():
+    parts = [_STUB_LIB_DIR]
+    for var in ("REPLIT_LD_LIBRARY_PATH", "REPLIT_PYTHON_LD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
+        val = os.environ.get(var, "")
+        if val:
+            parts.extend(val.split(":"))
+    unique = list(dict.fromkeys(p for p in parts if p))
+    os.environ["LD_LIBRARY_PATH"] = ":".join(unique)
+
+_fix_ld_library_path()
+
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, TimeoutError as PlaywrightTimeout
 
 from config import AI_CONFIGS, SESSIONS_DIR, DEFAULT_TIMEOUT, MAX_RESPONSE_WAIT, get_model_url_param

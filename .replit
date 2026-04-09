@@ -56,6 +56,10 @@ externalPort = 80
 localPort = 19906
 externalPort = 3001
 
+[[ports]]
+localPort = 19907
+externalPort = 3002
+
 [nix]
 channel = "stable-25_05"
 packages = ["gitFull", "playwright-driver"]

@@ -62,6 +62,7 @@ router.get("/proxy/ais", proxyToPython);
 router.post("/proxy/ask", proxyToPython);
 router.post("/proxy/ask-with-context", proxyToPython);
 router.post("/proxy/execute", proxyToPython);
+router.post("/proxy/set-model", proxyToPython);
 
 // Session routes
 router.get("/sessions", proxyToPython);

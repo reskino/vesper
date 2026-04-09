@@ -6,10 +6,10 @@ import {
   useReadFile, getReadFileQueryKey,
   FileNode,
 } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
@@ -74,6 +74,7 @@ function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }
 // ── Main component ────────────────────────────────────────────────────────────
 export function Home() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: aisData, isLoading: isLoadingAis } = useListAis({ query: { queryKey: getListAisQueryKey() } });
 
   const askAi = useAskAi();
@@ -206,7 +207,16 @@ export function Home() {
                             ${ai.currentModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}
                           onClick={() => setModelMutation.mutate(
                             { data: { aiId: ai.id, modelId: m.id } },
-                            { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListAisQueryKey() }); setExpandedModelPicker(null); } }
+                            {
+                              onSuccess: () => {
+                                queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
+                                setExpandedModelPicker(null);
+                                toast({ title: "Model updated", description: `Switched to ${m.name}` });
+                              },
+                              onError: () => {
+                                toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
+                              }
+                            }
                           )}
                         >
                           {ai.currentModel === m.id ? <Check className="h-3 w-3 shrink-0" /> : <span className="h-3 w-3 shrink-0" />}

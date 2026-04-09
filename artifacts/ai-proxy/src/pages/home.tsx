@@ -4,6 +4,7 @@ import {
   getListAisQueryKey, 
   useAskAi, 
   useAskAiWithContext,
+  useSetModel,
   useGetFileTree,
   getGetFileTreeQueryKey,
   useReadFile,
@@ -16,8 +17,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Send, TerminalSquare, AlertCircle, RefreshCw, PlusCircle, 
-  Paperclip, X, Folder, FileIcon, FileCode, FileText, FileJson, ChevronRight, ChevronDown, Loader2
+  Paperclip, X, Folder, FileIcon, FileCode, FileText, FileJson, ChevronRight, ChevronDown, Loader2,
+  ChevronUp, Cpu
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 
@@ -84,14 +87,17 @@ function MiniFileTreeItem({
 }
 
 export function Home() {
+  const queryClient = useQueryClient();
   const { data: aisData, isLoading: isLoadingAis } = useListAis({
     query: { queryKey: getListAisQueryKey() }
   });
 
   const askAi = useAskAi();
   const askAiWithContext = useAskAiWithContext();
+  const setModelMutation = useSetModel();
 
   const [selectedAi, setSelectedAi] = useState<string | null>(null);
+  const [expandedModelPicker, setExpandedModelPicker] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant", content: string, aiId?: string, error?: boolean }>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -221,7 +227,7 @@ export function Home() {
   return (
     <div className="flex h-full w-full bg-[#0a0a0a] text-gray-200">
       {/* AI Selector Sidebar */}
-      <div className="w-48 border-r border-[#1a1a1a] bg-[#0d0d0d] flex flex-col shrink-0">
+      <div className="w-52 border-r border-[#1a1a1a] bg-[#0d0d0d] flex flex-col shrink-0">
         <div className="p-3 border-b border-[#1a1a1a] flex items-center justify-between">
           <span className="font-mono text-xs text-gray-500 uppercase tracking-wider">Models</span>
           <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400" onClick={newChat} title="New Chat">
@@ -232,20 +238,76 @@ export function Home() {
           <div className="p-2 space-y-1">
             {isLoadingAis ? (
               <div className="p-4 text-xs text-gray-500 text-center">Loading...</div>
-            ) : aisData?.ais.map(ai => (
-              <button
-                key={ai.id}
-                onClick={() => setSelectedAi(ai.id)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2
-                  ${selectedAi === ai.id ? "bg-[#1a1a1a] text-white" : "hover:bg-[#111] text-gray-400"}`}
-              >
-                <div className={`h-2 w-2 rounded-full ${
-                  !ai.isAvailable ? "bg-red-500" :
-                  ai.hasSession ? "bg-green-500" : "bg-amber-500"
-                }`} />
-                <span className="truncate">{ai.name}</span>
-              </button>
-            ))}
+            ) : aisData?.ais.map(ai => {
+              const isSelected = selectedAi === ai.id;
+              const isExpanded = expandedModelPicker === ai.id;
+              const activeModel = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
+              return (
+                <div key={ai.id}>
+                  <div className={`flex items-center rounded-md text-sm transition-colors
+                    ${isSelected ? "bg-[#1a1a1a] text-white" : "hover:bg-[#111] text-gray-400"}`}
+                  >
+                    <button
+                      className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
+                      onClick={() => setSelectedAi(ai.id)}
+                    >
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${
+                        !ai.isAvailable ? "bg-red-500" :
+                        ai.hasSession ? "bg-green-500" : "bg-amber-500"
+                      }`} />
+                      <span className="truncate flex-1">{ai.name}</span>
+                    </button>
+                    {ai.models && ai.models.length > 0 && (
+                      <button
+                        className="shrink-0 opacity-40 hover:opacity-100 transition-opacity p-2 rounded"
+                        title="Switch model"
+                        onClick={() => setExpandedModelPicker(isExpanded ? null : ai.id)}
+                      >
+                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Active model label */}
+                  {isSelected && activeModel && (
+                    <div className="px-3 pb-1">
+                      <span className="text-[10px] text-gray-600 font-mono">{activeModel.name}</span>
+                    </div>
+                  )}
+
+                  {/* Model picker dropdown */}
+                  {isExpanded && ai.models && ai.models.length > 0 && (
+                    <div className="mx-2 mb-1 border border-[#2a2a2a] rounded-md overflow-hidden bg-[#0a0a0a]">
+                      {ai.models.map(model => (
+                        <button
+                          key={model.id}
+                          className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2
+                            ${ai.currentModel === model.id
+                              ? "bg-primary/20 text-primary"
+                              : "text-gray-400 hover:bg-[#1a1a1a] hover:text-gray-200"}`}
+                          onClick={() => {
+                            setModelMutation.mutate(
+                              { data: { aiId: ai.id, modelId: model.id } },
+                              {
+                                onSuccess: () => {
+                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
+                                  setExpandedModelPicker(null);
+                                }
+                              }
+                            );
+                          }}
+                        >
+                          <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                            ai.currentModel === model.id ? "bg-primary" : "bg-transparent border border-gray-600"
+                          }`} />
+                          <span className="truncate">{model.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
       </div>

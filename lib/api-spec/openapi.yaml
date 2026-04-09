@@ -93,6 +93,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/AiListResponse"
 
+  /proxy/set-model:
+    post:
+      operationId: setModel
+      tags: [proxy]
+      summary: Set the active model for an AI service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                aiId:
+                  type: string
+                modelId:
+                  type: string
+              required:
+                - aiId
+                - modelId
+      responses:
+        "200":
+          description: Model set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  aiId:
+                    type: string
+                  modelId:
+                    type: string
+
   /sessions:
     get:
       operationId: listSessions
@@ -535,6 +569,20 @@ components:
       required:
         - ais
 
+    AiModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        urlParam:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+
     AiInfo:
       type: object
       properties:
@@ -549,6 +597,13 @@ components:
         isAvailable:
           type: boolean
         icon:
+          type: string
+          nullable: true
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiModel"
+        currentModel:
           type: string
           nullable: true
       required:

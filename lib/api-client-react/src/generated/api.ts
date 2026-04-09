@@ -42,6 +42,8 @@ import type {
   ReadFileParams,
   SessionListResponse,
   SessionResponse,
+  SetModel200,
+  SetModelBody,
   TerminalCwdResponse,
   TerminalExecBody,
   TerminalExecResponse,
@@ -374,6 +376,92 @@ export function useListAis<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Set the active model for an AI service
+ */
+export const getSetModelUrl = () => {
+  return `/api/proxy/set-model`;
+};
+
+export const setModel = async (
+  setModelBody: SetModelBody,
+  options?: RequestInit,
+): Promise<SetModel200> => {
+  return customFetch<SetModel200>(getSetModelUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setModelBody),
+  });
+};
+
+export const getSetModelMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setModel>>,
+    TError,
+    { data: BodyType<SetModelBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setModel>>,
+  TError,
+  { data: BodyType<SetModelBody> },
+  TContext
+> => {
+  const mutationKey = ["setModel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setModel>>,
+    { data: BodyType<SetModelBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setModel(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetModelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setModel>>
+>;
+export type SetModelMutationBody = BodyType<SetModelBody>;
+export type SetModelMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the active model for an AI service
+ */
+export const useSetModel = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setModel>>,
+    TError,
+    { data: BodyType<SetModelBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setModel>>,
+  TError,
+  { data: BodyType<SetModelBody> },
+  TContext
+> => {
+  return useMutation(getSetModelMutationOptions(options));
+};
 
 /**
  * @summary List all saved browser sessions

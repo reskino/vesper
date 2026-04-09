@@ -47,6 +47,12 @@ export interface ExecutionResult {
   elapsedMs: number;
 }
 
+export interface AiModel {
+  id: string;
+  name: string;
+  urlParam?: string | null;
+}
+
 export interface AiInfo {
   id: string;
   name: string;
@@ -54,6 +60,8 @@ export interface AiInfo {
   hasSession: boolean;
   isAvailable: boolean;
   icon?: string | null;
+  models?: AiModel[];
+  currentModel?: string | null;
 }
 
 export interface AiListResponse {
@@ -279,6 +287,17 @@ export interface AgentStatusResponse {
   steps: AgentStep[];
   result?: AgentResult | null;
 }
+
+export type SetModelBody = {
+  aiId: string;
+  modelId: string;
+};
+
+export type SetModel200 = {
+  success?: boolean;
+  aiId?: string;
+  modelId?: string;
+};
 
 export type GetFileTreeParams = {
   /**

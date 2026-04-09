@@ -5,6 +5,7 @@
  * Universal AI Coding Proxy API
  * OpenAPI spec version: 0.1.0
  */
+import type { AiModel } from "./aiModel";
 
 export interface AiInfo {
   id: string;
@@ -13,4 +14,6 @@ export interface AiInfo {
   hasSession: boolean;
   isAvailable: boolean;
   icon?: string | null;
+  models?: AiModel[];
+  currentModel?: string | null;
 }

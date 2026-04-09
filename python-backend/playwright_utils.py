@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, TimeoutError as PlaywrightTimeout
 
-from config import AI_CONFIGS, SESSIONS_DIR, DEFAULT_TIMEOUT, MAX_RESPONSE_WAIT
+from config import AI_CONFIGS, SESSIONS_DIR, DEFAULT_TIMEOUT, MAX_RESPONSE_WAIT, get_model_url_param
 
 logger = logging.getLogger(__name__)
 
@@ -176,8 +176,13 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
             browser, context = launch_browser(p, headless=True, storage_state=session_path)
             page = context.new_page()
 
-            logger.info(f"Navigating to {config['url']} for {ai_id}")
-            page.goto(config["url"], wait_until="networkidle", timeout=DEFAULT_TIMEOUT)
+            # Build the URL — for ChatGPT, append ?model=<urlParam> if a model is selected
+            nav_url = config["url"]
+            url_param = get_model_url_param(ai_id)
+            if url_param:
+                nav_url = f"{nav_url}/?model={url_param}"
+            logger.info(f"Navigating to {nav_url} for {ai_id}")
+            page.goto(nav_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT)
 
             if check_captcha(page):
                 browser.close()

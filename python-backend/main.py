@@ -8,7 +8,7 @@ import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from config import AI_CONFIGS, FALLBACK_ORDER
+from config import AI_CONFIGS, FALLBACK_ORDER, get_active_model, set_active_model
 from playwright_utils import (
     session_exists, get_session_info, create_session_interactive,
     delete_session, send_prompt, check_ai_available
@@ -52,8 +52,23 @@ def list_ais():
             "hasSession": session_exists(ai_id),
             "isAvailable": True,
             "icon": config.get("icon"),
+            "models": config.get("models", []),
+            "currentModel": get_active_model(ai_id),
         })
     return jsonify({"ais": ais})
+
+
+@app.route("/api/proxy/set-model", methods=["POST"])
+def set_model():
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    model_id = data.get("modelId")
+    if not ai_id or not model_id:
+        return jsonify({"error": "aiId and modelId are required"}), 400
+    ok = set_active_model(ai_id, model_id)
+    if not ok:
+        return jsonify({"error": f"Invalid model '{model_id}' for AI '{ai_id}'"}), 400
+    return jsonify({"success": True, "aiId": ai_id, "modelId": model_id})
 
 
 @app.route("/api/proxy/ask", methods=["POST"])

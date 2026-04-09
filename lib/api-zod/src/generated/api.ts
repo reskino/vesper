@@ -86,8 +86,32 @@ export const ListAisResponse = zod.object({
       hasSession: zod.boolean(),
       isAvailable: zod.boolean(),
       icon: zod.string().nullish(),
+      models: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            name: zod.string(),
+            urlParam: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      currentModel: zod.string().nullish(),
     }),
   ),
+});
+
+/**
+ * @summary Set the active model for an AI service
+ */
+export const SetModelBody = zod.object({
+  aiId: zod.string(),
+  modelId: zod.string(),
+});
+
+export const SetModelResponse = zod.object({
+  success: zod.boolean().optional(),
+  aiId: zod.string().optional(),
+  modelId: zod.string().optional(),
 });
 
 /**

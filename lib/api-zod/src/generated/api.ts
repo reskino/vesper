@@ -294,6 +294,110 @@ export const RenameFileResponse = zod.object({
 });
 
 /**
+ * @summary Execute a shell command
+ */
+export const terminalExecBodyTimeoutDefault = 60;
+
+export const TerminalExecBody = zod.object({
+  command: zod.string().describe("Shell command to execute"),
+  cwd: zod
+    .string()
+    .nullish()
+    .describe("Working directory (defaults to workspace root)"),
+  timeout: zod
+    .number()
+    .default(terminalExecBodyTimeoutDefault)
+    .describe("Timeout in seconds"),
+});
+
+export const TerminalExecResponse = zod.object({
+  stdout: zod.string(),
+  stderr: zod.string(),
+  exitCode: zod.number(),
+  elapsedMs: zod.number(),
+  cwd: zod.string(),
+});
+
+/**
+ * @summary Get current working directory and environment info
+ */
+export const GetTerminalCwdResponse = zod.object({
+  cwd: zod.string(),
+  workspaceRoot: zod.string(),
+  python: zod.string(),
+  node: zod.string(),
+});
+
+/**
+ * @summary Run an autonomous coding agent task
+ */
+export const runAgentBodyMaxStepsDefault = 20;
+
+export const RunAgentBody = zod.object({
+  aiId: zod.string().describe("AI to use for the agent"),
+  task: zod.string().describe("Task description — what to build or do"),
+  workingDir: zod
+    .string()
+    .nullish()
+    .describe("Working directory for the agent"),
+  maxSteps: zod
+    .number()
+    .default(runAgentBodyMaxStepsDefault)
+    .describe("Maximum number of tool calls"),
+});
+
+export const RunAgentResponse = zod.object({
+  running: zod.boolean(),
+  task: zod.string(),
+  steps: zod.array(
+    zod.object({
+      step: zod.number(),
+      type: zod.enum(["thought", "tool", "error"]),
+      content: zod.string().nullish(),
+      tool: zod.string().nullish(),
+      params: zod.record(zod.string(), zod.unknown()).nullish(),
+      result: zod.string().nullish(),
+      elapsedMs: zod.number().optional(),
+    }),
+  ),
+  result: zod
+    .object({
+      success: zod.boolean(),
+      summary: zod.string().nullish(),
+      error: zod.string().nullish(),
+      totalElapsedMs: zod.number().nullish(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Get current agent run status
+ */
+export const GetAgentStatusResponse = zod.object({
+  running: zod.boolean(),
+  task: zod.string().nullish(),
+  steps: zod.array(
+    zod.object({
+      step: zod.number(),
+      type: zod.enum(["thought", "tool", "error"]),
+      content: zod.string().nullish(),
+      tool: zod.string().nullish(),
+      params: zod.record(zod.string(), zod.unknown()).nullish(),
+      result: zod.string().nullish(),
+      elapsedMs: zod.number().optional(),
+    }),
+  ),
+  result: zod
+    .object({
+      success: zod.boolean(),
+      summary: zod.string().nullish(),
+      error: zod.string().nullish(),
+      totalElapsedMs: zod.number().nullish(),
+    })
+    .nullish(),
+});
+
+/**
  * @summary Send a prompt to AI with file context attached
  */
 export const askAiWithContextBodyFallbackDefault = true;

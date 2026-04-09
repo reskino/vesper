@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Terminal, Database, History, Settings, Moon, Sun, Monitor, Code } from "lucide-react";
+import { Terminal, Database, History, Settings, Moon, Sun, Code, Bot, TerminalSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
@@ -21,6 +21,8 @@ export function Sidebar() {
   const navItems = [
     { href: "/", label: "Chat", icon: Terminal },
     { href: "/editor", label: "Editor", icon: Code },
+    { href: "/terminal", label: "Terminal", icon: TerminalSquare },
+    { href: "/agent", label: "Agent", icon: Bot },
     { href: "/sessions", label: "Sessions", icon: Database },
     { href: "/history", label: "History", icon: History },
   ];

@@ -336,6 +336,76 @@ paths:
               schema:
                 $ref: "#/components/schemas/FileWriteResponse"
 
+  /terminal/exec:
+    post:
+      operationId: terminalExec
+      tags: [proxy]
+      summary: Execute a shell command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TerminalExecBody"
+      responses:
+        "200":
+          description: Command output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminalExecResponse"
+
+  /terminal/cwd:
+    get:
+      operationId: getTerminalCwd
+      tags: [proxy]
+      summary: Get current working directory and environment info
+      responses:
+        "200":
+          description: Working directory info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminalCwdResponse"
+
+  /agent/run:
+    post:
+      operationId: runAgent
+      tags: [proxy]
+      summary: Run an autonomous coding agent task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRunBody"
+      responses:
+        "200":
+          description: Agent task trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunResponse"
+        "503":
+          description: AI unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /agent/status:
+    get:
+      operationId: getAgentStatus
+      tags: [proxy]
+      summary: Get current agent run status
+      responses:
+        "200":
+          description: Agent status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStatusResponse"
+
   /proxy/ask-with-context:
     post:
       operationId: askAiWithContext
@@ -783,3 +853,160 @@ components:
           type: string
       required:
         - error
+
+    TerminalExecBody:
+      type: object
+      properties:
+        command:
+          type: string
+          description: Shell command to execute
+        cwd:
+          type: string
+          nullable: true
+          description: Working directory (defaults to workspace root)
+        timeout:
+          type: integer
+          default: 60
+          description: Timeout in seconds
+      required:
+        - command
+
+    TerminalExecResponse:
+      type: object
+      properties:
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exitCode:
+          type: integer
+        elapsedMs:
+          type: number
+        cwd:
+          type: string
+      required:
+        - stdout
+        - stderr
+        - exitCode
+        - elapsedMs
+        - cwd
+
+    TerminalCwdResponse:
+      type: object
+      properties:
+        cwd:
+          type: string
+        workspaceRoot:
+          type: string
+        python:
+          type: string
+        node:
+          type: string
+      required:
+        - cwd
+        - workspaceRoot
+        - python
+        - node
+
+    AgentRunBody:
+      type: object
+      properties:
+        aiId:
+          type: string
+          description: AI to use for the agent
+        task:
+          type: string
+          description: Task description — what to build or do
+        workingDir:
+          type: string
+          nullable: true
+          description: Working directory for the agent
+        maxSteps:
+          type: integer
+          default: 20
+          description: Maximum number of tool calls
+      required:
+        - aiId
+        - task
+
+    AgentStep:
+      type: object
+      properties:
+        step:
+          type: integer
+        type:
+          type: string
+          enum: [thought, tool, error]
+        content:
+          type: string
+          nullable: true
+        tool:
+          type: string
+          nullable: true
+        params:
+          type: object
+          nullable: true
+          additionalProperties: true
+        result:
+          type: string
+          nullable: true
+        elapsedMs:
+          type: number
+      required:
+        - step
+        - type
+
+    AgentResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        totalElapsedMs:
+          type: number
+          nullable: true
+      required:
+        - success
+
+    AgentRunResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        task:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentStep"
+        result:
+          $ref: "#/components/schemas/AgentResult"
+          nullable: true
+      required:
+        - running
+        - task
+        - steps
+
+    AgentStatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        task:
+          type: string
+          nullable: true
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentStep"
+        result:
+          $ref: "#/components/schemas/AgentResult"
+          nullable: true
+      required:
+        - running
+        - steps

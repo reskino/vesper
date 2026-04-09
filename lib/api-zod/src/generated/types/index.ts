@@ -6,6 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./agentResult";
+export * from "./agentRunBody";
+export * from "./agentRunResponse";
+export * from "./agentStatusResponse";
+export * from "./agentStep";
+export * from "./agentStepParams";
+export * from "./agentStepType";
 export * from "./aiInfo";
 export * from "./aiListResponse";
 export * from "./aiResponse";
@@ -37,5 +44,8 @@ export * from "./readFileParams";
 export * from "./sessionInfo";
 export * from "./sessionListResponse";
 export * from "./sessionResponse";
+export * from "./terminalCwdResponse";
+export * from "./terminalExecBody";
+export * from "./terminalExecResponse";
 export * from "./usageStats";
 export * from "./usageStatsMessagesByAi";

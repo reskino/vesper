@@ -82,4 +82,12 @@ router.post("/files/create", proxyToPython);
 router.delete("/files/delete", proxyToPython);
 router.post("/files/rename", proxyToPython);
 
+// Terminal routes
+router.post("/terminal/exec", proxyToPython);
+router.get("/terminal/cwd", proxyToPython);
+
+// Agent routes
+router.post("/agent/run", proxyToPython);
+router.get("/agent/status", proxyToPython);
+
 export default router;

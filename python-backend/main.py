@@ -20,6 +20,8 @@ from file_manager import (
     get_file_tree, read_file, write_file, create_file, delete_path,
     rename_path, get_language, LANGUAGE_MAP
 )
+from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
+from agent import run_agent, get_status as get_agent_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -411,6 +413,67 @@ def file_rename():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/terminal/exec", methods=["POST"])
+def terminal_exec():
+    data = request.get_json()
+    command = data.get("command", "").strip()
+    if not command:
+        return jsonify({"error": "command is required"}), 400
+    cwd = data.get("cwd")
+    timeout = min(int(data.get("timeout", 60)), 300)
+    try:
+        result = exec_command(command, cwd=cwd, timeout=timeout)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/terminal/cwd", methods=["GET"])
+def terminal_cwd():
+    try:
+        info = get_env_info()
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/agent/run", methods=["POST"])
+def agent_run():
+    import threading
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    task = data.get("task", "").strip()
+    if not ai_id or not task:
+        return jsonify({"error": "aiId and task are required"}), 400
+
+    working_dir = data.get("workingDir")
+    max_steps = min(int(data.get("maxSteps", 20)), 30)
+
+    current = get_agent_status()
+    if current.get("running"):
+        return jsonify({"error": "An agent task is already running"}), 409
+
+    def _run():
+        try:
+            run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps)
+        except Exception as e:
+            logger.error(f"Agent thread error: {e}")
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({"running": True, "task": task, "steps": [], "result": None})
+
+
+@app.route("/api/agent/status", methods=["GET"])
+def agent_status():
+    try:
+        status = get_agent_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

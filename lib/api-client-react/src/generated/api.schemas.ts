@@ -204,6 +204,82 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface TerminalExecBody {
+  /** Shell command to execute */
+  command: string;
+  /** Working directory (defaults to workspace root) */
+  cwd?: string | null;
+  /** Timeout in seconds */
+  timeout?: number;
+}
+
+export interface TerminalExecResponse {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  elapsedMs: number;
+  cwd: string;
+}
+
+export interface TerminalCwdResponse {
+  cwd: string;
+  workspaceRoot: string;
+  python: string;
+  node: string;
+}
+
+export interface AgentRunBody {
+  /** AI to use for the agent */
+  aiId: string;
+  /** Task description — what to build or do */
+  task: string;
+  /** Working directory for the agent */
+  workingDir?: string | null;
+  /** Maximum number of tool calls */
+  maxSteps?: number;
+}
+
+export type AgentStepType = (typeof AgentStepType)[keyof typeof AgentStepType];
+
+export const AgentStepType = {
+  thought: "thought",
+  tool: "tool",
+  error: "error",
+} as const;
+
+export type AgentStepParams = { [key: string]: unknown } | null;
+
+export interface AgentStep {
+  step: number;
+  type: AgentStepType;
+  content?: string | null;
+  tool?: string | null;
+  params?: AgentStepParams;
+  result?: string | null;
+  elapsedMs?: number;
+}
+
+export interface AgentResult {
+  success: boolean;
+  summary?: string | null;
+  error?: string | null;
+  totalElapsedMs?: number | null;
+}
+
+export interface AgentRunResponse {
+  running: boolean;
+  task: string;
+  steps: AgentStep[];
+  result?: AgentResult | null;
+}
+
+export interface AgentStatusResponse {
+  running: boolean;
+  task?: string | null;
+  steps: AgentStep[];
+  result?: AgentResult | null;
+}
+
 export type GetFileTreeParams = {
   /**
    * Root path to list (relative to workspace root)

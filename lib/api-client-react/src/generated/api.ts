@@ -17,6 +17,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AgentRunBody,
+  AgentRunResponse,
+  AgentStatusResponse,
   AiListResponse,
   AiResponse,
   AskAiBody,
@@ -39,6 +42,9 @@ import type {
   ReadFileParams,
   SessionListResponse,
   SessionResponse,
+  TerminalCwdResponse,
+  TerminalExecBody,
+  TerminalExecResponse,
   UsageStats,
 } from "./api.schemas";
 
@@ -1477,6 +1483,328 @@ export const useRenameFile = <
 > => {
   return useMutation(getRenameFileMutationOptions(options));
 };
+
+/**
+ * @summary Execute a shell command
+ */
+export const getTerminalExecUrl = () => {
+  return `/api/terminal/exec`;
+};
+
+export const terminalExec = async (
+  terminalExecBody: TerminalExecBody,
+  options?: RequestInit,
+): Promise<TerminalExecResponse> => {
+  return customFetch<TerminalExecResponse>(getTerminalExecUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(terminalExecBody),
+  });
+};
+
+export const getTerminalExecMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof terminalExec>>,
+    TError,
+    { data: BodyType<TerminalExecBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof terminalExec>>,
+  TError,
+  { data: BodyType<TerminalExecBody> },
+  TContext
+> => {
+  const mutationKey = ["terminalExec"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof terminalExec>>,
+    { data: BodyType<TerminalExecBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return terminalExec(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TerminalExecMutationResult = NonNullable<
+  Awaited<ReturnType<typeof terminalExec>>
+>;
+export type TerminalExecMutationBody = BodyType<TerminalExecBody>;
+export type TerminalExecMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Execute a shell command
+ */
+export const useTerminalExec = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof terminalExec>>,
+    TError,
+    { data: BodyType<TerminalExecBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof terminalExec>>,
+  TError,
+  { data: BodyType<TerminalExecBody> },
+  TContext
+> => {
+  return useMutation(getTerminalExecMutationOptions(options));
+};
+
+/**
+ * @summary Get current working directory and environment info
+ */
+export const getGetTerminalCwdUrl = () => {
+  return `/api/terminal/cwd`;
+};
+
+export const getTerminalCwd = async (
+  options?: RequestInit,
+): Promise<TerminalCwdResponse> => {
+  return customFetch<TerminalCwdResponse>(getGetTerminalCwdUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTerminalCwdQueryKey = () => {
+  return [`/api/terminal/cwd`] as const;
+};
+
+export const getGetTerminalCwdQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTerminalCwd>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTerminalCwd>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTerminalCwdQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerminalCwd>>> = ({
+    signal,
+  }) => getTerminalCwd({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTerminalCwd>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTerminalCwdQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTerminalCwd>>
+>;
+export type GetTerminalCwdQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current working directory and environment info
+ */
+
+export function useGetTerminalCwd<
+  TData = Awaited<ReturnType<typeof getTerminalCwd>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTerminalCwd>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTerminalCwdQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Run an autonomous coding agent task
+ */
+export const getRunAgentUrl = () => {
+  return `/api/agent/run`;
+};
+
+export const runAgent = async (
+  agentRunBody: AgentRunBody,
+  options?: RequestInit,
+): Promise<AgentRunResponse> => {
+  return customFetch<AgentRunResponse>(getRunAgentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(agentRunBody),
+  });
+};
+
+export const getRunAgentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAgent>>,
+    TError,
+    { data: BodyType<AgentRunBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAgent>>,
+  TError,
+  { data: BodyType<AgentRunBody> },
+  TContext
+> => {
+  const mutationKey = ["runAgent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAgent>>,
+    { data: BodyType<AgentRunBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runAgent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAgentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAgent>>
+>;
+export type RunAgentMutationBody = BodyType<AgentRunBody>;
+export type RunAgentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Run an autonomous coding agent task
+ */
+export const useRunAgent = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAgent>>,
+    TError,
+    { data: BodyType<AgentRunBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAgent>>,
+  TError,
+  { data: BodyType<AgentRunBody> },
+  TContext
+> => {
+  return useMutation(getRunAgentMutationOptions(options));
+};
+
+/**
+ * @summary Get current agent run status
+ */
+export const getGetAgentStatusUrl = () => {
+  return `/api/agent/status`;
+};
+
+export const getAgentStatus = async (
+  options?: RequestInit,
+): Promise<AgentStatusResponse> => {
+  return customFetch<AgentStatusResponse>(getGetAgentStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAgentStatusQueryKey = () => {
+  return [`/api/agent/status`] as const;
+};
+
+export const getGetAgentStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAgentStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAgentStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAgentStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentStatus>>> = ({
+    signal,
+  }) => getAgentStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAgentStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAgentStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAgentStatus>>
+>;
+export type GetAgentStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current agent run status
+ */
+
+export function useGetAgentStatus<
+  TData = Awaited<ReturnType<typeof getAgentStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAgentStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAgentStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Send a prompt to AI with file context attached

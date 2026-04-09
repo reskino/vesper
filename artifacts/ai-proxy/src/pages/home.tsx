@@ -1,96 +1,79 @@
 import { useState, useRef, useEffect } from "react";
-import { 
-  useListAis, 
-  getListAisQueryKey, 
-  useAskAi, 
-  useAskAiWithContext,
-  useSetModel,
-  useGetFileTree,
-  getGetFileTreeQueryKey,
-  useReadFile,
-  getReadFileQueryKey,
-  FileNode
+import {
+  useListAis, getListAisQueryKey,
+  useAskAi, useAskAiWithContext, useSetModel,
+  useGetFileTree, getGetFileTreeQueryKey,
+  useReadFile, getReadFileQueryKey,
+  FileNode,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { 
-  Send, TerminalSquare, AlertCircle, RefreshCw, PlusCircle, 
-  Paperclip, X, Folder, FileIcon, FileCode, FileText, FileJson, ChevronRight, ChevronDown, Loader2,
-  ChevronUp, Cpu
+import {
+  Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
+  FileText, FileJson, ChevronRight, ChevronDown, Loader2,
+  ChevronUp, Cpu, RefreshCw, AlertCircle, Check, Zap,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 
-const getFileIcon = (filename: string) => {
-  if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.jsx') || filename.endsWith('.tsx')) return <FileCode className="h-4 w-4 text-blue-400" />;
-  if (filename.endsWith('.json')) return <FileJson className="h-4 w-4 text-yellow-400" />;
-  if (filename.endsWith('.md')) return <FileText className="h-4 w-4 text-gray-400" />;
-  return <FileIcon className="h-4 w-4 text-gray-500" />;
+// ── File icon helper ──────────────────────────────────────────────────────────
+const getFileIcon = (name: string) => {
+  if (/\.(js|ts|jsx|tsx)$/.test(name)) return <FileCode className="h-4 w-4 text-blue-400" />;
+  if (/\.json$/.test(name)) return <FileJson className="h-4 w-4 text-yellow-400" />;
+  if (/\.md$/.test(name)) return <FileText className="h-4 w-4 text-muted-foreground" />;
+  return <FileIcon className="h-4 w-4 text-muted-foreground" />;
 };
 
-function MiniFileTreeItem({ 
-  node, 
-  depth = 0, 
-  onSelect
-}: { 
-  node: FileNode; 
-  depth?: number; 
-  onSelect: (path: string) => void;
-}) {
+// ── Mini file tree ────────────────────────────────────────────────────────────
+function MiniFileTreeItem({ node, depth = 0, onSelect }: { node: FileNode; depth?: number; onSelect: (p: string) => void }) {
   const [expanded, setExpanded] = useState(depth === 0);
-
-  if (node.name.startsWith('.')) return null;
-
-  if (node.type === 'directory') {
+  if (node.name.startsWith(".")) return null;
+  if (node.type === "directory") {
     return (
       <div>
-        <div 
-          className="flex items-center py-1 px-2 hover:bg-[#1a1a1a] cursor-pointer text-sm text-gray-300 group"
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        <div
+          className="flex items-center py-1.5 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded-md group"
+          style={{ paddingLeft: `${depth * 14 + 8}px` }}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? <ChevronDown className="h-3.5 w-3.5 mr-1 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 mr-1 text-gray-500" />}
-          <Folder className="h-4 w-4 mr-2 text-blue-500" />
+          {expanded ? <ChevronDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />}
+          <Folder className="h-4 w-4 mr-2 text-blue-400" />
           <span className="truncate">{node.name}</span>
         </div>
-        {expanded && node.children && (
-          <div>
-            {node.children.map(child => (
-              <MiniFileTreeItem 
-                key={child.path} 
-                node={child} 
-                depth={depth + 1} 
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        )}
+        {expanded && node.children?.map(c => (
+          <MiniFileTreeItem key={c.path} node={c} depth={depth + 1} onSelect={onSelect} />
+        ))}
       </div>
     );
   }
-
   return (
-    <div 
-      className={`flex items-center justify-between py-1 px-2 cursor-pointer text-sm text-gray-300 hover:bg-[#1a1a1a]`}
-      style={{ paddingLeft: `${depth * 12 + 24}px` }}
+    <div
+      className="flex items-center py-1.5 px-2 hover:bg-muted/50 cursor-pointer text-sm rounded-md"
+      style={{ paddingLeft: `${depth * 14 + 24}px` }}
       onClick={() => onSelect(node.path)}
     >
-      <div className="flex items-center flex-1 min-w-0">
-        {getFileIcon(node.name)}
-        <span className="truncate ml-2">{node.name}</span>
-      </div>
+      {getFileIcon(node.name)}
+      <span className="truncate ml-2">{node.name}</span>
     </div>
   );
 }
 
+// ── AI status dot ─────────────────────────────────────────────────────────────
+function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }) {
+  return (
+    <span className={`h-2 w-2 rounded-full shrink-0 ${
+      !ai.isAvailable ? "bg-red-500" : ai.hasSession ? "bg-emerald-500" : "bg-amber-500"
+    }`} />
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export function Home() {
   const queryClient = useQueryClient();
-  const { data: aisData, isLoading: isLoadingAis } = useListAis({
-    query: { queryKey: getListAisQueryKey() }
-  });
+  const { data: aisData, isLoading: isLoadingAis } = useListAis({ query: { queryKey: getListAisQueryKey() } });
 
   const askAi = useAskAi();
   const askAiWithContext = useAskAiWithContext();
@@ -99,208 +82,134 @@ export function Home() {
   const [selectedAi, setSelectedAi] = useState<string | null>(null);
   const [expandedModelPicker, setExpandedModelPicker] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant", content: string, aiId?: string, error?: boolean }>>([]);
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string; aiId?: string; error?: boolean }>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<any>(null);
-  
-  // Attach file state
+
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
+  const [showMobileAiPicker, setShowMobileAiPicker] = useState(false);
 
-  const { data: treeData, isLoading: treeLoading } = useGetFileTree({ path: "", depth: 10 }, {
-    query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen }
-  });
-
+  const { data: treeData, isLoading: treeLoading } = useGetFileTree(
+    { path: "", depth: 10 },
+    { query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen } }
+  );
   const { data: attachedFileData } = useReadFile(
     { path: attachedFile || "" },
-    { 
-      query: { 
-        enabled: !!attachedFile,
-        queryKey: getReadFileQueryKey({ path: attachedFile || "" }),
-      } 
-    }
+    { query: { enabled: !!attachedFile, queryKey: getReadFileQueryKey({ path: attachedFile || "" }) } }
   );
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-select first AI with session
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => {
     if (aisData?.ais && !selectedAi) {
-      const activeAi = aisData.ais.find(a => a.hasSession);
-      if (activeAi) setSelectedAi(activeAi.id);
-      else if (aisData.ais.length > 0) setSelectedAi(aisData.ais[0].id);
+      const active = aisData.ais.find(a => a.hasSession);
+      setSelectedAi((active ?? aisData.ais[0])?.id ?? null);
     }
   }, [aisData, selectedAi]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, executionResult]);
 
   const isPending = askAi.isPending || askAiWithContext.isPending;
+  const currentAi = aisData?.ais.find(a => a.id === selectedAi);
+  const activeModel = currentAi?.models?.find(m => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
 
-  const handleSend = async () => {
-    if (!prompt.trim() || !selectedAi || isPending) return;
-
-    const userMsg = prompt;
-    setPrompt("");
-    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
-
+  const send = async (text: string) => {
+    if (!text.trim() || !selectedAi || isPending) return;
+    setMessages(prev => [...prev, { role: "user", content: text }]);
     try {
-      let result;
-      if (attachedFile && attachedFileData?.content) {
-        result = await askAiWithContext.mutateAsync({
-          data: {
-            aiId: selectedAi,
-            prompt: userMsg,
-            conversationId,
-            files: [{ path: attachedFile, content: attachedFileData.content }]
-          }
-        });
-      } else {
-        result = await askAi.mutateAsync({
-          data: {
-            aiId: selectedAi,
-            prompt: userMsg,
-            conversationId
-          }
-        });
-      }
-
+      const payload = {
+        aiId: selectedAi,
+        prompt: text,
+        conversationId: conversationId ?? undefined,
+      };
+      const result = attachedFile && attachedFileData?.content
+        ? await askAiWithContext.mutateAsync({ data: { ...payload, files: [{ path: attachedFile, content: attachedFileData.content }] } })
+        : await askAi.mutateAsync({ data: payload });
       if (result.success) {
         setConversationId(result.conversationId);
         setMessages(prev => [...prev, { role: "assistant", content: result.response, aiId: result.aiId }]);
       } else {
-        setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed to get response", error: true }]);
+        setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed", error: true }]);
       }
-    } catch (err: any) {
-      setMessages(prev => [...prev, { role: "assistant", content: "An unexpected error occurred.", error: true }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error.", error: true }]);
     }
   };
 
-  const handleRegenerate = async () => {
-    const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
-    if (!lastUserMessage || !selectedAi || isPending) return;
+  const handleSend = () => { send(prompt); setPrompt(""); };
 
-    try {
-      let result;
-      if (attachedFile && attachedFileData?.content) {
-        result = await askAiWithContext.mutateAsync({
-          data: {
-            aiId: selectedAi,
-            prompt: lastUserMessage.content,
-            conversationId,
-            files: [{ path: attachedFile, content: attachedFileData.content }]
-          }
-        });
-      } else {
-        result = await askAi.mutateAsync({
-          data: {
-            aiId: selectedAi,
-            prompt: lastUserMessage.content,
-            conversationId
-          }
-        });
-      }
-
-      if (result.success) {
-        setConversationId(result.conversationId);
-        setMessages(prev => [...prev, { role: "assistant", content: result.response, aiId: result.aiId }]);
-      }
-    } catch (err: any) {}
+  const handleRegenerate = () => {
+    const last = [...messages].reverse().find(m => m.role === "user");
+    if (last) send(last.content);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const newChat = () => {
-    setMessages([]);
-    setConversationId(null);
-    setExecutionResult(null);
-  };
+  const newChat = () => { setMessages([]); setConversationId(null); setExecutionResult(null); };
 
   return (
-    <div className="flex h-full w-full bg-[#0a0a0a] text-gray-200">
-      {/* AI Selector Sidebar */}
-      <div className="w-52 border-r border-[#1a1a1a] bg-[#0d0d0d] flex flex-col shrink-0">
-        <div className="p-3 border-b border-[#1a1a1a] flex items-center justify-between">
-          <span className="font-mono text-xs text-gray-500 uppercase tracking-wider">Models</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400" onClick={newChat} title="New Chat">
+    <div className="flex h-full w-full overflow-hidden bg-background">
+
+      {/* ── Desktop AI sidebar ──────────────────────────────────────────── */}
+      <div className="hidden sm:flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
+        <div className="px-3 py-3 border-b border-border/50 flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Models</span>
+          <button onClick={newChat} className="h-6 w-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="New chat">
             <PlusCircle className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
+
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div className="p-2 space-y-0.5">
             {isLoadingAis ? (
-              <div className="p-4 text-xs text-gray-500 text-center">Loading...</div>
+              <div className="py-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />Loading
+              </div>
             ) : aisData?.ais.map(ai => {
-              const isSelected = selectedAi === ai.id;
-              const isExpanded = expandedModelPicker === ai.id;
-              const activeModel = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
+              const isSel = selectedAi === ai.id;
+              const isExp = expandedModelPicker === ai.id;
+              const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
               return (
                 <div key={ai.id}>
-                  <div className={`flex items-center rounded-md text-sm transition-colors
-                    ${isSelected ? "bg-[#1a1a1a] text-white" : "hover:bg-[#111] text-gray-400"}`}
-                  >
-                    <button
-                      className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 text-left"
-                      onClick={() => setSelectedAi(ai.id)}
-                    >
-                      <div className={`h-2 w-2 rounded-full shrink-0 ${
-                        !ai.isAvailable ? "bg-red-500" :
-                        ai.hasSession ? "bg-green-500" : "bg-amber-500"
-                      }`} />
-                      <span className="truncate flex-1">{ai.name}</span>
+                  <div className={`flex items-center rounded-xl transition-all ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}>
+                    <button className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5 text-left" onClick={() => setSelectedAi(ai.id)}>
+                      <StatusDot ai={ai} />
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
+                        {isSel && mdl && <p className="text-[10px] text-muted-foreground truncate font-mono">{mdl.name}</p>}
+                      </div>
                     </button>
                     {ai.models && ai.models.length > 0 && (
                       <button
-                        className="shrink-0 opacity-40 hover:opacity-100 transition-opacity p-2 rounded"
+                        className="shrink-0 p-2 text-muted-foreground hover:text-foreground opacity-60 hover:opacity-100 transition-all"
                         title="Switch model"
-                        onClick={() => setExpandedModelPicker(isExpanded ? null : ai.id)}
+                        onClick={() => setExpandedModelPicker(isExp ? null : ai.id)}
                       >
-                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+                        {isExp ? <ChevronUp className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
                       </button>
                     )}
                   </div>
 
-                  {/* Active model label */}
-                  {isSelected && activeModel && (
-                    <div className="px-3 pb-1">
-                      <span className="text-[10px] text-gray-600 font-mono">{activeModel.name}</span>
-                    </div>
-                  )}
-
-                  {/* Model picker dropdown */}
-                  {isExpanded && ai.models && ai.models.length > 0 && (
-                    <div className="mx-2 mb-1 border border-[#2a2a2a] rounded-md overflow-hidden bg-[#0a0a0a]">
-                      {ai.models.map(model => (
+                  {isExp && ai.models && (
+                    <div className="mx-2 mb-1 rounded-xl border border-border overflow-hidden bg-background">
+                      {ai.models.map(m => (
                         <button
-                          key={model.id}
-                          className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2
-                            ${ai.currentModel === model.id
-                              ? "bg-primary/20 text-primary"
-                              : "text-gray-400 hover:bg-[#1a1a1a] hover:text-gray-200"}`}
-                          onClick={() => {
-                            setModelMutation.mutate(
-                              { data: { aiId: ai.id, modelId: model.id } },
-                              {
-                                onSuccess: () => {
-                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
-                                  setExpandedModelPicker(null);
-                                }
-                              }
-                            );
-                          }}
+                          key={m.id}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
+                            ${ai.currentModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}
+                          onClick={() => setModelMutation.mutate(
+                            { data: { aiId: ai.id, modelId: m.id } },
+                            { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListAisQueryKey() }); setExpandedModelPicker(null); } }
+                          )}
                         >
-                          <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                            ai.currentModel === model.id ? "bg-primary" : "bg-transparent border border-gray-600"
-                          }`} />
-                          <span className="truncate">{model.name}</span>
+                          {ai.currentModel === m.id ? <Check className="h-3 w-3 shrink-0" /> : <span className="h-3 w-3 shrink-0" />}
+                          {m.name}
                         </button>
                       ))}
                     </div>
@@ -312,54 +221,96 @@ export function Home() {
         </ScrollArea>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <div className="flex-1 overflow-auto p-4 md:p-6" ref={scrollRef}>
+      {/* ── Main chat area ──────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Mobile header */}
+        <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center">
+              <Zap className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">AI Proxy</p>
+              {currentAi && <p className="text-[10px] text-muted-foreground">{currentAi.name}{activeModel ? ` · ${activeModel.name}` : ""}</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowMobileAiPicker(true)}
+              className="flex items-center gap-1.5 bg-muted rounded-xl px-3 py-1.5 text-xs font-medium text-foreground"
+            >
+              {currentAi && <StatusDot ai={currentAi} />}
+              {currentAi?.name ?? "Select AI"}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            <button onClick={newChat} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors">
+              <PlusCircle className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto" ref={scrollRef}>
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 space-y-4">
-              <TerminalSquare className="h-12 w-12 opacity-20" />
-              <div>
-                <h3 className="text-lg font-medium text-gray-300">Proxy Terminal Ready</h3>
-                <p className="text-sm max-w-md mx-auto mt-2">
-                  Select an AI model from the sidebar and start typing to route your prompt.
-                </p>
+            <div className="h-full flex flex-col items-center justify-center text-center px-4 py-12">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
+                <Zap className="h-8 w-8 text-primary" />
               </div>
+              <h2 className="text-xl font-bold mb-2">Universal AI Proxy</h2>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Route your coding prompts to ChatGPT, Grok, or Claude — pick a model and start chatting.
+              </p>
+              {currentAi && !currentAi.hasSession && (
+                <div className="mt-5 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  No active session — go to Sessions to log in
+                </div>
+              )}
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto space-y-8 pb-10">
+            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-4">
               {messages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-lg p-4 ${
-                    msg.role === "user" 
-                      ? "bg-[#1a1a1a] text-gray-200 border border-[#2a2a2a]" 
-                      : msg.error 
-                        ? "bg-red-950/20 border border-red-900/50 text-red-400"
-                        : "bg-transparent text-gray-300"
+                <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Zap className="h-4 w-4 text-primary" />
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] sm:max-w-[80%] ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3"
+                      : msg.error
+                        ? "bg-red-950/30 border border-red-500/30 text-red-400 rounded-2xl rounded-tl-sm px-4 py-3"
+                        : "text-foreground"
                   }`}>
                     {msg.role === "user" ? (
-                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     ) : (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
-                            {aisData?.ais.find(a => a.id === msg.aiId)?.name || "Assistant"}
-                          </span>
-                        </div>
-                        <MarkdownRenderer 
-                          content={msg.content} 
-                          onCodeExecuted={setExecutionResult}
-                        />
+                      <div className="space-y-3">
+                        {msg.aiId && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                              {aisData?.ais.find(a => a.id === msg.aiId)?.name ?? "AI"}
+                            </span>
+                          </div>
+                        )}
+                        <MarkdownRenderer content={msg.content} onCodeExecuted={setExecutionResult} />
                       </div>
                     )}
                   </div>
                 </div>
               ))}
-              {askAi.isPending && (
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] p-4 text-gray-500 flex items-center gap-3">
-                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce" />
-                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <div className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:0.4s]" />
+
+              {isPending && (
+                <div className="flex gap-3 justify-start">
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Zap className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3.5 flex items-center gap-1.5">
+                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce" />
+                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
                   </div>
                 </div>
               )}
@@ -367,110 +318,132 @@ export function Home() {
           )}
         </div>
 
-        {/* Output panel if code was executed */}
+        {/* Code execution output */}
         {executionResult && (
-          <div className="shrink-0 z-10 relative shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+          <div className="shrink-0 border-t border-border">
             <TerminalOutput result={executionResult} onClose={() => setExecutionResult(null)} />
           </div>
         )}
 
-        {/* Input Area */}
-        <div className="shrink-0 p-4 bg-[#0a0a0a] border-t border-[#1a1a1a]">
-          <div className="max-w-4xl mx-auto relative flex flex-col gap-2">
-            
-            {/* Attached file chip */}
+        {/* Input bar */}
+        <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-3 sm:px-4 pt-3 pb-3">
+          <div className="max-w-3xl mx-auto space-y-2">
             {attachedFile && (
-              <div className="flex items-center gap-2 bg-[#1a1a1a] text-gray-300 text-xs px-3 py-1.5 rounded-full w-max border border-[#333]">
-                <Paperclip className="h-3 w-3 text-primary" />
-                <span className="max-w-[200px] truncate">{attachedFile}</span>
-                <button 
-                  className="hover:bg-[#333] rounded-full p-0.5 ml-1"
-                  onClick={() => setAttachedFile(null)}
-                >
+              <div className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-3 py-1.5 rounded-xl w-max max-w-full">
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="truncate max-w-[200px]">{attachedFile}</span>
+                <button onClick={() => setAttachedFile(null)} className="ml-1 hover:text-foreground transition-colors">
                   <X className="h-3 w-3" />
                 </button>
               </div>
             )}
 
-            <div className="relative">
-              <Textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Enter prompt (Shift+Enter for new line)..."
-                className="min-h-[80px] max-h-64 resize-none bg-[#111] border-[#222] focus-visible:ring-1 focus-visible:ring-primary text-gray-200 py-3 pr-24 pl-12"
-                disabled={askAi.isPending || askAiWithContext.isPending}
-              />
-              
-              {/* Attach button */}
-              <Dialog open={isFilePickerOpen} onOpenChange={setIsFilePickerOpen}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-3 top-3 h-6 w-6 text-gray-400 hover:text-gray-200"
-                  onClick={() => setIsFilePickerOpen(true)}
-                  title="Attach file context"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <DialogContent className="bg-[#0d0d0d] border-[#1a1a1a] text-gray-200 max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Select File</DialogTitle>
-                  </DialogHeader>
-                  <ScrollArea className="h-[300px] border border-[#1a1a1a] rounded-md bg-[#0a0a0a]">
-                    <div className="p-2">
-                      {treeLoading ? (
-                        <div className="flex items-center justify-center p-4 text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                      ) : treeData?.tree ? (
-                        <MiniFileTreeItem 
-                          node={treeData.tree} 
-                          onSelect={(path) => {
-                            setAttachedFile(path);
-                            setIsFilePickerOpen(false);
-                          }} 
-                        />
-                      ) : (
-                        <div className="p-4 text-xs text-gray-500 text-center">No files found</div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
+            <div className="flex items-end gap-2">
+              {/* Attach file */}
+              <button
+                onClick={() => setIsFilePickerOpen(true)}
+                className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Attach file"
+              >
+                <Paperclip className="h-5 w-5" />
+              </button>
 
-              <div className="absolute right-3 bottom-3 flex items-center gap-2">
+              {/* Textarea */}
+              <div className="flex-1 relative">
+                <Textarea
+                  ref={textareaRef}
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={selectedAi ? "Message the AI... (Enter to send)" : "Select a model first..."}
+                  className="min-h-[44px] max-h-48 resize-none bg-muted/40 border-border/50 focus-visible:ring-1 focus-visible:ring-primary rounded-xl text-sm py-3 pr-3"
+                  disabled={isPending}
+                  rows={1}
+                />
+              </div>
+
+              {/* Regen + Send */}
+              <div className="flex items-center gap-1 shrink-0">
                 {messages.length > 0 && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-gray-400 hover:text-gray-200"
+                  <button
                     onClick={handleRegenerate}
                     disabled={isPending}
-                    title="Regenerate last response"
+                    className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+                    title="Regenerate"
                   >
                     <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
-                  </Button>
+                  </button>
                 )}
-                <Button 
-                  size="sm" 
-                  onClick={handleSend} 
+                <button
+                  onClick={handleSend}
                   disabled={!prompt.trim() || isPending || !selectedAi}
-                  className="h-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="h-10 w-10 flex items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-all shadow-sm"
                 >
-                  <Send className="h-4 w-4 mr-1" /> Send
-                </Button>
+                  <Send className="h-4 w-4" />
+                </button>
               </div>
             </div>
-            
-            {/* Warning if AI selected has no session */}
-            {selectedAi && aisData?.ais.find(a => a.id === selectedAi && !a.hasSession) && (
-              <div className="absolute -top-8 left-0 text-xs text-amber-500 flex items-center gap-1 bg-amber-500/10 px-2 py-1 rounded">
+
+            {currentAi && !currentAi.hasSession && (
+              <p className="text-[11px] text-amber-500 flex items-center gap-1.5">
                 <AlertCircle className="h-3 w-3" />
-                No active session for this AI. Sending may fail.
-              </div>
+                No session — messages may fail. Add a session first.
+              </p>
             )}
           </div>
         </div>
       </div>
+
+      {/* ── Mobile AI picker sheet ──────────────────────────────────────── */}
+      <Dialog open={showMobileAiPicker} onOpenChange={setShowMobileAiPicker}>
+        <DialogContent className="sm:hidden max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Select Model</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            {aisData?.ais.map(ai => {
+              const isSel = selectedAi === ai.id;
+              const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
+              return (
+                <button
+                  key={ai.id}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-left ${
+                    isSel ? "bg-primary/10 border border-primary/20" : "hover:bg-muted border border-transparent"
+                  }`}
+                  onClick={() => { setSelectedAi(ai.id); setShowMobileAiPicker(false); }}
+                >
+                  <StatusDot ai={ai} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${isSel ? "text-primary" : ""}`}>{ai.name}</p>
+                    {mdl && <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>}
+                  </div>
+                  {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── File picker dialog ──────────────────────────────────────────── */}
+      <Dialog open={isFilePickerOpen} onOpenChange={setIsFilePickerOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Attach a File</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-72 border border-border rounded-xl bg-muted/20">
+            <div className="p-2">
+              {treeLoading ? (
+                <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : treeData?.tree ? (
+                <MiniFileTreeItem node={treeData.tree} onSelect={p => { setAttachedFile(p); setIsFilePickerOpen(false); }} />
+              ) : (
+                <p className="text-xs text-muted-foreground text-center p-6">No files found</p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

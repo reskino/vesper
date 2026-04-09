@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Code2, TerminalSquare, Bot, Database, History, Moon, Sun } from "lucide-react";
+import { MessageSquare, Code2, TerminalSquare, Bot, Database, History, Moon, Sun, BookOpen } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { href: "/agent",    label: "Agent",    icon: Bot },
   { href: "/sessions", label: "Sessions", icon: Database },
   { href: "/history",  label: "History",  icon: History },
+  { href: "/help",     label: "Help",     icon: BookOpen },
 ];
 
 export function Sidebar() {
@@ -74,7 +75,7 @@ export function Sidebar() {
 
       {/* ── Mobile bottom nav ────────────────────────── */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-sidebar/95 backdrop-blur-xl border-t border-border grid grid-cols-5">
-        {NAV.slice(0, 5).map(({ href, label, icon: Icon }) => {
+        {[NAV[0], NAV[1], NAV[3], NAV[4], NAV[6]].map(({ href, label, icon: Icon }) => {
           const active = location === href;
           return (
             <Link key={href} href={href} className="col-span-1">

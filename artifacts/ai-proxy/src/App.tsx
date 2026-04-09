@@ -10,6 +10,7 @@ import { History } from "@/pages/history";
 import Editor from "@/pages/editor";
 import TerminalPage from "@/pages/terminal";
 import AgentPage from "@/pages/agent";
+import HelpPage from "@/pages/help";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ function Router() {
         <Route path="/agent" component={AgentPage} />
         <Route path="/sessions" component={Sessions} />
         <Route path="/history" component={History} />
+        <Route path="/help" component={HelpPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

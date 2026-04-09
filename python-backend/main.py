@@ -30,6 +30,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _ensure_playwright_browsers():
+    """Install Playwright's Chromium browser if it is not already present."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            try:
+                # Try to get the executable path — if it exists we're done
+                exe = p.chromium.executable_path
+                if os.path.exists(exe):
+                    logger.info("Playwright Chromium already installed at %s", exe)
+                    return
+            except Exception:
+                pass
+        logger.info("Playwright Chromium not found — running 'playwright install chromium' …")
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if result.returncode == 0:
+            logger.info("Playwright Chromium installed successfully")
+        else:
+            logger.warning("playwright install returned %d: %s", result.returncode, result.stderr[:500])
+    except Exception as exc:
+        logger.warning("Could not ensure Playwright browsers: %s", exc)
+
+
+_ensure_playwright_browsers()
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -319,6 +350,49 @@ def create_session():
 def delete_session_route(ai_id):
     success, message = delete_session(ai_id)
     return jsonify({"success": success, "message": message, "aiId": ai_id})
+
+
+@app.route("/api/sessions/import", methods=["POST"])
+def import_session():
+    """
+    Accept a raw Playwright storage-state JSON (cookies + origins/localStorage)
+    submitted manually by the user and save it as the session for the given AI.
+    """
+    import json as _json
+    from config import SESSIONS_DIR
+
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    state_json = data.get("stateJson")
+
+    if not ai_id or not state_json:
+        return jsonify({"success": False, "message": "aiId and stateJson are required"}), 400
+
+    if ai_id not in AI_CONFIGS:
+        return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
+
+    # Validate it's parseable JSON
+    try:
+        state = _json.loads(state_json) if isinstance(state_json, str) else state_json
+        if not isinstance(state, dict):
+            raise ValueError("Must be a JSON object")
+    except Exception as exc:
+        return jsonify({"success": False, "message": f"Invalid JSON: {exc}"}), 400
+
+    # Ensure it has the expected Playwright shape
+    if "cookies" not in state and "origins" not in state:
+        return jsonify({"success": False, "message": "JSON must contain 'cookies' or 'origins' keys (Playwright storage state format)"}), 400
+
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
+    session_path = os.path.join(SESSIONS_DIR, f"{ai_id}_state.json")
+    try:
+        with open(session_path, "w") as f:
+            _json.dump(state, f, indent=2)
+        logger.info("Imported session for %s from manual cookie paste", ai_id)
+        return jsonify({"success": True, "message": f"Session imported for {AI_CONFIGS[ai_id]['name']}", "aiId": ai_id})
+    except Exception as exc:
+        logger.error("Failed to write session file: %s", exc)
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 # ─── History ─────────────────────────────────────────────────────────────────

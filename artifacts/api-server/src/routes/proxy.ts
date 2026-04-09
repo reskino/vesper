@@ -67,6 +67,7 @@ router.post("/proxy/set-model", proxyToPython);
 // Session routes
 router.get("/sessions", proxyToPython);
 router.post("/sessions/create", proxyToPython);
+router.post("/sessions/import", proxyToPython);
 router.delete("/sessions/:aiId/delete", proxyToPython);
 
 // History routes

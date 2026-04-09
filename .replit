@@ -3,6 +3,7 @@ modules = ["nodejs-24", "python-3.11"]
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
@@ -20,6 +21,14 @@ author = "agent"
 task = "workflow.run"
 args = "Python AI Backend"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/api-server: API Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/ai-proxy: web"
+
 [[workflows.workflow]]
 name = "Python AI Backend"
 author = "agent"
@@ -31,6 +40,30 @@ waitForPort = 5050
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "artifacts/api-server: API Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "artifacts/ai-proxy: web"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=19906 BASE_PATH=/ pnpm --filter @workspace/ai-proxy run dev"
+waitForPort = 19906
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -62,4 +95,4 @@ externalPort = 3002
 
 [nix]
 channel = "stable-25_05"
-packages = ["gitFull", "playwright-driver"]
+packages = ["gitFull", "openssl", "playwright-driver", "postgresql"]

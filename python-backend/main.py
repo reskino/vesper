@@ -1,11 +1,15 @@
 import os
 import sys
 import uuid
+import json as _json
+import base64
 import logging
+import shutil
 import subprocess
 import threading
 import time
-from flask import Flask, jsonify, request
+import tempfile
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 from config import AI_CONFIGS, FALLBACK_ORDER, get_active_model, set_active_model
@@ -322,6 +326,45 @@ def list_sessions():
     return jsonify({"sessions": sessions})
 
 
+# ─── Browser session worker management ───────────────────────────────────────
+# Keyed by ai_id → {"proc": Popen, "work_dir": str}
+_browser_workers: dict = {}
+_workers_lock = threading.Lock()
+
+XVFB_RUN = shutil.which("xvfb-run")
+WORKER_SCRIPT = os.path.join(os.path.dirname(__file__), "session_browser_worker.py")
+
+
+def _launch_browser_worker(ai_id: str) -> tuple:
+    """Start xvfb-run python3 session_browser_worker.py <ai_id> <work_dir>."""
+    work_dir = os.path.join(tempfile.gettempdir(), f"vesper_browser_{ai_id}")
+    os.makedirs(work_dir, exist_ok=True)
+    # Remove stale command file if any
+    cmd_path = os.path.join(work_dir, "command.txt")
+    if os.path.exists(cmd_path):
+        os.remove(cmd_path)
+
+    cmd = [sys.executable, WORKER_SCRIPT, ai_id, work_dir]
+    if XVFB_RUN:
+        cmd = [XVFB_RUN, "-a", "--"] + cmd
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with _workers_lock:
+        _browser_workers[ai_id] = {"proc": proc, "work_dir": work_dir}
+    return proc, work_dir
+
+
+def _send_worker_command(ai_id: str, payload: dict) -> bool:
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return False
+    cmd_path = os.path.join(info["work_dir"], "command.txt")
+    with open(cmd_path, "w") as f:
+        f.write(_json.dumps(payload))
+    return True
+
+
 @app.route("/api/sessions/create", methods=["POST"])
 def create_session():
     data = request.get_json()
@@ -329,21 +372,82 @@ def create_session():
 
     if not ai_id:
         return jsonify({"success": False, "message": "aiId is required"}), 400
-
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
 
-    def run_session():
-        create_session_interactive(ai_id)
+    # Kill any existing worker for this AI
+    with _workers_lock:
+        old = _browser_workers.pop(ai_id, None)
+    if old:
+        try:
+            old["proc"].terminate()
+        except Exception:
+            pass
 
-    thread = threading.Thread(target=run_session, daemon=True)
-    thread.start()
+    try:
+        _launch_browser_worker(ai_id)
+    except Exception as e:
+        logger.error("Failed to launch browser worker: %s", e)
+        return jsonify({"success": False, "message": str(e)}), 500
 
     return jsonify({
         "success": True,
-        "message": f"Browser opened for {AI_CONFIGS[ai_id]['name']}. Please log in, then close the browser window to save your session.",
+        "message": f"Browser launched for {AI_CONFIGS[ai_id]['name']}. Watch it in Vesper and log in.",
         "aiId": ai_id,
     })
+
+
+@app.route("/api/sessions/browser-status/<ai_id>", methods=["GET"])
+def browser_status(ai_id):
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return jsonify({"active": False, "status": "idle"})
+
+    proc = info["proc"]
+    if proc.poll() is not None:
+        # Worker finished
+        with _workers_lock:
+            _browser_workers.pop(ai_id, None)
+
+    status_file = os.path.join(info["work_dir"], "status.json")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file) as f:
+                status = _json.load(f)
+            return jsonify({"active": proc.poll() is None, **status})
+        except Exception:
+            pass
+    return jsonify({"active": proc.poll() is None, "status": "starting"})
+
+
+@app.route("/api/sessions/browser-screenshot/<ai_id>", methods=["GET"])
+def browser_screenshot(ai_id):
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return jsonify({"error": "No active browser session"}), 404
+
+    screenshot_file = os.path.join(info["work_dir"], "latest.png")
+    if not os.path.exists(screenshot_file):
+        return jsonify({"error": "Screenshot not yet available"}), 202
+
+    try:
+        with open(screenshot_file, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode("utf-8")
+        return jsonify({"screenshot": f"data:image/png;base64,{b64}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/browser-action/<ai_id>", methods=["POST"])
+def browser_action(ai_id):
+    payload = request.get_json() or {}
+    ok = _send_worker_command(ai_id, payload)
+    if not ok:
+        return jsonify({"success": False, "message": "No active browser session"}), 404
+    return jsonify({"success": True})
 
 
 @app.route("/api/sessions/<ai_id>/delete", methods=["DELETE"])

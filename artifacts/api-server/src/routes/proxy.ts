@@ -69,6 +69,9 @@ router.get("/sessions", proxyToPython);
 router.post("/sessions/create", proxyToPython);
 router.post("/sessions/import", proxyToPython);
 router.delete("/sessions/:aiId/delete", proxyToPython);
+router.get("/sessions/browser-status/:aiId", proxyToPython);
+router.get("/sessions/browser-screenshot/:aiId", proxyToPython);
+router.post("/sessions/browser-action/:aiId", proxyToPython);
 
 // History routes
 router.get("/history", proxyToPython);

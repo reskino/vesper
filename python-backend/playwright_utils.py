@@ -2,13 +2,82 @@ import os
 import json
 import time
 import logging
+import shutil
+import threading
+import subprocess
+import tempfile
+import base64
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, TimeoutError as PlaywrightTimeout
 
 from config import AI_CONFIGS, SESSIONS_DIR, DEFAULT_TIMEOUT, MAX_RESPONSE_WAIT, get_model_url_param
 
 logger = logging.getLogger(__name__)
+
+# ─── Remote browser session state ────────────────────────────────────────────
+# Keyed by ai_id, holds live browser session info for the "Desktop" login flow
+
+_remote_sessions: Dict[str, Dict[str, Any]] = {}
+_remote_lock = threading.Lock()
+
+def _get_free_display() -> int:
+    """Return a free X display number (99..199)."""
+    for num in range(99, 200):
+        lock_file = f"/tmp/.X{num}-lock"
+        if not os.path.exists(lock_file):
+            return num
+    return 99
+
+
+def _start_xvfb(display: int) -> Optional[subprocess.Popen]:
+    """Start an Xvfb process on :display and return it (or None on failure)."""
+    xvfb = shutil.which("Xvfb") or shutil.which("xvfb-run")
+    if not xvfb:
+        logger.warning("Xvfb not found; browser may not be able to open without a display")
+        return None
+    try:
+        # Use Xvfb directly if available, else fall back to xvfb-run
+        if "xvfb-run" in xvfb:
+            return None  # xvfb-run wraps a command; we can't use it as a daemon easily
+        proc = subprocess.Popen(
+            ["Xvfb", f":{display}", "-screen", "0", "1280x900x24", "-ac"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1)  # give Xvfb a moment to start
+        return proc
+    except Exception as exc:
+        logger.warning("Failed to start Xvfb: %s", exc)
+        return None
+
+
+def get_remote_session(ai_id: str) -> Optional[Dict[str, Any]]:
+    with _remote_lock:
+        return _remote_sessions.get(ai_id)
+
+
+def close_remote_session(ai_id: str):
+    with _remote_lock:
+        info = _remote_sessions.pop(ai_id, None)
+    if info:
+        try:
+            info.get("context") and info["context"].close()
+        except Exception:
+            pass
+        try:
+            info.get("browser") and info["browser"].close()
+        except Exception:
+            pass
+        try:
+            info.get("playwright") and info["playwright"].stop()
+        except Exception:
+            pass
+        try:
+            xvfb_proc = info.get("xvfb_proc")
+            xvfb_proc and xvfb_proc.terminate()
+        except Exception:
+            pass
 
 
 def get_session_path(ai_id: str) -> str:

@@ -2,7 +2,7 @@
 
 ## Overview
 
-A full-stack Universal AI Coding Proxy and AI-powered development environment that routes coding prompts to multiple AI chat services (ChatGPT, Grok, Claude) via browser automation with Playwright. No API keys needed — drives the actual AI websites with persistent logged-in sessions.
+A full-stack Universal AI Coding Proxy and AI-powered development environment that routes coding prompts to multiple AI services (ChatGPT, Grok, Claude) via their **official REST APIs**. Requires API keys — stored locally in `python-backend/sessions/keys.json` or via environment variables.
 
 ## Stack
 
@@ -12,17 +12,17 @@ A full-stack Universal AI Coding Proxy and AI-powered development environment th
 - **TypeScript version**: 5.9
 - **Frontend**: React + Vite (artifacts/ai-proxy) at `/`
 - **API Gateway**: Express 5 (artifacts/api-server) at `/api`
-- **Python Backend**: Flask + Playwright (python-backend/) on port 5050
+- **Python Backend**: Flask + OpenAI/Anthropic SDKs (python-backend/) on port 5050
 - **Validation**: Zod (`zod/v4`)
 - **API codegen**: Orval (from OpenAPI spec)
 
 ## Architecture
 
 ```
-Browser → React Frontend (/) → Express API (/api) → Python Flask (:5050) → Playwright → AI Websites
+Browser → React Frontend (/) → Express API (/api) → Python Flask (:5050) → Official APIs (OpenAI / xAI / Anthropic)
 ```
 
-The Express server proxies all routes to the Python Flask backend which does browser automation.
+The Express server proxies all routes to the Python Flask backend which calls official AI REST APIs.
 
 ## Python Backend (python-backend/)
 

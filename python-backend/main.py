@@ -2,20 +2,18 @@ import os
 import sys
 import uuid
 import json as _json
-import base64
 import logging
-import shutil
 import subprocess
 import threading
 import time
-import tempfile
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 from config import AI_CONFIGS, FALLBACK_ORDER, get_active_model, set_active_model
-from playwright_utils import (
-    session_exists, get_session_info, create_session_interactive,
-    delete_session, send_prompt, check_ai_available
+from api_client import (
+    session_exists, get_session_info, delete_session,
+    send_prompt, check_ai_available,
+    get_api_key, set_api_key, delete_api_key, get_key_info,
 )
 from history_manager import (
     add_message, get_messages, get_all_summaries, clear_messages, get_stats
@@ -33,37 +31,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
-
-
-def _ensure_playwright_browsers():
-    """Install Playwright's Chromium browser if it is not already present."""
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            try:
-                # Try to get the executable path — if it exists we're done
-                exe = p.chromium.executable_path
-                if os.path.exists(exe):
-                    logger.info("Playwright Chromium already installed at %s", exe)
-                    return
-            except Exception:
-                pass
-        logger.info("Playwright Chromium not found — running 'playwright install chromium' …")
-        result = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if result.returncode == 0:
-            logger.info("Playwright Chromium installed successfully")
-        else:
-            logger.warning("playwright install returned %d: %s", result.returncode, result.stderr[:500])
-    except Exception as exc:
-        logger.warning("Could not ensure Playwright browsers: %s", exc)
-
-
-_ensure_playwright_browsers()
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -171,7 +138,6 @@ def ask_ai():
 
 @app.route("/api/proxy/ask-with-context", methods=["POST"])
 def ask_ai_with_context():
-    """Send a prompt to AI with attached file context (like an AI coding assistant)."""
     data = request.get_json()
     ai_id = data.get("aiId")
     user_prompt = data.get("prompt", "").strip()
@@ -311,13 +277,13 @@ def execute_code():
         })
 
 
-# ─── Sessions ────────────────────────────────────────────────────────────────
+# ─── API Key Management (replaces browser Sessions) ──────────────────────────
 
 @app.route("/api/sessions")
 def list_sessions():
     sessions = []
     for ai_id, config in AI_CONFIGS.items():
-        info = get_session_info(ai_id)
+        info = get_key_info(ai_id)
         sessions.append({
             "aiId": ai_id,
             "aiName": config["name"],
@@ -326,176 +292,75 @@ def list_sessions():
     return jsonify({"sessions": sessions})
 
 
-# ─── Browser session worker management ───────────────────────────────────────
-# Keyed by ai_id → {"proc": Popen, "work_dir": str}
-_browser_workers: dict = {}
-_workers_lock = threading.Lock()
-
-XVFB_RUN = shutil.which("xvfb-run")
-WORKER_SCRIPT = os.path.join(os.path.dirname(__file__), "session_browser_worker.py")
-
-
-def _launch_browser_worker(ai_id: str) -> tuple:
-    """Start xvfb-run python3 session_browser_worker.py <ai_id> <work_dir>."""
-    work_dir = os.path.join(tempfile.gettempdir(), f"vesper_browser_{ai_id}")
-    os.makedirs(work_dir, exist_ok=True)
-    # Remove stale command file if any
-    cmd_path = os.path.join(work_dir, "command.txt")
-    if os.path.exists(cmd_path):
-        os.remove(cmd_path)
-
-    log_path = os.path.join(work_dir, "worker.log")
-    log_file = open(log_path, "w")
-    cmd = [sys.executable, WORKER_SCRIPT, ai_id, work_dir]
-    proc = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
-    with _workers_lock:
-        _browser_workers[ai_id] = {"proc": proc, "work_dir": work_dir}
-    return proc, work_dir
-
-
-def _send_worker_command(ai_id: str, payload: dict) -> bool:
-    with _workers_lock:
-        info = _browser_workers.get(ai_id)
-    if not info:
-        return False
-    cmd_path = os.path.join(info["work_dir"], "command.txt")
-    with open(cmd_path, "w") as f:
-        f.write(_json.dumps(payload))
-    return True
-
-
-@app.route("/api/sessions/create", methods=["POST"])
-def create_session():
+@app.route("/api/sessions/set-key", methods=["POST"])
+def set_key_route():
     data = request.get_json()
     ai_id = data.get("aiId")
+    api_key = (data.get("apiKey") or "").strip()
 
     if not ai_id:
         return jsonify({"success": False, "message": "aiId is required"}), 400
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
+    if not api_key:
+        return jsonify({"success": False, "message": "apiKey is required"}), 400
 
-    # Kill any existing worker for this AI
-    with _workers_lock:
-        old = _browser_workers.pop(ai_id, None)
-    if old:
-        try:
-            old["proc"].terminate()
-        except Exception:
-            pass
-
-    try:
-        _launch_browser_worker(ai_id)
-    except Exception as e:
-        logger.error("Failed to launch browser worker: %s", e)
-        return jsonify({"success": False, "message": str(e)}), 500
-
-    return jsonify({
-        "success": True,
-        "message": f"Browser launched for {AI_CONFIGS[ai_id]['name']}. Watch it in Vesper and log in.",
-        "aiId": ai_id,
-    })
+    ok = set_api_key(ai_id, api_key)
+    if ok:
+        config = AI_CONFIGS[ai_id]
+        logger.info("API key set for %s", ai_id)
+        return jsonify({
+            "success": True,
+            "message": f"API key saved for {config['name']}",
+            "aiId": ai_id,
+        })
+    return jsonify({"success": False, "message": "Failed to save key"}), 500
 
 
-@app.route("/api/sessions/browser-status/<ai_id>", methods=["GET"])
-def browser_status(ai_id):
-    with _workers_lock:
-        info = _browser_workers.get(ai_id)
-    if not info:
-        return jsonify({"active": False, "status": "idle"})
+@app.route("/api/sessions/create", methods=["POST"])
+def create_session():
+    """
+    Legacy endpoint kept for API-client-react compatibility.
+    Expects {aiId, apiKey} — just calls set_key_route logic.
+    """
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    api_key = (data.get("apiKey") or "").strip()
 
-    proc = info["proc"]
-    if proc.poll() is not None:
-        # Worker finished
-        with _workers_lock:
-            _browser_workers.pop(ai_id, None)
+    if not ai_id:
+        return jsonify({"success": False, "message": "aiId is required"}), 400
+    if ai_id not in AI_CONFIGS:
+        return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
+    if not api_key:
+        return jsonify({"success": False, "message": "apiKey is required — enter your API key"}), 400
 
-    status_file = os.path.join(info["work_dir"], "status.json")
-    if os.path.exists(status_file):
-        try:
-            with open(status_file) as f:
-                status = _json.load(f)
-            return jsonify({"active": proc.poll() is None, **status})
-        except Exception:
-            pass
-    return jsonify({"active": proc.poll() is None, "status": "starting"})
-
-
-@app.route("/api/sessions/browser-screenshot/<ai_id>", methods=["GET"])
-def browser_screenshot(ai_id):
-    with _workers_lock:
-        info = _browser_workers.get(ai_id)
-    if not info:
-        return jsonify({"error": "No active browser session"}), 404
-
-    screenshot_file = os.path.join(info["work_dir"], "latest.png")
-    if not os.path.exists(screenshot_file):
-        return jsonify({"error": "Screenshot not yet available"}), 202
-
-    try:
-        with open(screenshot_file, "rb") as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode("utf-8")
-        return jsonify({"screenshot": f"data:image/png;base64,{b64}"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/sessions/browser-action/<ai_id>", methods=["POST"])
-def browser_action(ai_id):
-    payload = request.get_json() or {}
-    ok = _send_worker_command(ai_id, payload)
-    if not ok:
-        return jsonify({"success": False, "message": "No active browser session"}), 404
-    return jsonify({"success": True})
+    ok = set_api_key(ai_id, api_key)
+    if ok:
+        config = AI_CONFIGS[ai_id]
+        return jsonify({
+            "success": True,
+            "message": f"API key saved for {config['name']}",
+            "aiId": ai_id,
+        })
+    return jsonify({"success": False, "message": "Failed to save key"}), 500
 
 
 @app.route("/api/sessions/<ai_id>/delete", methods=["DELETE"])
 def delete_session_route(ai_id):
-    success, message = delete_session(ai_id)
+    success, message = delete_api_key(ai_id)
     return jsonify({"success": success, "message": message, "aiId": ai_id})
 
 
-@app.route("/api/sessions/import", methods=["POST"])
-def import_session():
-    """
-    Accept a raw Playwright storage-state JSON (cookies + origins/localStorage)
-    submitted manually by the user and save it as the session for the given AI.
-    """
-    import json as _json
-    from config import SESSIONS_DIR
-
-    data = request.get_json()
-    ai_id = data.get("aiId")
-    state_json = data.get("stateJson")
-
-    if not ai_id or not state_json:
-        return jsonify({"success": False, "message": "aiId and stateJson are required"}), 400
-
+@app.route("/api/sessions/verify/<ai_id>", methods=["POST"])
+def verify_key_route(ai_id):
+    """Send a trivial test prompt to verify the key works."""
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
 
-    # Validate it's parseable JSON
-    try:
-        state = _json.loads(state_json) if isinstance(state_json, str) else state_json
-        if not isinstance(state, dict):
-            raise ValueError("Must be a JSON object")
-    except Exception as exc:
-        return jsonify({"success": False, "message": f"Invalid JSON: {exc}"}), 400
-
-    # Ensure it has the expected Playwright shape
-    if "cookies" not in state and "origins" not in state:
-        return jsonify({"success": False, "message": "JSON must contain 'cookies' or 'origins' keys (Playwright storage state format)"}), 400
-
-    os.makedirs(SESSIONS_DIR, exist_ok=True)
-    session_path = os.path.join(SESSIONS_DIR, f"{ai_id}_state.json")
-    try:
-        with open(session_path, "w") as f:
-            _json.dump(state, f, indent=2)
-        logger.info("Imported session for %s from manual cookie paste", ai_id)
-        return jsonify({"success": True, "message": f"Session imported for {AI_CONFIGS[ai_id]['name']}", "aiId": ai_id})
-    except Exception as exc:
-        logger.error("Failed to write session file: %s", exc)
-        return jsonify({"success": False, "message": str(exc)}), 500
+    success, _text, error = send_prompt(ai_id, "Reply with exactly one word: OK")
+    if success:
+        return jsonify({"success": True, "message": "API key is working"})
+    return jsonify({"success": False, "message": error or "Key verification failed"}), 400
 
 
 # ─── History ─────────────────────────────────────────────────────────────────
@@ -607,6 +472,8 @@ def file_rename():
         return jsonify({"error": str(e)}), 400
 
 
+# ─── Terminal ─────────────────────────────────────────────────────────────────
+
 @app.route("/api/terminal/exec", methods=["POST"])
 def terminal_exec():
     data = request.get_json()
@@ -631,9 +498,10 @@ def terminal_cwd():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Agent ───────────────────────────────────────────────────────────────────
+
 @app.route("/api/agent/run", methods=["POST"])
 def agent_run():
-    import threading
     data = request.get_json()
     ai_id = data.get("aiId")
     task = data.get("task", "").strip()
@@ -670,8 +538,6 @@ def agent_status():
 
 @app.route("/api/agent/screenshot/<filename>", methods=["GET"])
 def agent_screenshot(filename: str):
-    from flask import send_file
-    # Security: only allow safe filenames
     if not filename.endswith(".png") or "/" in filename or ".." in filename:
         return jsonify({"error": "invalid filename"}), 400
     path = get_screenshot_path(filename)

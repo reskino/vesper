@@ -34,7 +34,7 @@ from pathlib import Path
 
 import requests as _requests
 
-from playwright_utils import send_prompt, session_exists
+from api_client import send_prompt, session_exists
 from file_manager import get_language
 from terminal_manager import exec_command, get_cwd, WORKSPACE_ROOT
 from config import FALLBACK_ORDER

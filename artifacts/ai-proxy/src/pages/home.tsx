@@ -175,7 +175,7 @@ export function Home() {
   }, [messages, executionResult]);
 
   const isPending = askAi.isPending || askAiWithContext.isPending;
-  const currentAi = aisData?.ais.find(a => a.id === selectedAi);
+  const currentAi = aisData?.ais?.find(a => a.id === selectedAi);
   const activeModel = currentAi?.models?.find(m => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
 
   const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };

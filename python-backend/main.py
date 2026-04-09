@@ -16,6 +16,10 @@ from playwright_utils import (
 from history_manager import (
     add_message, get_messages, get_all_summaries, clear_messages, get_stats
 )
+from file_manager import (
+    get_file_tree, read_file, write_file, create_file, delete_path,
+    rename_path, get_language, LANGUAGE_MAP
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +36,8 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 def health_check():
     return jsonify({"status": "ok"})
 
+
+# ─── AI Proxy ────────────────────────────────────────────────────────────────
 
 @app.route("/api/proxy/ais")
 def list_ais():
@@ -111,6 +117,90 @@ def ask_ai():
     }), 503
 
 
+@app.route("/api/proxy/ask-with-context", methods=["POST"])
+def ask_ai_with_context():
+    """Send a prompt to AI with attached file context (like an AI coding assistant)."""
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    user_prompt = data.get("prompt", "").strip()
+    files = data.get("files", [])
+    action = data.get("action")
+    conversation_id = data.get("conversationId") or str(uuid.uuid4())
+    use_fallback = data.get("fallback", True)
+
+    if not ai_id or not user_prompt:
+        return jsonify({"error": "aiId and prompt are required"}), 400
+
+    ACTION_PREFIXES = {
+        "fix": "Please analyze the following code and fix any bugs, errors, or issues. Explain what you changed and why.\n\n",
+        "explain": "Please explain the following code in detail. Describe what it does, how it works, and any important patterns or concepts used.\n\n",
+        "test": "Please write comprehensive unit tests for the following code. Use appropriate testing frameworks and cover edge cases.\n\n",
+        "refactor": "Please refactor the following code to improve readability, performance, and maintainability. Follow best practices and explain your changes.\n\n",
+        "suggest": "Please review the following code and suggest improvements, optimizations, and best practices.\n\n",
+        "debug": "Please help debug the following code. Identify potential issues, explain the root cause, and provide a fix.\n\n",
+        "document": "Please add comprehensive documentation, docstrings, and inline comments to the following code.\n\n",
+    }
+
+    prefix = ACTION_PREFIXES.get(action, "") if action else ""
+
+    file_context = ""
+    if files:
+        file_context = "\n\n--- Attached Files ---\n"
+        for f in files:
+            lang = f.get("language") or get_language(f.get("path", ""))
+            file_context += f"\n**File: `{f['path']}`**\n```{lang}\n{f['content']}\n```\n"
+
+    full_prompt = prefix + user_prompt + file_context
+
+    add_message(ai_id, "user", full_prompt, conversation_id)
+
+    start_time = time.time()
+    fallback_used = False
+    tried_ais = []
+
+    ais_to_try = [ai_id]
+    if use_fallback:
+        for fallback_ai in FALLBACK_ORDER:
+            if fallback_ai != ai_id and fallback_ai not in ais_to_try:
+                ais_to_try.append(fallback_ai)
+
+    for current_ai in ais_to_try:
+        if not session_exists(current_ai):
+            tried_ais.append(current_ai)
+            continue
+
+        if current_ai != ai_id:
+            fallback_used = True
+
+        success, response_text, error = send_prompt(current_ai, full_prompt)
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        if success and response_text:
+            add_message(ai_id, "assistant", response_text, conversation_id)
+            return jsonify({
+                "success": True,
+                "aiId": current_ai,
+                "response": response_text,
+                "conversationId": conversation_id,
+                "elapsedMs": elapsed_ms,
+                "fallbackUsed": fallback_used,
+                "error": None,
+            })
+
+        tried_ais.append(current_ai)
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    return jsonify({
+        "success": False,
+        "aiId": ai_id,
+        "response": "",
+        "conversationId": conversation_id,
+        "elapsedMs": elapsed_ms,
+        "fallbackUsed": fallback_used,
+        "error": f"All AIs failed. Tried: {tried_ais}",
+    }), 503
+
+
 @app.route("/api/proxy/execute", methods=["POST"])
 def execute_code():
     data = request.get_json()
@@ -123,7 +213,11 @@ def execute_code():
 
     start_time = time.time()
 
-    allowed_languages = {"python": ["python3", "-c"], "javascript": ["node", "-e"], "bash": ["bash", "-c"]}
+    allowed_languages = {
+        "python": ["python3", "-c"],
+        "javascript": ["node", "-e"],
+        "bash": ["bash", "-c"]
+    }
     if language not in allowed_languages:
         return jsonify({"error": f"Unsupported language: {language}"}), 400
 
@@ -164,6 +258,8 @@ def execute_code():
             "elapsedMs": elapsed_ms,
         })
 
+
+# ─── Sessions ────────────────────────────────────────────────────────────────
 
 @app.route("/api/sessions")
 def list_sessions():
@@ -208,6 +304,8 @@ def delete_session_route(ai_id):
     return jsonify({"success": success, "message": message, "aiId": ai_id})
 
 
+# ─── History ─────────────────────────────────────────────────────────────────
+
 @app.route("/api/history")
 def list_history():
     summaries = get_all_summaries(AI_CONFIGS)
@@ -230,6 +328,89 @@ def get_history(ai_id):
 def clear_history_route(ai_id):
     clear_messages(ai_id)
     return jsonify({"success": True, "message": f"History cleared for {ai_id}", "aiId": ai_id})
+
+
+# ─── File System ─────────────────────────────────────────────────────────────
+
+@app.route("/api/files/tree")
+def file_tree():
+    path = request.args.get("path", ".")
+    depth = int(request.args.get("depth", 3))
+    depth = min(depth, 6)
+    try:
+        result = get_file_tree(path, depth)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/files/read")
+def file_read():
+    path = request.args.get("path")
+    if not path:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        result = read_file(path)
+        return jsonify(result)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/files/write", methods=["POST"])
+def file_write():
+    data = request.get_json()
+    path = data.get("path")
+    content = data.get("content", "")
+    if not path:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        result = write_file(path, content)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/files/create", methods=["POST"])
+def file_create():
+    data = request.get_json()
+    path = data.get("path")
+    file_type = data.get("type", "file")
+    content = data.get("content")
+    if not path:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        result = create_file(path, file_type, content)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/files/delete", methods=["DELETE"])
+def file_delete():
+    path = request.args.get("path")
+    if not path:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        result = delete_path(path)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/files/rename", methods=["POST"])
+def file_rename():
+    data = request.get_json()
+    old_path = data.get("oldPath")
+    new_path = data.get("newPath")
+    if not old_path or not new_path:
+        return jsonify({"error": "oldPath and newPath are required"}), 400
+    try:
+        result = rename_path(old_path, new_path)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 if __name__ == "__main__":

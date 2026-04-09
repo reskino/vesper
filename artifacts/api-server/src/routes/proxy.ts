@@ -57,15 +57,29 @@ function proxyToPython(req: Request, res: Response) {
   proxyReq.end();
 }
 
+// AI Proxy routes
 router.get("/proxy/ais", proxyToPython);
 router.post("/proxy/ask", proxyToPython);
+router.post("/proxy/ask-with-context", proxyToPython);
 router.post("/proxy/execute", proxyToPython);
+
+// Session routes
 router.get("/sessions", proxyToPython);
 router.post("/sessions/create", proxyToPython);
 router.delete("/sessions/:aiId/delete", proxyToPython);
+
+// History routes
 router.get("/history", proxyToPython);
 router.get("/history/stats", proxyToPython);
 router.get("/history/:aiId", proxyToPython);
 router.delete("/history/:aiId", proxyToPython);
+
+// File system routes
+router.get("/files/tree", proxyToPython);
+router.get("/files/read", proxyToPython);
+router.post("/files/write", proxyToPython);
+router.post("/files/create", proxyToPython);
+router.delete("/files/delete", proxyToPython);
+router.post("/files/rename", proxyToPython);
 
 export default router;

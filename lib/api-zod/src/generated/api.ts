@@ -189,3 +189,143 @@ export const GetHistoryStatsResponse = zod.object({
   totalSessions: zod.number(),
   mostUsedAi: zod.string().nullish(),
 });
+
+/**
+ * @summary Get directory tree
+ */
+export const getFileTreeQueryPathDefault = `.`;
+export const getFileTreeQueryDepthDefault = 3;
+
+export const GetFileTreeQueryParams = zod.object({
+  path: zod.coerce
+    .string()
+    .default(getFileTreeQueryPathDefault)
+    .describe("Root path to list (relative to workspace root)"),
+  depth: zod.coerce
+    .number()
+    .default(getFileTreeQueryDepthDefault)
+    .describe("Max depth to traverse"),
+});
+
+export const GetFileTreeResponse = zod.object({
+  tree: zod.object({
+    name: zod.string(),
+    path: zod.string(),
+    type: zod.enum(["file", "directory"]),
+    size: zod.number().nullish(),
+    extension: zod.string().nullish(),
+    children: zod.array(zod.unknown()).nullish(),
+  }),
+  rootPath: zod.string(),
+});
+
+/**
+ * @summary Read a file's contents
+ */
+export const ReadFileQueryParams = zod.object({
+  path: zod.coerce.string().describe("File path (relative to workspace root)"),
+});
+
+export const ReadFileResponse = zod.object({
+  path: zod.string(),
+  content: zod.string(),
+  size: zod.number(),
+  extension: zod.string().nullish(),
+  lineCount: zod.number(),
+  isBinary: zod.boolean(),
+});
+
+/**
+ * @summary Write content to a file
+ */
+export const WriteFileBody = zod.object({
+  path: zod.string(),
+  content: zod.string(),
+});
+
+export const WriteFileResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  path: zod.string(),
+});
+
+/**
+ * @summary Create a new file or directory
+ */
+export const createFileBodyTypeDefault = `file`;
+
+export const CreateFileBody = zod.object({
+  path: zod.string(),
+  type: zod.enum(["file", "directory"]).default(createFileBodyTypeDefault),
+  content: zod.string().nullish(),
+});
+
+export const CreateFileResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  path: zod.string(),
+});
+
+/**
+ * @summary Delete a file or directory
+ */
+export const DeleteFileQueryParams = zod.object({
+  path: zod.coerce.string(),
+});
+
+export const DeleteFileResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  path: zod.string(),
+});
+
+/**
+ * @summary Rename or move a file
+ */
+export const RenameFileBody = zod.object({
+  oldPath: zod.string(),
+  newPath: zod.string(),
+});
+
+export const RenameFileResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  path: zod.string(),
+});
+
+/**
+ * @summary Send a prompt to AI with file context attached
+ */
+export const askAiWithContextBodyFallbackDefault = true;
+
+export const AskAiWithContextBody = zod.object({
+  aiId: zod.string(),
+  prompt: zod.string(),
+  files: zod
+    .array(
+      zod.object({
+        path: zod.string(),
+        content: zod.string(),
+        language: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  action: zod
+    .string()
+    .nullish()
+    .describe(
+      'Quick action like \"fix\", \"explain\", \"test\", \"refactor\", \"suggest\"',
+    ),
+  conversationId: zod.string().nullish(),
+  fallback: zod.boolean().default(askAiWithContextBodyFallbackDefault),
+});
+
+export const AskAiWithContextResponse = zod.object({
+  success: zod.boolean(),
+  aiId: zod.string(),
+  response: zod.string(),
+  conversationId: zod.string(),
+  elapsedMs: zod.number(),
+  fallbackUsed: zod.boolean(),
+  error: zod.string().nullish(),
+});

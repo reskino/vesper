@@ -123,3 +123,105 @@ export interface UsageStats {
   totalSessions: number;
   mostUsedAi?: string | null;
 }
+
+export type FileNodeType = (typeof FileNodeType)[keyof typeof FileNodeType];
+
+export const FileNodeType = {
+  file: "file",
+  directory: "directory",
+} as const;
+
+export interface FileNode {
+  name: string;
+  path: string;
+  type: FileNodeType;
+  size?: number | null;
+  extension?: string | null;
+  children?: FileNode[] | null;
+}
+
+export interface FileTreeResponse {
+  tree: FileNode;
+  rootPath: string;
+}
+
+export interface FileReadResponse {
+  path: string;
+  content: string;
+  size: number;
+  extension?: string | null;
+  lineCount: number;
+  isBinary: boolean;
+}
+
+export interface FileWriteBody {
+  path: string;
+  content: string;
+}
+
+export type FileCreateBodyType =
+  (typeof FileCreateBodyType)[keyof typeof FileCreateBodyType];
+
+export const FileCreateBodyType = {
+  file: "file",
+  directory: "directory",
+} as const;
+
+export interface FileCreateBody {
+  path: string;
+  type?: FileCreateBodyType;
+  content?: string | null;
+}
+
+export interface FileRenameBody {
+  oldPath: string;
+  newPath: string;
+}
+
+export interface FileWriteResponse {
+  success: boolean;
+  message: string;
+  path: string;
+}
+
+export interface FileContext {
+  path: string;
+  content: string;
+  language?: string | null;
+}
+
+export interface AskWithContextBody {
+  aiId: string;
+  prompt: string;
+  files?: FileContext[];
+  /** Quick action like "fix", "explain", "test", "refactor", "suggest" */
+  action?: string | null;
+  conversationId?: string | null;
+  fallback?: boolean;
+}
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export type GetFileTreeParams = {
+  /**
+   * Root path to list (relative to workspace root)
+   */
+  path?: string;
+  /**
+   * Max depth to traverse
+   */
+  depth?: number;
+};
+
+export type ReadFileParams = {
+  /**
+   * File path (relative to workspace root)
+   */
+  path: string;
+};
+
+export type DeleteFileParams = {
+  path: string;
+};

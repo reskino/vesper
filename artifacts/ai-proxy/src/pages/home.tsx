@@ -1,11 +1,87 @@
 import { useState, useRef, useEffect } from "react";
-import { useListAis, getListAisQueryKey, useAskAi } from "@workspace/api-client-react";
+import { 
+  useListAis, 
+  getListAisQueryKey, 
+  useAskAi, 
+  useAskAiWithContext,
+  useGetFileTree,
+  getGetFileTreeQueryKey,
+  useReadFile,
+  getReadFileQueryKey,
+  FileNode
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, TerminalSquare, AlertCircle, RefreshCw, PlusCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Send, TerminalSquare, AlertCircle, RefreshCw, PlusCircle, 
+  Paperclip, X, Folder, FileIcon, FileCode, FileText, FileJson, ChevronRight, ChevronDown, Loader2
+} from "lucide-react";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
+
+const getFileIcon = (filename: string) => {
+  if (filename.endsWith('.js') || filename.endsWith('.ts') || filename.endsWith('.jsx') || filename.endsWith('.tsx')) return <FileCode className="h-4 w-4 text-blue-400" />;
+  if (filename.endsWith('.json')) return <FileJson className="h-4 w-4 text-yellow-400" />;
+  if (filename.endsWith('.md')) return <FileText className="h-4 w-4 text-gray-400" />;
+  return <FileIcon className="h-4 w-4 text-gray-500" />;
+};
+
+function MiniFileTreeItem({ 
+  node, 
+  depth = 0, 
+  onSelect
+}: { 
+  node: FileNode; 
+  depth?: number; 
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(depth === 0);
+
+  if (node.name.startsWith('.')) return null;
+
+  if (node.type === 'directory') {
+    return (
+      <div>
+        <div 
+          className="flex items-center py-1 px-2 hover:bg-[#1a1a1a] cursor-pointer text-sm text-gray-300 group"
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown className="h-3.5 w-3.5 mr-1 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 mr-1 text-gray-500" />}
+          <Folder className="h-4 w-4 mr-2 text-blue-500" />
+          <span className="truncate">{node.name}</span>
+        </div>
+        {expanded && node.children && (
+          <div>
+            {node.children.map(child => (
+              <MiniFileTreeItem 
+                key={child.path} 
+                node={child} 
+                depth={depth + 1} 
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`flex items-center justify-between py-1 px-2 cursor-pointer text-sm text-gray-300 hover:bg-[#1a1a1a]`}
+      style={{ paddingLeft: `${depth * 12 + 24}px` }}
+      onClick={() => onSelect(node.path)}
+    >
+      <div className="flex items-center flex-1 min-w-0">
+        {getFileIcon(node.name)}
+        <span className="truncate ml-2">{node.name}</span>
+      </div>
+    </div>
+  );
+}
 
 export function Home() {
   const { data: aisData, isLoading: isLoadingAis } = useListAis({
@@ -13,12 +89,31 @@ export function Home() {
   });
 
   const askAi = useAskAi();
+  const askAiWithContext = useAskAiWithContext();
 
   const [selectedAi, setSelectedAi] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant", content: string, aiId?: string, error?: boolean }>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<any>(null);
+  
+  // Attach file state
+  const [attachedFile, setAttachedFile] = useState<string | null>(null);
+  const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
+
+  const { data: treeData, isLoading: treeLoading } = useGetFileTree({ path: "", depth: 10 }, {
+    query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen }
+  });
+
+  const { data: attachedFileData } = useReadFile(
+    { path: attachedFile || "" },
+    { 
+      query: { 
+        enabled: !!attachedFile,
+        queryKey: getReadFileQueryKey({ path: attachedFile || "" }),
+      } 
+    }
+  );
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,21 +132,35 @@ export function Home() {
     }
   }, [messages, executionResult]);
 
+  const isPending = askAi.isPending || askAiWithContext.isPending;
+
   const handleSend = async () => {
-    if (!prompt.trim() || !selectedAi) return;
+    if (!prompt.trim() || !selectedAi || isPending) return;
 
     const userMsg = prompt;
     setPrompt("");
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
 
     try {
-      const result = await askAi.mutateAsync({
-        data: {
-          aiId: selectedAi,
-          prompt: userMsg,
-          conversationId
-        }
-      });
+      let result;
+      if (attachedFile && attachedFileData?.content) {
+        result = await askAiWithContext.mutateAsync({
+          data: {
+            aiId: selectedAi,
+            prompt: userMsg,
+            conversationId,
+            files: [{ path: attachedFile, content: attachedFileData.content }]
+          }
+        });
+      } else {
+        result = await askAi.mutateAsync({
+          data: {
+            aiId: selectedAi,
+            prompt: userMsg,
+            conversationId
+          }
+        });
+      }
 
       if (result.success) {
         setConversationId(result.conversationId);
@@ -66,16 +175,28 @@ export function Home() {
 
   const handleRegenerate = async () => {
     const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
-    if (!lastUserMessage || !selectedAi) return;
+    if (!lastUserMessage || !selectedAi || isPending) return;
 
     try {
-      const result = await askAi.mutateAsync({
-        data: {
-          aiId: selectedAi,
-          prompt: lastUserMessage.content,
-          conversationId
-        }
-      });
+      let result;
+      if (attachedFile && attachedFileData?.content) {
+        result = await askAiWithContext.mutateAsync({
+          data: {
+            aiId: selectedAi,
+            prompt: lastUserMessage.content,
+            conversationId,
+            files: [{ path: attachedFile, content: attachedFileData.content }]
+          }
+        });
+      } else {
+        result = await askAi.mutateAsync({
+          data: {
+            aiId: selectedAi,
+            prompt: lastUserMessage.content,
+            conversationId
+          }
+        });
+      }
 
       if (result.success) {
         setConversationId(result.conversationId);
@@ -193,36 +314,89 @@ export function Home() {
 
         {/* Input Area */}
         <div className="shrink-0 p-4 bg-[#0a0a0a] border-t border-[#1a1a1a]">
-          <div className="max-w-4xl mx-auto relative">
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter prompt (Shift+Enter for new line)..."
-              className="min-h-[80px] max-h-64 resize-none bg-[#111] border-[#222] focus-visible:ring-1 focus-visible:ring-primary text-gray-200 py-3 pr-24"
-              disabled={askAi.isPending}
-            />
-            <div className="absolute right-3 bottom-3 flex items-center gap-2">
-              {messages.length > 0 && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-gray-400 hover:text-gray-200"
-                  onClick={handleRegenerate}
-                  disabled={askAi.isPending}
-                  title="Regenerate last response"
+          <div className="max-w-4xl mx-auto relative flex flex-col gap-2">
+            
+            {/* Attached file chip */}
+            {attachedFile && (
+              <div className="flex items-center gap-2 bg-[#1a1a1a] text-gray-300 text-xs px-3 py-1.5 rounded-full w-max border border-[#333]">
+                <Paperclip className="h-3 w-3 text-primary" />
+                <span className="max-w-[200px] truncate">{attachedFile}</span>
+                <button 
+                  className="hover:bg-[#333] rounded-full p-0.5 ml-1"
+                  onClick={() => setAttachedFile(null)}
                 >
-                  <RefreshCw className={`h-4 w-4 ${askAi.isPending ? "animate-spin" : ""}`} />
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
+            <div className="relative">
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter prompt (Shift+Enter for new line)..."
+                className="min-h-[80px] max-h-64 resize-none bg-[#111] border-[#222] focus-visible:ring-1 focus-visible:ring-primary text-gray-200 py-3 pr-24 pl-12"
+                disabled={askAi.isPending || askAiWithContext.isPending}
+              />
+              
+              {/* Attach button */}
+              <Dialog open={isFilePickerOpen} onOpenChange={setIsFilePickerOpen}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-3 top-3 h-6 w-6 text-gray-400 hover:text-gray-200"
+                  onClick={() => setIsFilePickerOpen(true)}
+                  title="Attach file context"
+                >
+                  <Paperclip className="h-4 w-4" />
                 </Button>
-              )}
-              <Button 
-                size="sm" 
-                onClick={handleSend} 
-                disabled={!prompt.trim() || askAi.isPending || !selectedAi}
-                className="h-8 bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Send className="h-4 w-4 mr-1" /> Send
-              </Button>
+                <DialogContent className="bg-[#0d0d0d] border-[#1a1a1a] text-gray-200 max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Select File</DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="h-[300px] border border-[#1a1a1a] rounded-md bg-[#0a0a0a]">
+                    <div className="p-2">
+                      {treeLoading ? (
+                        <div className="flex items-center justify-center p-4 text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                      ) : treeData?.tree ? (
+                        <MiniFileTreeItem 
+                          node={treeData.tree} 
+                          onSelect={(path) => {
+                            setAttachedFile(path);
+                            setIsFilePickerOpen(false);
+                          }} 
+                        />
+                      ) : (
+                        <div className="p-4 text-xs text-gray-500 text-center">No files found</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
+
+              <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                {messages.length > 0 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-gray-400 hover:text-gray-200"
+                    onClick={handleRegenerate}
+                    disabled={isPending}
+                    title="Regenerate last response"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
+                  </Button>
+                )}
+                <Button 
+                  size="sm" 
+                  onClick={handleSend} 
+                  disabled={!prompt.trim() || isPending || !selectedAi}
+                  className="h-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <Send className="h-4 w-4 mr-1" /> Send
+                </Button>
+              </div>
             </div>
             
             {/* Warning if AI selected has no session */}

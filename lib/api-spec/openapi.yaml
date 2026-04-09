@@ -16,6 +16,8 @@ tags:
     description: Browser session management
   - name: history
     description: Conversation history
+  - name: files
+    description: File system operations
 paths:
   /healthz:
     get:
@@ -205,6 +207,159 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UsageStats"
+
+  /files/tree:
+    get:
+      operationId: getFileTree
+      tags: [files]
+      summary: Get directory tree
+      parameters:
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: "."
+          description: Root path to list (relative to workspace root)
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 3
+          description: Max depth to traverse
+      responses:
+        "200":
+          description: Directory tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileTreeResponse"
+
+  /files/read:
+    get:
+      operationId: readFile
+      tags: [files]
+      summary: Read a file's contents
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: File path (relative to workspace root)
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileReadResponse"
+        "404":
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /files/write:
+    post:
+      operationId: writeFile
+      tags: [files]
+      summary: Write content to a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileWriteBody"
+      responses:
+        "200":
+          description: File written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteResponse"
+
+  /files/create:
+    post:
+      operationId: createFile
+      tags: [files]
+      summary: Create a new file or directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileCreateBody"
+      responses:
+        "200":
+          description: File or directory created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteResponse"
+
+  /files/delete:
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file or directory
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteResponse"
+
+  /files/rename:
+    post:
+      operationId: renameFile
+      tags: [files]
+      summary: Rename or move a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileRenameBody"
+      responses:
+        "200":
+          description: File renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteResponse"
+
+  /proxy/ask-with-context:
+    post:
+      operationId: askAiWithContext
+      tags: [proxy]
+      summary: Send a prompt to AI with file context attached
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskWithContextBody"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiResponse"
+        "503":
+          description: AI unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -470,3 +625,161 @@ components:
         - totalMessages
         - messagesByAi
         - totalSessions
+
+    FileNode:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+          nullable: true
+        extension:
+          type: string
+          nullable: true
+        children:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/FileNode"
+      required:
+        - name
+        - path
+        - type
+
+    FileTreeResponse:
+      type: object
+      properties:
+        tree:
+          $ref: "#/components/schemas/FileNode"
+        rootPath:
+          type: string
+      required:
+        - tree
+        - rootPath
+
+    FileReadResponse:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        size:
+          type: integer
+        extension:
+          type: string
+          nullable: true
+        lineCount:
+          type: integer
+        isBinary:
+          type: boolean
+      required:
+        - path
+        - content
+        - size
+        - lineCount
+        - isBinary
+
+    FileWriteBody:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+      required:
+        - path
+        - content
+
+    FileCreateBody:
+      type: object
+      properties:
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+          default: file
+        content:
+          type: string
+          nullable: true
+      required:
+        - path
+
+    FileRenameBody:
+      type: object
+      properties:
+        oldPath:
+          type: string
+        newPath:
+          type: string
+      required:
+        - oldPath
+        - newPath
+
+    FileWriteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        path:
+          type: string
+      required:
+        - success
+        - message
+        - path
+
+    AskWithContextBody:
+      type: object
+      properties:
+        aiId:
+          type: string
+        prompt:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileContext"
+        action:
+          type: string
+          nullable: true
+          description: Quick action like "fix", "explain", "test", "refactor", "suggest"
+        conversationId:
+          type: string
+          nullable: true
+        fallback:
+          type: boolean
+          default: true
+      required:
+        - aiId
+        - prompt
+
+    FileContext:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        language:
+          type: string
+          nullable: true
+      required:
+        - path
+        - content
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

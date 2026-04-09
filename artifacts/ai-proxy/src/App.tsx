@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Home } from "@/pages/home";
 import { Sessions } from "@/pages/sessions";
 import { History } from "@/pages/history";
+import Editor from "@/pages/editor";
 
 const queryClient = new QueryClient();
 
@@ -15,6 +16,7 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/editor" component={Editor} />
         <Route path="/sessions" component={Sessions} />
         <Route path="/history" component={History} />
         <Route component={NotFound} />

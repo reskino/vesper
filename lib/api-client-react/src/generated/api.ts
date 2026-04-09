@@ -20,13 +20,23 @@ import type {
   AiListResponse,
   AiResponse,
   AskAiBody,
+  AskWithContextBody,
   ConversationHistory,
   CreateSessionBody,
+  DeleteFileParams,
   ErrorResponse,
   ExecuteCodeBody,
   ExecutionResult,
+  FileCreateBody,
+  FileReadResponse,
+  FileRenameBody,
+  FileTreeResponse,
+  FileWriteBody,
+  FileWriteResponse,
+  GetFileTreeParams,
   HealthStatus,
   HistoryListResponse,
+  ReadFileParams,
   SessionListResponse,
   SessionResponse,
   UsageStats,
@@ -925,3 +935,631 @@ export function useGetHistoryStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get directory tree
+ */
+export const getGetFileTreeUrl = (params?: GetFileTreeParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/files/tree?${stringifiedParams}`
+    : `/api/files/tree`;
+};
+
+export const getFileTree = async (
+  params?: GetFileTreeParams,
+  options?: RequestInit,
+): Promise<FileTreeResponse> => {
+  return customFetch<FileTreeResponse>(getGetFileTreeUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFileTreeQueryKey = (params?: GetFileTreeParams) => {
+  return [`/api/files/tree`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetFileTreeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFileTree>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFileTreeParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFileTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFileTreeQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFileTree>>> = ({
+    signal,
+  }) => getFileTree(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFileTree>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFileTreeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFileTree>>
+>;
+export type GetFileTreeQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get directory tree
+ */
+
+export function useGetFileTree<
+  TData = Awaited<ReturnType<typeof getFileTree>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFileTreeParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFileTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFileTreeQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read a file's contents
+ */
+export const getReadFileUrl = (params: ReadFileParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/files/read?${stringifiedParams}`
+    : `/api/files/read`;
+};
+
+export const readFile = async (
+  params: ReadFileParams,
+  options?: RequestInit,
+): Promise<FileReadResponse> => {
+  return customFetch<FileReadResponse>(getReadFileUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getReadFileQueryKey = (params?: ReadFileParams) => {
+  return [`/api/files/read`, ...(params ? [params] : [])] as const;
+};
+
+export const getReadFileQueryOptions = <
+  TData = Awaited<ReturnType<typeof readFile>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: ReadFileParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof readFile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getReadFileQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof readFile>>> = ({
+    signal,
+  }) => readFile(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof readFile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ReadFileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof readFile>>
+>;
+export type ReadFileQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Read a file's contents
+ */
+
+export function useReadFile<
+  TData = Awaited<ReturnType<typeof readFile>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: ReadFileParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof readFile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getReadFileQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Write content to a file
+ */
+export const getWriteFileUrl = () => {
+  return `/api/files/write`;
+};
+
+export const writeFile = async (
+  fileWriteBody: FileWriteBody,
+  options?: RequestInit,
+): Promise<FileWriteResponse> => {
+  return customFetch<FileWriteResponse>(getWriteFileUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fileWriteBody),
+  });
+};
+
+export const getWriteFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof writeFile>>,
+    TError,
+    { data: BodyType<FileWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof writeFile>>,
+  TError,
+  { data: BodyType<FileWriteBody> },
+  TContext
+> => {
+  const mutationKey = ["writeFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof writeFile>>,
+    { data: BodyType<FileWriteBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return writeFile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type WriteFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof writeFile>>
+>;
+export type WriteFileMutationBody = BodyType<FileWriteBody>;
+export type WriteFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Write content to a file
+ */
+export const useWriteFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof writeFile>>,
+    TError,
+    { data: BodyType<FileWriteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof writeFile>>,
+  TError,
+  { data: BodyType<FileWriteBody> },
+  TContext
+> => {
+  return useMutation(getWriteFileMutationOptions(options));
+};
+
+/**
+ * @summary Create a new file or directory
+ */
+export const getCreateFileUrl = () => {
+  return `/api/files/create`;
+};
+
+export const createFile = async (
+  fileCreateBody: FileCreateBody,
+  options?: RequestInit,
+): Promise<FileWriteResponse> => {
+  return customFetch<FileWriteResponse>(getCreateFileUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fileCreateBody),
+  });
+};
+
+export const getCreateFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFile>>,
+    TError,
+    { data: BodyType<FileCreateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFile>>,
+  TError,
+  { data: BodyType<FileCreateBody> },
+  TContext
+> => {
+  const mutationKey = ["createFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFile>>,
+    { data: BodyType<FileCreateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createFile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFile>>
+>;
+export type CreateFileMutationBody = BodyType<FileCreateBody>;
+export type CreateFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new file or directory
+ */
+export const useCreateFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFile>>,
+    TError,
+    { data: BodyType<FileCreateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createFile>>,
+  TError,
+  { data: BodyType<FileCreateBody> },
+  TContext
+> => {
+  return useMutation(getCreateFileMutationOptions(options));
+};
+
+/**
+ * @summary Delete a file or directory
+ */
+export const getDeleteFileUrl = (params: DeleteFileParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/files/delete?${stringifiedParams}`
+    : `/api/files/delete`;
+};
+
+export const deleteFile = async (
+  params: DeleteFileParams,
+  options?: RequestInit,
+): Promise<FileWriteResponse> => {
+  return customFetch<FileWriteResponse>(getDeleteFileUrl(params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFile>>,
+    TError,
+    { params: DeleteFileParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteFile>>,
+  TError,
+  { params: DeleteFileParams },
+  TContext
+> => {
+  const mutationKey = ["deleteFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteFile>>,
+    { params: DeleteFileParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return deleteFile(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteFile>>
+>;
+
+export type DeleteFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a file or directory
+ */
+export const useDeleteFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFile>>,
+    TError,
+    { params: DeleteFileParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteFile>>,
+  TError,
+  { params: DeleteFileParams },
+  TContext
+> => {
+  return useMutation(getDeleteFileMutationOptions(options));
+};
+
+/**
+ * @summary Rename or move a file
+ */
+export const getRenameFileUrl = () => {
+  return `/api/files/rename`;
+};
+
+export const renameFile = async (
+  fileRenameBody: FileRenameBody,
+  options?: RequestInit,
+): Promise<FileWriteResponse> => {
+  return customFetch<FileWriteResponse>(getRenameFileUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fileRenameBody),
+  });
+};
+
+export const getRenameFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof renameFile>>,
+    TError,
+    { data: BodyType<FileRenameBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof renameFile>>,
+  TError,
+  { data: BodyType<FileRenameBody> },
+  TContext
+> => {
+  const mutationKey = ["renameFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof renameFile>>,
+    { data: BodyType<FileRenameBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return renameFile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RenameFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof renameFile>>
+>;
+export type RenameFileMutationBody = BodyType<FileRenameBody>;
+export type RenameFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Rename or move a file
+ */
+export const useRenameFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof renameFile>>,
+    TError,
+    { data: BodyType<FileRenameBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof renameFile>>,
+  TError,
+  { data: BodyType<FileRenameBody> },
+  TContext
+> => {
+  return useMutation(getRenameFileMutationOptions(options));
+};
+
+/**
+ * @summary Send a prompt to AI with file context attached
+ */
+export const getAskAiWithContextUrl = () => {
+  return `/api/proxy/ask-with-context`;
+};
+
+export const askAiWithContext = async (
+  askWithContextBody: AskWithContextBody,
+  options?: RequestInit,
+): Promise<AiResponse> => {
+  return customFetch<AiResponse>(getAskAiWithContextUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(askWithContextBody),
+  });
+};
+
+export const getAskAiWithContextMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof askAiWithContext>>,
+    TError,
+    { data: BodyType<AskWithContextBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof askAiWithContext>>,
+  TError,
+  { data: BodyType<AskWithContextBody> },
+  TContext
+> => {
+  const mutationKey = ["askAiWithContext"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof askAiWithContext>>,
+    { data: BodyType<AskWithContextBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return askAiWithContext(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AskAiWithContextMutationResult = NonNullable<
+  Awaited<ReturnType<typeof askAiWithContext>>
+>;
+export type AskAiWithContextMutationBody = BodyType<AskWithContextBody>;
+export type AskAiWithContextMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a prompt to AI with file context attached
+ */
+export const useAskAiWithContext = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof askAiWithContext>>,
+    TError,
+    { data: BodyType<AskWithContextBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof askAiWithContext>>,
+  TError,
+  { data: BodyType<AskWithContextBody> },
+  TContext
+> => {
+  return useMutation(getAskAiWithContextMutationOptions(options));
+};

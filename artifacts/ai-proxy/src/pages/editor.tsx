@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
+import { ImportExportModal } from "@/components/import-export-modal";
 import { 
   useGetFileTree, 
   getGetFileTreeQueryKey,
@@ -19,7 +20,8 @@ import {
   Folder, FileIcon, FileCode, FileText, FileJson, 
   ChevronRight, ChevronDown, Save, Play, RefreshCw, 
   TerminalSquare, Check, CheckSquare, Square,
-  Settings, Loader2, PlayCircle, MessageSquare
+  Settings, Loader2, PlayCircle, MessageSquare,
+  Upload, Download, FolderDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -124,6 +126,7 @@ function FileTreeItem({
 
 export default function Editor() {
   const { toast } = useToast();
+  const [showImportExport, setShowImportExport] = useState(false);
   
   // File Tree
   const { data: treeData, isLoading: treeLoading } = useGetFileTree({ path: "", depth: 10 }, {
@@ -255,8 +258,36 @@ export default function Editor() {
         
         {/* Left Panel: File Tree */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="bg-sidebar border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border flex items-center justify-between shrink-0">
+          <div className="p-2 px-3 border-b border-border flex items-center justify-between shrink-0">
             <span className="font-mono text-xs text-muted-foreground uppercase tracking-wider">Explorer</span>
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                title="Import files, folder, ZIP, or GitHub repo"
+                onClick={() => setShowImportExport(true)}
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                title="Export workspace as ZIP"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/files/export`;
+                  a.download = "";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  toast({ title: "Exporting workspace..." });
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
           <ScrollArea className="flex-1">
             <div className="p-2">
@@ -412,6 +443,11 @@ export default function Editor() {
         </ResizablePanel>
 
       </ResizablePanelGroup>
+
+      <ImportExportModal
+        open={showImportExport}
+        onClose={() => setShowImportExport(false)}
+      />
     </div>
   );
 }

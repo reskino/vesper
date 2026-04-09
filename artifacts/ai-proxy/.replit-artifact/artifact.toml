@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Universal AI Coding Proxy"
+version = "1.0.0"
+id = "artifacts/ai-proxy"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19906
+
+[services.development]
+run = "pnpm --filter @workspace/ai-proxy run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ai-proxy", "run", "build" ]
+publicDir = "artifacts/ai-proxy/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19906"
+BASE_PATH = "/"

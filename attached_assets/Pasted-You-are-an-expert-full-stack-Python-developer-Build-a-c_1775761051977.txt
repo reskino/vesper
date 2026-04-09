@@ -1,0 +1,53 @@
+You are an expert full-stack Python developer. Build a complete, production-ready web application in this Replit that acts as a "Universal AI Coding Proxy".
+
+Core requirements:
+- Use Python + Playwright for browser automation (headless by default, but allow headless=False for debugging).
+- Support persistent logged-in sessions ("long accounts") for multiple AI chat websites: ChatGPT (chat.openai.com), Grok (grok.x.ai or x.com/i/grok), GitHub Copilot chat if accessible, and any others I add later.
+- Save/load browser storage_state JSON files so logins persist across runs without re-logging every time.
+- Create a clean, simple web UI using Flask or FastAPI + HTML/JS (or Streamlit if easier) where I can:
+  - Select which AI to use (dropdown: ChatGPT, Grok, Copilot, etc.)
+  - Type a coding request or paste code
+  - Click "Send to AI" and see the response nicely formatted
+  - Button to "Run the generated code" directly in Replit (using exec or subprocess safely in a sandbox)
+  - Option to iterate: "Improve this", "Fix bugs", "Add tests", etc.
+- Add multi-AI routing: if one AI fails or is slow, fallback to another automatically.
+- Include a simple account manager: list saved storage files, option to create new sessions.
+
+Technical details to implement:
+- Use playwright.sync_api
+- Store multiple storage_state files (e.g., chatgpt_state.json, grok_state.json)
+- On first run for each AI: launch with headless=False, let me log in manually, then auto-save the storage_state.
+- Robust waiting and selectors: use page.wait_for_selector with timeouts, and make selectors easy to update in a config dict (because UIs change). Provide comments on how to inspect and update them.
+- Extract the full AI response cleanly (handle streaming if possible, or wait for final answer).
+- Add error handling: CAPTCHA detection warning, rate-limit retry, session expired → prompt re-login.
+- Make it extensible: easy to add more AIs later.
+- Security: never hardcode credentials; only use saved browser sessions.
+
+UI features:
+- Sidebar with AI selection and session status
+- Large textarea for prompt (support code blocks)
+- Response area with markdown rendering (use markdown-it or simple HTML)
+- Buttons: Send, Regenerate, Copy Code, Execute in Replit, New Chat
+- Dark mode friendly, mobile responsive
+
+Extra power features:
+- Keep conversation history per AI session
+- Option to chain requests (e.g., "Generate code → explain → test")
+- Log all interactions for debugging
+- Deploy button hint (Replit auto-deploys)
+
+Start by setting up the project structure:
+- main.py (Flask/FastAPI app)
+- playwright_utils.py (all browser functions)
+- config.py (AI URLs, selectors, storage paths)
+- templates/ for HTML
+- static/ for CSS/JS
+
+First, check if the Python-Playwright template is being used. Install any missing packages with pip if needed. Then build step-by-step and show me the code files one by one or let me run it.
+
+After building, give clear instructions on:
+1. How to run the first login for each AI
+2. How to update selectors if the UI changes
+3. How to use the web interface
+
+Make this the most robust and user-friendly AI web automation coding tool possible on Replit. Use best practices for reliability and maintainability.

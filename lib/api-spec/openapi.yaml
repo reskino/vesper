@@ -3,13 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Universal AI Coding Proxy API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: proxy
+    description: AI proxy operations
+  - name: sessions
+    description: Browser session management
+  - name: history
+    description: Conversation history
 paths:
   /healthz:
     get:
@@ -24,6 +30,182 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /proxy/ask:
+    post:
+      operationId: askAi
+      tags: [proxy]
+      summary: Send a prompt to an AI
+      description: Routes a coding prompt to the selected AI service via browser automation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskAiBody"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiResponse"
+        "503":
+          description: AI service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /proxy/execute:
+    post:
+      operationId: executeCode
+      tags: [proxy]
+      summary: Execute generated code
+      description: Runs a code snippet in a sandboxed subprocess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteCodeBody"
+      responses:
+        "200":
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionResult"
+
+  /proxy/ais:
+    get:
+      operationId: listAis
+      tags: [proxy]
+      summary: List available AI services
+      description: Returns all configured AI services with their status
+      responses:
+        "200":
+          description: List of AIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiListResponse"
+
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List all saved browser sessions
+      responses:
+        "200":
+          description: Sessions list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionListResponse"
+
+  /sessions/create:
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new browser session for an AI
+      description: Launches a visible browser window for manual login, then saves the session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+
+  /sessions/{aiId}/delete:
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete a saved session
+      parameters:
+        - name: aiId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: List all conversation history
+      responses:
+        "200":
+          description: History list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryListResponse"
+
+  /history/{aiId}:
+    get:
+      operationId: getHistory
+      tags: [history]
+      summary: Get conversation history for a specific AI
+      parameters:
+        - name: aiId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationHistory"
+
+    delete:
+      operationId: clearHistory
+      tags: [history]
+      summary: Clear conversation history for a specific AI
+      parameters:
+        - name: aiId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: History cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+
+  /history/stats:
+    get:
+      operationId: getHistoryStats
+      tags: [history]
+      summary: Get aggregate stats about usage
+      responses:
+        "200":
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +216,257 @@ components:
       required:
         - status
 
+    AskAiBody:
+      type: object
+      properties:
+        aiId:
+          type: string
+          description: ID of the AI to use (e.g., "chatgpt", "grok")
+        prompt:
+          type: string
+          description: The coding prompt or question
+        conversationId:
+          type: string
+          nullable: true
+          description: Optional conversation ID to continue a session
+        fallback:
+          type: boolean
+          default: true
+          description: Whether to automatically fallback to another AI on failure
+      required:
+        - aiId
+        - prompt
+
+    AiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        aiId:
+          type: string
+        response:
+          type: string
+        conversationId:
+          type: string
+        elapsedMs:
+          type: number
+        fallbackUsed:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+      required:
+        - success
+        - aiId
+        - response
+        - conversationId
+        - elapsedMs
+        - fallbackUsed
+
+    ExecuteCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Code to execute
+        language:
+          type: string
+          default: "python"
+          description: Programming language (python, javascript, bash)
+        timeout:
+          type: integer
+          default: 30
+          description: Execution timeout in seconds
+      required:
+        - code
+
+    ExecutionResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        stdout:
+          type: string
+        stderr:
+          type: string
+        exitCode:
+          type: integer
+        elapsedMs:
+          type: number
+      required:
+        - success
+        - stdout
+        - stderr
+        - exitCode
+        - elapsedMs
+
+    AiListResponse:
+      type: object
+      properties:
+        ais:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiInfo"
+      required:
+        - ais
+
+    AiInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        hasSession:
+          type: boolean
+        isAvailable:
+          type: boolean
+        icon:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - url
+        - hasSession
+        - isAvailable
+
+    SessionListResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionInfo"
+      required:
+        - sessions
+
+    SessionInfo:
+      type: object
+      properties:
+        aiId:
+          type: string
+        aiName:
+          type: string
+        hasSession:
+          type: boolean
+        sessionFile:
+          type: string
+          nullable: true
+        lastUsed:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - aiId
+        - aiName
+        - hasSession
+
+    CreateSessionBody:
+      type: object
+      properties:
+        aiId:
+          type: string
+          description: ID of the AI to create a session for
+      required:
+        - aiId
+
+    SessionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        aiId:
+          type: string
+      required:
+        - success
+        - message
+
+    HistoryListResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationSummary"
+      required:
+        - conversations
+
+    ConversationSummary:
+      type: object
+      properties:
+        aiId:
+          type: string
+        aiName:
+          type: string
+        messageCount:
+          type: integer
+        lastMessage:
+          type: string
+          nullable: true
+        lastUpdated:
+          type: string
+          format: date-time
+      required:
+        - aiId
+        - aiName
+        - messageCount
+        - lastUpdated
+
+    ConversationHistory:
+      type: object
+      properties:
+        aiId:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+      required:
+        - aiId
+        - messages
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        conversationId:
+          type: string
+      required:
+        - id
+        - role
+        - content
+        - timestamp
+        - conversationId
+
+    UsageStats:
+      type: object
+      properties:
+        totalMessages:
+          type: integer
+        messagesByAi:
+          type: object
+          additionalProperties:
+            type: integer
+        totalSessions:
+          type: integer
+        mostUsedAi:
+          type: string
+          nullable: true
+      required:
+        - totalMessages
+        - messagesByAi
+        - totalSessions

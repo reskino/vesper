@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
-  ChevronUp, RefreshCw, AlertCircle, Check,
+  ChevronUp, RefreshCw, AlertCircle, Check, Plus, Upload, FolderOpen,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { useQueryClient } from "@tanstack/react-query";
@@ -89,8 +89,11 @@ export function Home() {
   const [executionResult, setExecutionResult] = useState<any>(null);
 
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null);
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showMobileAiPicker, setShowMobileAiPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: treeData, isLoading: treeLoading } = useGetFileTree(
     { path: "", depth: 10 },
@@ -119,6 +122,18 @@ export function Home() {
   const currentAi = aisData?.ais.find(a => a.id === selectedAi);
   const activeModel = currentAi?.models?.find(m => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
 
+  const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };
+
+  useEffect(() => {
+    if (!showAttachMenu) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-attach-menu]")) setShowAttachMenu(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showAttachMenu]);
+
   const send = async (text: string) => {
     if (!text.trim() || !selectedAi || isPending) return;
     setMessages(prev => [...prev, { role: "user", content: text }]);
@@ -128,8 +143,10 @@ export function Home() {
         prompt: text,
         conversationId: conversationId ?? undefined,
       };
-      const result = attachedFile && attachedFileData?.content
-        ? await askAiWithContext.mutateAsync({ data: { ...payload, files: [{ path: attachedFile, content: attachedFileData.content }] } })
+      const fileContent = uploadedFile?.content ?? attachedFileData?.content;
+      const filePath = uploadedFile?.name ?? attachedFile ?? "file";
+      const result = fileContent
+        ? await askAiWithContext.mutateAsync({ data: { ...payload, files: [{ path: filePath, content: fileContent }] } })
         : await askAi.mutateAsync({ data: payload });
       if (result.success) {
         setConversationId(result.conversationId);
@@ -346,25 +363,73 @@ export function Home() {
         {/* Input bar */}
         <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-3 sm:px-4 pt-3 pb-3">
           <div className="max-w-3xl mx-auto space-y-2">
-            {attachedFile && (
+            {/* Attachment badge */}
+            {(attachedFile || uploadedFile) && (
               <div className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-3 py-1.5 rounded-xl w-max max-w-full">
                 <Paperclip className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[200px]">{attachedFile}</span>
-                <button onClick={() => setAttachedFile(null)} className="ml-1 hover:text-foreground transition-colors">
+                <span className="truncate max-w-[200px]">{uploadedFile?.name ?? attachedFile}</span>
+                <button onClick={clearAttachment} className="ml-1 hover:text-foreground transition-colors">
                   <X className="h-3 w-3" />
                 </button>
               </div>
             )}
 
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.yaml,.yml,.html,.css,.sh,.rs,.go,.java,.cpp,.c,.cs,.rb,.php,.swift,.kt,.sql,.toml,.env,.gitignore"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const content = ev.target?.result as string;
+                  setUploadedFile({ name: file.name, content });
+                  setAttachedFile(null);
+                  setShowAttachMenu(false);
+                };
+                reader.readAsText(file);
+                e.target.value = "";
+              }}
+            />
+
             <div className="flex items-end gap-2">
-              {/* Attach file */}
-              <button
-                onClick={() => setIsFilePickerOpen(true)}
-                className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title="Attach file"
-              >
-                <Paperclip className="h-5 w-5" />
-              </button>
+              {/* + Attach menu */}
+              <div className="relative shrink-0" data-attach-menu>
+                <button
+                  onClick={() => setShowAttachMenu(prev => !prev)}
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl transition-colors ${showAttachMenu ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                  title="Add attachment"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+                {showAttachMenu && (
+                  <div className="absolute bottom-12 left-0 z-50 min-w-[220px] rounded-2xl border border-border bg-popover shadow-lg p-1.5 space-y-0.5">
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-muted transition-colors text-left"
+                      onClick={() => { fileInputRef.current?.click(); }}
+                    >
+                      <Upload className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="font-medium">Upload a file</p>
+                        <p className="text-[11px] text-muted-foreground">From your device</p>
+                      </div>
+                    </button>
+                    <button
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-muted transition-colors text-left"
+                      onClick={() => { setIsFilePickerOpen(true); setShowAttachMenu(false); }}
+                    >
+                      <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="font-medium">From workspace</p>
+                        <p className="text-[11px] text-muted-foreground">Attach a project file</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Textarea */}
               <div className="flex-1 relative">
@@ -498,7 +563,7 @@ export function Home() {
               {treeLoading ? (
                 <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : treeData?.tree ? (
-                <MiniFileTreeItem node={treeData.tree} onSelect={p => { setAttachedFile(p); setIsFilePickerOpen(false); }} />
+                <MiniFileTreeItem node={treeData.tree} onSelect={p => { setAttachedFile(p); setUploadedFile(null); setIsFilePickerOpen(false); }} />
               ) : (
                 <p className="text-xs text-muted-foreground text-center p-6">No files found</p>
               )}

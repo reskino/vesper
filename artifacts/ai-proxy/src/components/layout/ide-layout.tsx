@@ -455,15 +455,28 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       {/* ── Desktop layout ──────────────────────────────────────────────────── */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
         <ActivityBar />
-        {sidebarPanel && (
-          <aside className={`shrink-0 flex flex-col border-r border-[#1a1a24] overflow-hidden bg-[#0a0a0c]
-            ${sidebarPanel === "agent" ? "w-72" : "w-64"}`}>
-            <SidebarContent activeFilePath={null} />
-          </aside>
-        )}
-        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-          {children ? children : <DesktopWorkspace />}
-        </div>
+        <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0 min-w-0">
+          {sidebarPanel && (
+            <>
+              <ResizablePanel
+                defaultSize={sidebarPanel === "agent" ? 20 : 18}
+                minSize={12}
+                maxSize={40}
+                className="min-w-0"
+              >
+                <aside className="h-full flex flex-col border-r border-[#1a1a24] overflow-hidden bg-[#0a0a0c]">
+                  <SidebarContent activeFilePath={null} />
+                </aside>
+              </ResizablePanel>
+              <ResizableHandle className="w-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-col-resize" />
+            </>
+          )}
+          <ResizablePanel defaultSize={sidebarPanel ? 82 : 100} minSize={40} className="min-w-0">
+            <div className="flex h-full min-w-0 min-h-0 overflow-hidden">
+              {children ? children : <DesktopWorkspace />}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       {/* ── Mobile layout ───────────────────────────────────────────────────── */}

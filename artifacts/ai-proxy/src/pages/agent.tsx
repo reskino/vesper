@@ -292,6 +292,12 @@ export default function AgentPage() {
               </p>
             )}
 
+            {!isRunning && (
+              <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
+                💡 ChatGPT and Claude follow the tool format most reliably. Mistral, Groq, and other models may loop — switch models if you see repeated steps.
+              </p>
+            )}
+
             <div className="space-y-2 pt-1">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Examples</p>
               {EXAMPLE_TASKS.map((ex, i) => (

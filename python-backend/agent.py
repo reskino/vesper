@@ -43,7 +43,67 @@ logger = logging.getLogger(__name__)
 
 MAX_STEPS = 25
 TOOL_PATTERN = re.compile(r"<tool>(.*?)</tool>", re.DOTALL)
-COMPLETE_PATTERN = re.compile(r"TASK_COMPLETE:\s*(.+)", re.IGNORECASE)
+COMPLETE_PATTERN = re.compile(
+    r"TASK[_ ]COMPLETE[:\s]+(.+)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# ── Alternative tool-call formats some models produce ────────────────────────
+# Matches:  <write_file> <parameter=path>foo.py</parameter> ...
+#           <execute> <parameter=command>python3 foo.py</parameter> ...
+_TOOL_NAMES_RE = (
+    "execute|write_file|read_file|background_exec|kill_process|"
+    "create_dir|delete|list_dir|check_port|http_get|http_post|"
+    "screenshot_url|sleep"
+)
+ALT_TOOL_RE = re.compile(
+    rf"<({_TOOL_NAMES_RE})>(.*?)(?:</(?:{_TOOL_NAMES_RE})>|(?=<(?:{_TOOL_NAMES_RE})>)|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+ALT_PARAM_RE = re.compile(
+    r"<parameter(?:=(\w+))?>(.*?)</parameter>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _try_parse_alt_tool(text: str) -> list[dict]:
+    """
+    Parse alternative tool-call formats that some LLMs produce instead of the
+    required JSON-in-<tool> format.
+
+    Handles:
+      <write_file> <parameter=path>hello.py</parameter> <parameter=content>...</parameter>
+      <execute> <parameter=command>python3 hello.py</parameter>
+    """
+    results = []
+    for m in ALT_TOOL_RE.finditer(text):
+        tool_name = m.group(1).lower()
+        body = m.group(2) or ""
+        params: dict = {}
+        for pm in ALT_PARAM_RE.finditer(body):
+            key = (pm.group(1) or "value").strip()
+            val = pm.group(2).strip()
+            params[key] = val
+        # Also try "function call" style: <execute command="..." />
+        if not params:
+            for attr_m in re.finditer(r'(\w+)=["\']([^"\']*)["\']', body):
+                params[attr_m.group(1)] = attr_m.group(2)
+        if params:
+            results.append({"name": tool_name, "params": params})
+    return results
+
+
+def _trim_conversation(conv: str, max_chars: int = 40_000) -> str:
+    """
+    If the conversation has grown too large, remove the oldest tool result
+    blocks to stay within the context window.
+    """
+    if len(conv) <= max_chars:
+        return conv
+    # Keep the system prompt (first 3000 chars) and trim the middle
+    head = conv[:3000]
+    tail = conv[-(max_chars - 3500):]
+    return head + "\n\n[...earlier history trimmed to fit context window...]\n\n" + tail
 
 SCREENSHOT_DIR = Path(tempfile.gettempdir()) / "agent_screenshots"
 SCREENSHOT_DIR.mkdir(exist_ok=True)
@@ -52,6 +112,18 @@ SCREENSHOT_DIR.mkdir(exist_ok=True)
 _background_processes: dict[str, subprocess.Popen] = {}
 
 SYSTEM_PROMPT = """You are an expert autonomous coding agent. You build complete, fully-verified, production-ready software by thinking step-by-step and using tools — exactly like a senior engineer would.
+
+══════════════════════════════════════════
+CRITICAL — TOOL CALL FORMAT (mandatory)
+══════════════════════════════════════════
+You MUST call tools using this EXACT JSON format. No other format is accepted:
+
+<tool>{{"name": "write_file", "params": {{"path": "hello.py", "content": "print('hello')"}}}}</tool>
+
+WRONG formats (will be ignored — do NOT use these):
+  ✗  <write_file> <parameter=path>hello.py</parameter> ...
+  ✗  ```write_file path=hello.py ...```
+  ✗  [write_file](path=hello.py)
 
 You have these tools available. Call them using this exact format:
 <tool>{{"name": "tool_name", "params": {{...}}}}</tool>
@@ -512,13 +584,19 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
         workspace_root=WORKSPACE_ROOT,
         max_steps=max_steps,
     )
-    conversation = f"{system}\n\n{'═'*50}\nTASK: {task}\n{'═'*50}\n\nStart by thinking through your approach:"
+    conversation = (
+        f"{system}\n\n{'═'*50}\nTASK: {task}\n{'═'*50}\n\n"
+        f"Start by thinking through your approach, then call your first tool:"
+    )
 
     start_time = time.time()
-    tool_call_count = 0
+    last_response: str = ""
 
     for step_num in range(max_steps):
         step_start = time.time()
+
+        # Trim conversation to avoid overflowing the model's context window
+        conversation = _trim_conversation(conversation)
 
         success, ai_response, error = send_prompt(actual_ai, conversation)
 
@@ -531,6 +609,23 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
             })
             break
 
+        # ── Repetition guard ──────────────────────────────────────────────────
+        # If the model outputs the exact same text twice in a row it has
+        # looped.  Stop immediately instead of wasting all remaining steps.
+        if ai_response.strip() == last_response.strip() and last_response:
+            steps.append({
+                "step": step_num + 1,
+                "type": "error",
+                "content": (
+                    "Agent detected a repeated response — the model is stuck in a loop. "
+                    "This usually means the model isn't following the required tool-call format. "
+                    "Try a different AI model (ChatGPT or Claude work most reliably with Agent Mode)."
+                ),
+                "elapsedMs": int((time.time() - step_start) * 1000),
+            })
+            break
+        last_response = ai_response
+
         steps.append({
             "step": step_num + 1,
             "type": "thought",
@@ -539,10 +634,11 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
         })
         _agent_status["steps"] = list(steps)
 
-        # Check for task complete
+        # ── Check for task completion ─────────────────────────────────────────
         complete_match = COMPLETE_PATTERN.search(ai_response)
         if complete_match:
-            summary = complete_match.group(1).strip()
+            # Take the first non-empty line of the match as the summary
+            summary = complete_match.group(1).strip().splitlines()[0].strip()
             _agent_status = {
                 "running": False,
                 "task": task,
@@ -556,22 +652,34 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
             }
             return _agent_status
 
-        # Parse and execute tool calls
-        tool_calls = TOOL_PATTERN.findall(ai_response)
+        # ── Parse tool calls (primary JSON format) ───────────────────────────
+        primary_tool_jsons = TOOL_PATTERN.findall(ai_response)
 
-        if not tool_calls:
-            # Push AI to continue
+        # ── Parse tool calls (alternative XML/parameter format fallback) ──────
+        alt_tool_dicts: list[dict] = []
+        if not primary_tool_jsons:
+            alt_tool_dicts = _try_parse_alt_tool(ai_response)
+
+        if not primary_tool_jsons and not alt_tool_dicts:
+            # The model didn't call any tool AND didn't say TASK_COMPLETE.
+            # Nudge it with a very explicit reminder of the required format.
+            steps_remaining = max_steps - step_num - 1
             conversation += (
                 f"\n\nAssistant: {ai_response}"
-                f"\n\nSystem: You haven't used any tools or said TASK_COMPLETE yet."
-                f" Use a tool to make progress, or say TASK_COMPLETE if the task is fully done and verified."
+                f"\n\nSystem: ⚠ No tool call detected and task is not complete."
+                f" You MUST use tools to make progress. Required format (copy this exactly):\n\n"
+                f'<tool>{{"name": "write_file", "params": {{"path": "hello.py", "content": "print(\'hi\')"}}}}</tool>\n\n'
+                f"Or when done:\nTASK_COMPLETE: brief summary of what was built\n\n"
+                f"Steps remaining: {steps_remaining}. Use a tool now."
                 f"\n\nAssistant:"
             )
             continue
 
-        tool_results_text_parts = []
+        # ── Execute all tool calls ────────────────────────────────────────────
+        tool_results_text_parts: list[str] = []
 
-        for tool_json in tool_calls:
+        # Process primary (JSON) tool calls
+        for tool_json in primary_tool_jsons:
             try:
                 tool_data = json.loads(tool_json.strip())
             except json.JSONDecodeError as e:
@@ -587,9 +695,7 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
 
             tool_name = tool_data.get("name", "")
             tool_params = tool_data.get("params", {})
-
             tool_result = _execute_tool(tool_name, tool_params, cwd)
-            tool_call_count += 1
 
             steps.append({
                 "step": step_num + 1,
@@ -600,16 +706,32 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
                 "elapsedMs": 0,
             })
             _agent_status["steps"] = list(steps)
+            tool_results_text_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
 
-            tool_results_text_parts.append(
-                f"[Tool: {tool_name}]\n{tool_result}"
-            )
+        # Process alternative-format tool calls
+        for tool_data in alt_tool_dicts:
+            tool_name = tool_data.get("name", "")
+            tool_params = tool_data.get("params", {})
+            tool_result = _execute_tool(tool_name, tool_params, cwd)
+
+            steps.append({
+                "step": step_num + 1,
+                "type": "tool",
+                "tool": tool_name,
+                "params": tool_params,
+                "result": tool_result,
+                "elapsedMs": 0,
+            })
+            _agent_status["steps"] = list(steps)
+            tool_results_text_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
 
         tool_results_block = "\n\n---\n\n".join(tool_results_text_parts)
+        steps_remaining = max_steps - step_num - 1
         conversation += (
             f"\n\nAssistant: {ai_response}"
             f"\n\nTool Results:\n{tool_results_block}"
-            f"\n\nSystem: Continue. Use more tools to make progress, read back files to verify,"
+            f"\n\nSystem: Continue. Steps remaining: {steps_remaining}."
+            f" Use more tools to make progress, read back files to verify,"
             f" test your code, or say TASK_COMPLETE when fully done and verified."
             f"\n\nAssistant:"
         )

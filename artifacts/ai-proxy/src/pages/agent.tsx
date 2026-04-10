@@ -14,6 +14,7 @@ import {
   ChevronDown, ChevronRight, Terminal, FileCode, FolderPlus,
   FileEdit, Trash2, List, Loader2, Sparkles, AlertCircle,
   Globe, Camera, Wifi, Clock, Server, Zap, WifiOff, ChevronUp,
+  Square,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -54,7 +55,7 @@ const TOOL_COLORS: Record<string, string> = {
 const EXAMPLE_TASKS = [
   "Create a Flask REST API with /hello and /time endpoints, save it as hello_api.py, then run it",
   "Write a Python Fibonacci script, run it, show the first 20 numbers",
-  "Fetch a JSON placeholder todo with Node.js and log it",
+  "Fetch a JSON placeholder todo with curl and log it",
   "Build a calculator CLI in Python with add/sub/mul/div, write tests, run them",
   "Create a README.md for this AI Proxy project",
 ];
@@ -155,10 +156,31 @@ function StepCard({ step, defaultOpen = false }: { step: AgentStep; defaultOpen?
   return null;
 }
 
+const AGENT_CAPABLE_AI_IDS = new Set([
+  "pollinations", "gemini", "groq", "openrouter",
+  "chatgpt", "claude", "mistral", "cerebras", "deepseek", "together",
+]);
+
+const BEST_AGENT_MODELS: Record<string, string[]> = {
+  pollinations: ["openai", "openai-large", "claude-sonnet-3-7"],
+  gemini:       ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-pro"],
+  groq:         ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free"],
+  chatgpt:      ["gpt-5.3", "gpt-5.4"],
+  claude:       ["claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"],
+  mistral:      ["codestral-latest", "mistral-large-latest"],
+  cerebras:     ["llama-3.3-70b", "qwen-3-32b"],
+  deepseek:     ["deepseek-chat", "deepseek-reasoner"],
+  together:     ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
+};
+
 export default function AgentPage() {
   const [task, setTask] = useState("");
-  const [selectedAi, setSelectedAi] = useState("chatgpt");
+  const [selectedAi, setSelectedAi] = useState("pollinations");
+  const [selectedModel, setSelectedModel] = useState("openai");
+  const [maxSteps, setMaxSteps] = useState(20);
   const [isRunning, setIsRunning] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [result, setResult] = useState<{ success: boolean; summary?: string | null; error?: string | null; totalElapsedMs?: number | null } | null>(null);
   const [currentTask, setCurrentTask] = useState<string | null>(null);
@@ -178,15 +200,42 @@ export default function AgentPage() {
     }
   });
 
+  const availableAis = (ais?.ais ?? []).filter(a => AGENT_CAPABLE_AI_IDS.has(a.id));
+
+  const currentAiInfo = availableAis.find(a => a.id === selectedAi);
+  const currentAiModels = (currentAiInfo?.models ?? []) as Array<{ id: string; name: string; tier?: string }>;
+  const agentModels = currentAiModels.filter(m => {
+    const best = BEST_AGENT_MODELS[selectedAi];
+    return !best || best.includes(m.id) || m.id === "__auto__";
+  });
+  const modelsToShow = agentModels.length > 1 ? agentModels : currentAiModels;
+
+  useEffect(() => {
+    const ai = availableAis.find(a => a.id === selectedAi);
+    if (!ai) return;
+    const models = (ai.models ?? []) as Array<{ id: string }>;
+    const best = BEST_AGENT_MODELS[selectedAi];
+    if (best) {
+      const match = models.find(m => best.includes(m.id));
+      if (match) { setSelectedModel(match.id); return; }
+    }
+    const auto = models.find(m => m.id === "__auto__");
+    if (auto) setSelectedModel("__auto__");
+    else if (models[0]) setSelectedModel(models[0].id);
+  }, [selectedAi]);
+
   useEffect(() => {
     if (!statusData) return;
     if (statusData.steps) setSteps(statusData.steps as AgentStep[]);
     if (!statusData.running && isRunning) {
       setIsRunning(false);
+      setIsStopping(false);
       if (statusData.result) {
         setResult(statusData.result);
         if (statusData.result.success) {
           toast({ title: "Task complete!", description: statusData.result.summary || undefined });
+        } else if (statusData.result.error === "Agent stopped by user.") {
+          toast({ title: "Agent stopped", description: "The agent was stopped early." });
         } else {
           toast({ title: "Task failed", description: statusData.result.error || undefined, variant: "destructive" });
         }
@@ -207,17 +256,38 @@ export default function AgentPage() {
     setIsRunning(true);
     setInputCollapsed(true);
     runAgentMutation.mutate(
-      { data: { aiId: selectedAi, task: task.trim(), maxSteps: 20 } },
+      { data: { aiId: selectedAi, modelId: selectedModel || null, task: task.trim(), maxSteps } },
       { onError: err => { setIsRunning(false); toast({ title: "Failed to start agent", description: String(err), variant: "destructive" }); } }
     );
   };
 
+  const handleStop = async () => {
+    if (!isRunning || isStopping) return;
+    setIsStopping(true);
+    try {
+      const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+      await fetch(`${base}/api/agent/stop`, { method: "POST" });
+    } catch {
+      setIsStopping(false);
+    }
+  };
+
   const fmt = (ms: number) => ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+
+  const tierColor = (tier?: string) => {
+    if (tier === "pro") return "text-amber-400";
+    if (tier === "plus") return "text-blue-400";
+    return "text-emerald-400";
+  };
+  const tierLabel = (tier?: string) => {
+    if (tier === "pro") return "Max";
+    if (tier === "plus") return "Plus";
+    return "Free";
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* Page header */}
       <div className="shrink-0 border-b border-border px-4 sm:px-6 py-3.5 bg-background">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -229,7 +299,6 @@ export default function AgentPage() {
               Describe what to build — the agent plans, codes, runs &amp; fixes until done
             </p>
           </div>
-          {/* Mobile collapse/expand task input */}
           {currentTask && (
             <button
               className="sm:hidden h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors"
@@ -260,42 +329,131 @@ export default function AgentPage() {
               />
             </div>
 
+            {/* AI Provider selector */}
             <div className="space-y-2">
-              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Model</label>
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">AI Provider</label>
               <Select value={selectedAi} onValueChange={setSelectedAi} disabled={isRunning}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ais?.ais?.map(ai => (
-                    <SelectItem key={ai.id} value={ai.id}>{ai.name}</SelectItem>
-                  )) ?? (
-                    <>
-                      <SelectItem value="chatgpt">ChatGPT</SelectItem>
-                      <SelectItem value="grok">Grok</SelectItem>
-                      <SelectItem value="claude">Claude</SelectItem>
-                    </>
-                  )}
+                  {availableAis.length > 0
+                    ? availableAis.map(ai => (
+                        <SelectItem key={ai.id} value={ai.id}>
+                          <span className="flex items-center gap-2">
+                            {ai.name}
+                            {!ai.hasSession && ai.id !== "pollinations" && (
+                              <span className="text-[10px] text-muted-foreground">(no session)</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))
+                    : (
+                      <>
+                        <SelectItem value="pollinations">Pollinations AI</SelectItem>
+                        <SelectItem value="gemini">Google Gemini</SelectItem>
+                        <SelectItem value="groq">Groq</SelectItem>
+                        <SelectItem value="claude">Claude</SelectItem>
+                        <SelectItem value="chatgpt">ChatGPT</SelectItem>
+                      </>
+                    )}
                 </SelectContent>
               </Select>
             </div>
 
-            <Button className="w-full gap-2 rounded-xl" onClick={handleRun} disabled={isRunning || !task.trim()}>
-              {isRunning
-                ? <><Loader2 className="h-4 w-4 animate-spin" />Running…</>
-                : <><Play className="h-4 w-4" />Run Agent</>}
-            </Button>
+            {/* Specific model selector */}
+            {modelsToShow.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Model</label>
+                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isRunning}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelsToShow.map(m => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="flex items-center gap-1.5">
+                          <span>{m.name}</span>
+                          {m.tier && (
+                            <span className={`text-[10px] font-bold ${tierColor(m.tier)}`}>
+                              {tierLabel(m.tier)}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Max steps selector */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                Max Steps
+                <span className="ml-1 normal-case font-normal">({maxSteps})</span>
+              </label>
+              <div className="flex gap-1.5">
+                {[10, 20, 30, 50].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setMaxSteps(n)}
+                    disabled={isRunning}
+                    className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors font-medium
+                      ${maxSteps === n
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Run / Stop buttons */}
+            <div className="space-y-2">
+              <Button
+                className="w-full gap-2 rounded-xl"
+                onClick={handleRun}
+                disabled={isRunning || !task.trim()}
+              >
+                {isRunning
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Running…</>
+                  : <><Play className="h-4 w-4" />Run Agent</>}
+              </Button>
+              {isRunning && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={handleStop}
+                  disabled={isStopping}
+                >
+                  {isStopping
+                    ? <><Loader2 className="h-4 w-4 animate-spin" />Stopping…</>
+                    : <><Square className="h-4 w-4" />Stop Agent</>}
+                </Button>
+              )}
+            </div>
 
             {isRunning && (
               <p className="text-xs text-center text-muted-foreground">
-                Agent is working — steps appear live below
+                Agent is working — steps appear live on the right
               </p>
             )}
 
             {!isRunning && (
-              <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-                💡 ChatGPT and Claude follow the tool format most reliably. Mistral, Groq, and other models may loop — switch models if you see repeated steps.
-              </p>
+              <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-1.5">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tips</p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  • <strong>Best models for agent tasks:</strong> Claude Sonnet, GPT-4o, Gemini 2.5 Flash, DeepSeek V3 — these follow the tool format most reliably.
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  • <strong>Pollinations</strong> is always free, no key needed — great for testing.
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  • If the agent loops or repeats steps, switch to a smarter model.
+                </p>
+              </div>
             )}
 
             <div className="space-y-2 pt-1">

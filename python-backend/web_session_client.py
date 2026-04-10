@@ -1107,11 +1107,23 @@ def _send_claude_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, 
     """Send via official Anthropic API (api.anthropic.com) using an API key."""
     try:
         import urllib.request, urllib.error
-        body = json.dumps({
+        _AGENT_SYS_MARKER = "You are an expert autonomous coding agent"
+        _SEP = "═" * 20
+        system_text: str | None = None
+        user_content = prompt
+        if prompt.startswith(_AGENT_SYS_MARKER):
+            sep_pos = prompt.find(_SEP)
+            if sep_pos > 100:
+                system_text = prompt[:sep_pos].strip()
+                user_content = prompt[sep_pos:].strip()
+        body_data: dict = {
             "model": model,
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode()
+            "max_tokens": 16384,
+            "messages": [{"role": "user", "content": user_content}],
+        }
+        if system_text:
+            body_data["system"] = system_text
+        body = json.dumps(body_data).encode()
         req = urllib.request.Request(
             "https://api.anthropic.com/v1/messages",
             data=body,
@@ -1212,10 +1224,25 @@ def _send_gemini_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, 
     try:
         import urllib.request, urllib.error
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-        body = json.dumps({
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 8192},
-        }).encode()
+
+        _AGENT_SYS_MARKER = "You are an expert autonomous coding agent"
+        _SEP = "═" * 20
+        system_instruction_text: str | None = None
+        user_content = prompt
+        if prompt.startswith(_AGENT_SYS_MARKER):
+            sep_pos = prompt.find(_SEP)
+            if sep_pos > 100:
+                system_instruction_text = prompt[:sep_pos].strip()
+                user_content = prompt[sep_pos:].strip()
+
+        body_data: dict = {
+            "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+            "generationConfig": {"maxOutputTokens": 8192, "temperature": 0.7},
+        }
+        if system_instruction_text:
+            body_data["system_instruction"] = {"parts": [{"text": system_instruction_text}]}
+
+        body = json.dumps(body_data).encode()
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read())

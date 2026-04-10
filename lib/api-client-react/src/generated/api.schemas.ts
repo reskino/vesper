@@ -239,6 +239,8 @@ export interface TerminalCwdResponse {
 export interface AgentRunBody {
   /** AI to use for the agent */
   aiId: string;
+  /** Specific model to use (e.g. "gemini-2.5-flash-preview-05-20"). __auto__ resolves to provider default. */
+  modelId?: string | null;
   /** Task description — what to build or do */
   task: string;
   /** Working directory for the agent */

@@ -106,6 +106,7 @@ router.get("/terminal/cwd", proxyToPython);
 
 // Agent routes
 router.post("/agent/run", proxyToPython);
+router.post("/agent/stop", proxyToPython);
 router.get("/agent/status", proxyToPython);
 router.get("/agent/screenshot/:filename", proxyToPython);
 

@@ -24,7 +24,7 @@ from file_manager import (
     rename_path, get_language, LANGUAGE_MAP
 )
 from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
-from agent import run_agent, get_status as get_agent_status, get_screenshot_path
+from agent import run_agent, get_status as get_agent_status, get_screenshot_path, stop_agent
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -930,19 +930,28 @@ def agent_run():
         return jsonify({"error": "aiId and task are required"}), 400
 
     working_dir = data.get("workingDir")
-    max_steps = min(int(data.get("maxSteps", 20)), 30)
+    max_steps = min(int(data.get("maxSteps", 20)), 50)
+    model_id = data.get("modelId") or None
 
     if get_agent_status().get("running"):
         return jsonify({"error": "An agent task is already running"}), 409
 
     def _run():
         try:
-            run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps)
+            run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps, model_id=model_id)
         except Exception as e:
             logger.error("Agent thread error: %s", e)
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"running": True, "task": task, "steps": [], "result": None})
+
+
+@app.route("/api/agent/stop", methods=["POST"])
+def agent_stop():
+    stopped = stop_agent()
+    if stopped:
+        return jsonify({"success": True, "message": "Stop signal sent to agent"})
+    return jsonify({"success": False, "message": "No agent task is currently running"}), 400
 
 
 @app.route("/api/agent/status", methods=["GET"])

@@ -37,7 +37,7 @@ import requests as _requests
 from playwright_utils import send_prompt, session_exists
 from file_manager import get_language
 from terminal_manager import exec_command, get_cwd, WORKSPACE_ROOT
-from config import FALLBACK_ORDER
+from config import FALLBACK_ORDER, set_active_model
 
 logger = logging.getLogger(__name__)
 
@@ -212,10 +212,19 @@ Begin your response by thinking through the approach, then use tools one at a ti
 
 
 _agent_status: dict = {"running": False, "task": None, "steps": [], "result": None}
+_stop_requested: bool = False
 
 
 def get_status() -> dict:
     return dict(_agent_status)
+
+
+def stop_agent() -> bool:
+    global _stop_requested
+    if _agent_status.get("running"):
+        _stop_requested = True
+        return True
+    return False
 
 
 def _pick_ai(ai_id: str) -> Optional[str]:
@@ -561,14 +570,24 @@ def _execute_tool(tool_name: str, params: dict, cwd: str) -> str:
 
 # ─── Agent loop ───────────────────────────────────────────────────────────────
 
-def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_steps: int = MAX_STEPS) -> dict:
-    global _agent_status
+def run_agent(
+    ai_id: str,
+    task: str,
+    working_dir: Optional[str] = None,
+    max_steps: int = MAX_STEPS,
+    model_id: Optional[str] = None,
+) -> dict:
+    global _agent_status, _stop_requested
 
     cwd = working_dir or get_cwd()
     if not os.path.isabs(cwd):
         cwd = os.path.join(WORKSPACE_ROOT, cwd)
 
+    _stop_requested = False
     _agent_status = {"running": True, "task": task, "steps": [], "result": None}
+
+    if model_id:
+        set_active_model(ai_id, model_id)
 
     actual_ai = _pick_ai(ai_id)
     if not actual_ai:
@@ -600,6 +619,21 @@ def run_agent(ai_id: str, task: str, working_dir: Optional[str] = None, max_step
 
     for step_num in range(max_steps):
         step_start = time.time()
+
+        # Check if the user requested a stop
+        if _stop_requested:
+            _agent_status = {
+                "running": False,
+                "task": task,
+                "steps": steps,
+                "result": {
+                    "success": False,
+                    "summary": None,
+                    "error": "Agent stopped by user.",
+                    "totalElapsedMs": int((time.time() - start_time) * 1000),
+                },
+            }
+            return _agent_status
 
         # Trim conversation to avoid overflowing the model's context window
         conversation = _trim_conversation(conversation)

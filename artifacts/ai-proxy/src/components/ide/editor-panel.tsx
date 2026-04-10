@@ -571,16 +571,57 @@ export function EditorPanel() {
       {/* ── Editor body ──────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {!activeTab ? (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-4 select-none">
-            <FileCode className="h-12 w-12 text-[#1e1e2e]" />
-            <p className="text-[#3a3a5c] text-sm font-medium">No file open</p>
-            <p className="text-[#1e1e2e] text-xs">Select a file from the Explorer to start editing</p>
-            <div className="flex gap-3 mt-2 text-[10px] text-[#2a2a40]">
-              <span>Ctrl+S — save</span>
-              <span>Ctrl+W — close tab</span>
-              <span>Ctrl+` — terminal</span>
+          /* ── Premium empty state ─────────────────────────────────────── */
+          <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-8 select-none">
+
+            {/* Logo glow */}
+            <div className="relative flex flex-col items-center gap-3">
+              <div className="absolute inset-0 -m-8 blur-3xl bg-primary/5 rounded-full pointer-events-none" />
+              <div className="relative h-14 w-14 rounded-2xl bg-gradient-to-br from-[#1a1a2e] to-[#0d0d12]
+                border border-[#1e1e2e] flex items-center justify-center
+                shadow-[0_0_40px_rgba(99,102,241,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <FileCode className="h-6 w-6 text-[#2a2a40]" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-[#3a3a5c] tracking-tight">Open a file to begin</p>
+                <p className="text-[11px] text-[#252535] mt-1">
+                  Select from the Explorer or create a new file
+                </p>
+              </div>
             </div>
+
+            {/* Keyboard shortcut grid */}
+            <div className="flex flex-col gap-1.5 w-full max-w-[280px]">
+              {[
+                { keys: ["Ctrl", "S"],   label: "Save file" },
+                { keys: ["Ctrl", "W"],   label: "Close tab" },
+                { keys: ["Ctrl", "`"],   label: "Toggle terminal" },
+                { keys: ["Ctrl", "J"],   label: "Toggle chat" },
+                { keys: ["Ctrl", "N"],   label: "New chat" },
+              ].map(({ keys, label }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between px-3 py-1.5 rounded-lg
+                    bg-[#0a0a0e] border border-[#141420] group hover:border-[#1e1e2e] transition-colors"
+                >
+                  <span className="text-[11px] text-[#2a2a40] group-hover:text-[#3a3a5c] transition-colors">{label}</span>
+                  <div className="flex items-center gap-1">
+                    {keys.map((k, i) => (
+                      <span key={i} className="flex items-center gap-1">
+                        <kbd className="text-[9px] font-bold font-mono text-[#2a2a40] group-hover:text-[#52526e]
+                          bg-[#141420] border border-[#1e1e2e] rounded px-1.5 py-0.5 transition-colors">
+                          {k}
+                        </kbd>
+                        {i < keys.length - 1 && (
+                          <span className="text-[9px] text-[#1e1e2e]">+</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
           </div>
         ) : (
           <ResizablePanelGroup direction="horizontal" className="h-full">

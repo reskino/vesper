@@ -92,9 +92,11 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 rounded-lg bg-[#141420] hover:bg-[#1e1e2e] border border-[#1a1a24]
-          font-semibold text-foreground transition-all
-          ${compact ? "h-8 px-2.5 text-xs" : "h-7 px-3 text-sm"}`}
+        className={`flex items-center gap-2 rounded-xl bg-[#0f0f16] hover:bg-[#141420]
+          border border-[#1e1e2e] hover:border-[#252535]
+          font-semibold text-foreground transition-all duration-150
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]
+          ${compact ? "h-8 px-2.5 text-xs" : "h-8 px-3 text-[13px]"}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Select AI model"
@@ -247,61 +249,72 @@ export function TopBar() {
 
   return (
     <header
-      className="shrink-0 h-12 flex items-center px-3 gap-2 bg-[#0a0a0c] border-b border-[#1a1a24] z-20 select-none"
+      className="shrink-0 h-11 flex items-center px-3 gap-2.5
+        bg-[#080809] border-b border-[#131318] z-20 select-none
+        shadow-[0_1px_0_rgba(255,255,255,0.02)]"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      {/* Logo */}
+      {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 shrink-0">
-        <VesperLogo size={22} />
-        <span className="font-extrabold text-sm text-foreground tracking-tight">Vesper</span>
+        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10
+          border border-primary/20 flex items-center justify-center
+          shadow-[0_0_12px_rgba(99,102,241,0.15)]">
+          <VesperLogo size={14} />
+        </div>
+        <span className="font-bold text-[13px] text-foreground tracking-tight hidden sm:block">Vesper</span>
       </div>
 
-      <div className="w-px h-5 bg-[#1a1a24] shrink-0 hidden md:block" />
+      {/* Divider */}
+      <div className="w-px h-4 bg-[#1a1a24] shrink-0 hidden md:block" />
 
-      {/* Model selector — centered on desktop, left-ish on mobile */}
+      {/* ── Model selector — centered on desktop ───────────────────────── */}
       <div className="flex-1 flex items-center md:justify-center">
-        {/* Desktop: full selector */}
         <div className="hidden md:block">
           <ModelSelector />
         </div>
-        {/* Mobile: compact selector */}
         <div className="md:hidden">
           <ModelSelector compact />
         </div>
       </div>
 
-      {/* Right actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        {/* New chat — visible everywhere */}
+      {/* ── Right actions ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-0.5 shrink-0">
+
+        {/* New chat */}
         <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <button
               onClick={triggerNewChat}
-              className="h-8 w-8 flex items-center justify-center rounded-lg text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all"
+              className="h-8 w-8 flex items-center justify-center rounded-lg
+                text-[#52526e] hover:text-foreground hover:bg-[#141420]
+                transition-all duration-150"
               aria-label="New Chat"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-[15px] w-[15px]" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">New Chat <span className="text-[#52526e]">Ctrl+N</span></TooltipContent>
+          <TooltipContent side="bottom" className="text-xs">
+            New Chat <kbd className="ml-1 text-[10px] text-[#52526e] bg-[#0a0a0c] border border-[#1a1a24] rounded px-1">⌃N</kbd>
+          </TooltipContent>
         </Tooltip>
 
-        {/* Desktop-only panel toggles */}
-        <div className="hidden md:flex items-center gap-1">
-          <IconBtn icon={PanelRight}    label="Toggle Chat"     shortcut="Ctrl+J" active={showChat}     onClick={toggleChat} />
-          <IconBtn icon={PanelBottom}   label="Toggle Terminal" shortcut="Ctrl+`" active={showTerminal}  onClick={toggleTerminal} />
-          <div className="w-px h-4 bg-[#1a1a24] mx-1" />
+        {/* Desktop panel toggles */}
+        <div className="hidden md:flex items-center gap-0.5">
+          <IconBtn icon={PanelRight}  label="Toggle Chat"     shortcut="⌃J" active={showChat}    onClick={toggleChat} />
+          <IconBtn icon={PanelBottom} label="Toggle Terminal" shortcut="⌃`" active={showTerminal} onClick={toggleTerminal} />
+          <div className="w-px h-4 bg-[#1a1a24] mx-1.5" />
         </div>
 
-        {/* Settings — both */}
+        {/* Sessions / settings */}
         <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <Link href="/sessions">
               <button
-                className="h-8 w-8 flex items-center justify-center rounded-lg text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all"
+                className="h-8 w-8 flex items-center justify-center rounded-lg
+                  text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
                 aria-label="Sessions & Settings"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-[15px] w-[15px]" />
               </button>
             </Link>
           </TooltipTrigger>

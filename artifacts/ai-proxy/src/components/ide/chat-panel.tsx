@@ -31,7 +31,8 @@ import {
   Send, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
   AlertCircle, Upload, Copy, Check, RotateCcw, Sparkles,
-  FolderOpen,
+  FolderOpen, Search, Bug, FlaskConical, Globe, Code2,
+  BookOpen, Zap, ArrowRight,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -90,11 +91,11 @@ function MiniFileTreeItem({ node, depth = 0, onSelect }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PHRASES = [
-  "Ask anything, build anything.",
+  "What are you building today?",
   "Debug your code in seconds.",
   "Write, review and ship faster.",
   "Turn ideas into working code.",
-  "Access ChatGPT, Claude & Grok.",
+  "Claude · ChatGPT · Grok · Gemini.",
 ];
 
 function TypewriterText() {
@@ -106,43 +107,49 @@ function TypewriterText() {
   useEffect(() => {
     const phrase = PHRASES[phraseIdx];
     if (paused) {
-      const t = setTimeout(() => { setPaused(false); setTyping(false); }, 1800);
+      const t = setTimeout(() => { setPaused(false); setTyping(false); }, 2000);
       return () => clearTimeout(t);
     }
     if (typing) {
       if (displayed.length < phrase.length) {
-        const t = setTimeout(() => setDisplayed(phrase.slice(0, displayed.length + 1)), 45);
+        const t = setTimeout(() => setDisplayed(phrase.slice(0, displayed.length + 1)), 42);
         return () => clearTimeout(t);
       } else { setPaused(true); }
     } else {
       if (displayed.length > 0) {
-        const t = setTimeout(() => setDisplayed(d => d.slice(0, -1)), 22);
+        const t = setTimeout(() => setDisplayed(d => d.slice(0, -1)), 18);
         return () => clearTimeout(t);
       } else { setPhraseIdx(i => (i + 1) % PHRASES.length); setTyping(true); }
     }
   }, [displayed, typing, paused, phraseIdx]);
 
   return (
-    <p className="text-[#52526e] text-base min-h-[1.75rem] text-center">
+    <p className="text-[#52526e] text-[13px] min-h-[1.5rem] text-center tracking-wide">
       {displayed}
-      <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-middle animate-pulse" />
+      <span className="inline-block w-px h-[0.9em] bg-primary/60 ml-0.5 align-middle animate-pulse" />
     </p>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Quick prompts
+// Quick prompts — with Lucide icons + short descriptions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const QUICK_PROMPTS = [
-  { label: "Explain this code",        icon: "🔍" },
-  { label: "Fix the bug",              icon: "🐛" },
-  { label: "Write unit tests",         icon: "✅" },
-  { label: "Refactor for readability", icon: "✨" },
-  { label: "Create a REST API",        icon: "🚀" },
-  { label: "Optimise performance",     icon: "⚡" },
-  { label: "Add TypeScript types",     icon: "📝" },
-  { label: "Write documentation",      icon: "📖" },
+type QuickPrompt = {
+  label: string;
+  icon: React.ElementType;
+  desc: string;
+};
+
+const QUICK_PROMPTS: QuickPrompt[] = [
+  { label: "Explain this code",    icon: Search,       desc: "What does it do?" },
+  { label: "Fix the bug",          icon: Bug,          desc: "Diagnose & repair" },
+  { label: "Write unit tests",     icon: FlaskConical, desc: "Full test coverage" },
+  { label: "Refactor code",        icon: Sparkles,     desc: "Cleaner structure" },
+  { label: "Build a REST API",     icon: Globe,        desc: "Endpoint scaffold" },
+  { label: "Optimise performance", icon: Zap,          desc: "Speed improvements" },
+  { label: "Add TypeScript types", icon: Code2,        desc: "Type-safe code" },
+  { label: "Write documentation",  icon: BookOpen,     desc: "Docs & comments" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,64 +272,96 @@ function ThinkingDots() {
 
 function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => void; connectedCount: number }) {
   return (
-    <div className="flex flex-col items-center justify-start h-full pt-10 pb-4 gap-5 px-4">
-      <div className="relative flex flex-col items-center gap-3">
-        <div className="absolute inset-0 blur-3xl bg-primary/15 rounded-full scale-[2.5] opacity-60" />
-        <VesperLogo size={48} />
+    <div className="flex flex-col h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col items-center pt-9 pb-5 px-5 text-center">
+        {/* Logo lockup */}
+        <div className="relative mb-4">
+          <div className="absolute inset-0 -m-6 blur-3xl bg-primary/10 rounded-full pointer-events-none" />
+          <div className="relative h-12 w-12 rounded-2xl bg-gradient-to-br from-primary/25 to-primary/5
+            border border-primary/20 flex items-center justify-center
+            shadow-[0_0_32px_rgba(99,102,241,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <VesperLogo size={24} />
+          </div>
+        </div>
+
+        <h2 className="text-[15px] font-semibold text-foreground tracking-tight mb-1">
+          How can I help you?
+        </h2>
         <TypewriterText />
+
+        {/* AI status pill */}
+        <div className="mt-3.5">
+          {connectedCount > 0 ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium
+              text-emerald-400 bg-emerald-950/80 border border-emerald-900/60
+              rounded-full px-3 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              {connectedCount} AI provider{connectedCount !== 1 ? "s" : ""} connected
+            </span>
+          ) : (
+            <div className="flex items-start gap-2 p-3 bg-amber-950/40 border border-amber-900/50
+              rounded-xl text-amber-400/80 text-[11px] max-w-[240px] text-left leading-relaxed">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>No AI connected. Add a key in Sessions, or use Pollinations AI for free.</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {connectedCount > 0 ? (
-        <div className="flex items-center gap-2 text-xs text-emerald-400/80 bg-emerald-500/10
-          border border-emerald-500/20 rounded-full px-3 py-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          {connectedCount} AI{connectedCount !== 1 ? "s" : ""} ready
-        </div>
-      ) : (
-        <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20
-          rounded-xl text-amber-400 text-sm max-w-xs w-full">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>No AI connected. Go to Sessions → add an API key. Pollinations AI is always free.</span>
-        </div>
-      )}
-
-      {/* Horizontal scrolling chips */}
-      <div className="w-full">
+      {/* ── Mobile horizontal scroll (shown below md) ─────────────────────── */}
+      <div className="md:hidden px-3 pb-3">
         <div
-          className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
-          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+          className="flex gap-2 overflow-x-auto snap-x"
+          style={{ scrollbarWidth: "none" } as React.CSSProperties}
         >
-          {QUICK_PROMPTS.map(({ label, icon }) => (
+          {QUICK_PROMPTS.map(({ label, icon: Icon }) => (
             <button
               key={label}
               onClick={() => onPrompt(label)}
-              className="shrink-0 snap-start flex items-center gap-2 px-4 py-2.5 rounded-full
-                bg-[#141420] hover:bg-[#1e1e2e] active:bg-[#1e1e2e]
-                border border-[#1a1a24] hover:border-primary/30
-                text-[13px] md:text-sm text-[#8080a0] hover:text-foreground
-                transition-all min-h-[44px] whitespace-nowrap"
+              className="shrink-0 snap-start flex items-center gap-2 px-3.5 py-2.5 rounded-xl
+                bg-[#141420] hover:bg-[#1a1a28] border border-[#1a1a24] hover:border-[#2a2a3c]
+                text-[13px] text-[#7070a0] hover:text-foreground transition-all min-h-[44px] whitespace-nowrap"
             >
-              <span>{icon}</span>
+              <Icon className="h-3.5 w-3.5 shrink-0 text-[#52526e]" />
               <span>{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="hidden md:grid grid-cols-2 gap-2 w-full max-w-sm">
-        {QUICK_PROMPTS.slice(0, 4).map(({ label, icon }) => (
-          <button
-            key={label}
-            onClick={() => onPrompt(label)}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-left
-              bg-[#141420] hover:bg-[#1e1e2e] border border-[#1a1a24] hover:border-primary/20
-              text-sm text-[#8080a0] hover:text-foreground transition-all"
-          >
-            <span className="text-base">{icon}</span>
-            <span>{label}</span>
-          </button>
-        ))}
+      {/* ── Desktop 2-column card grid ────────────────────────────────────── */}
+      <div className="hidden md:block px-3 pb-5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#2a2a40] mb-2.5 px-0.5 select-none">
+          Quick actions
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {QUICK_PROMPTS.map(({ label, icon: Icon, desc }) => (
+            <button
+              key={label}
+              onClick={() => onPrompt(label)}
+              className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left
+                bg-[#0f0f16] hover:bg-[#141420] border border-[#1a1a24] hover:border-[#252535]
+                transition-all duration-150 group"
+            >
+              <div className="mt-0.5 h-6 w-6 rounded-lg bg-[#141420] border border-[#1e1e2e] flex items-center justify-center shrink-0
+                group-hover:bg-[#1a1a2a] group-hover:border-[#2a2a3c] transition-all">
+                <Icon className="h-3 w-3 text-[#52526e] group-hover:text-[#a0a0c0] transition-colors" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium text-[#7070a0] group-hover:text-foreground transition-colors leading-tight">
+                  {label}
+                </p>
+                <p className="text-[10px] text-[#3a3a5c] group-hover:text-[#52526e] mt-0.5 transition-colors">
+                  {desc}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
+
     </div>
   );
 }
@@ -517,18 +556,22 @@ export function ChatPanel({ newChatKey, compact = false }: {
     <div className={`flex flex-col h-full bg-[#0d0d12] ${!compact ? "border-l border-[#1a1a24]" : ""}`}>
 
       {/* ── Desktop header ─────────────────────────────────────────────── */}
-      <div className="hidden md:flex shrink-0 items-center justify-between px-3 h-9 border-b border-[#1a1a24] bg-[#0a0a0c]">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-bold text-[#52526e] uppercase tracking-wider">Chat</span>
+      <div className="hidden md:flex shrink-0 items-center justify-between px-3 h-9
+        border-b border-[#131318] bg-[#080809]">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3 text-primary/70" />
+            <span className="text-[11px] font-bold text-[#3a3a5c] uppercase tracking-widest">Chat</span>
+          </div>
           {hasImportedProject && (
-            <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded font-bold">
+            <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
               <FolderOpen className="h-2.5 w-2.5" />
               {importedProject!.name}
             </span>
           )}
           {isAuto && connectedAis.length > 0 && (
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
+            <span className="flex items-center gap-1 text-[10px] bg-emerald-950/60 text-emerald-400/80 border border-emerald-900/60 px-1.5 py-0.5 rounded-md font-semibold">
+              <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" />
               {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""}
             </span>
           )}
@@ -537,10 +580,10 @@ export function ChatPanel({ newChatKey, compact = false }: {
           <button
             onClick={handleRegen}
             disabled={isPending}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#52526e] hover:text-foreground hover:bg-[#141420] disabled:opacity-40 transition-colors"
-            title="Regenerate"
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
+            title="Regenerate last response"
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+            <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
           </button>
         )}
       </div>

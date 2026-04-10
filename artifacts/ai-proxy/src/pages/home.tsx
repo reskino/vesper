@@ -20,6 +20,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 
+// ── Model tier badge ──────────────────────────────────────────────────────────
+function ModelTierBadge({ tier }: { tier?: string }) {
+  if (!tier || tier === "free") {
+    return (
+      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+        Free
+      </span>
+    );
+  }
+  if (tier === "pro") {
+    return (
+      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">
+        Pro
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/20">
+      Plus
+    </span>
+  );
+}
+
 // ── File icon helper ──────────────────────────────────────────────────────────
 const getFileIcon = (name: string) => {
   if (/\.(js|ts|jsx|tsx)$/.test(name)) return <FileCode className="h-4 w-4 text-blue-400" />;
@@ -277,7 +300,7 @@ export function Home() {
 
                   {isExp && ai.models && (
                     <div className="mx-2 rounded-xl border border-border overflow-hidden bg-card shadow-sm">
-                      {ai.models.map(m => (
+                      {ai.models.map((m: any) => (
                         <button
                           key={m.id}
                           className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
@@ -303,6 +326,7 @@ export function Home() {
                         >
                           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
                           {m.name}
+                          <ModelTierBadge tier={(m as any).tier} />
                           {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
                         </button>
                       ))}
@@ -569,7 +593,7 @@ export function Home() {
                   </div>
                   {isExp && ai.models && (
                     <div className="ml-4 rounded-xl border border-border overflow-hidden bg-card">
-                      {ai.models.map(m => (
+                      {ai.models.map((m: any) => (
                         <button
                           key={m.id}
                           className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${
@@ -594,6 +618,7 @@ export function Home() {
                         >
                           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
                           {m.name}
+                          <ModelTierBadge tier={(m as any).tier} />
                           {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
                         </button>
                       ))}

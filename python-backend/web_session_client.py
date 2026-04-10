@@ -15,6 +15,8 @@ import logging
 import re
 from typing import Tuple
 
+from config import get_free_model
+
 logger = logging.getLogger(__name__)
 
 # ─── Cookie helpers ───────────────────────────────────────────────────────────
@@ -131,7 +133,33 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
         if resp.status_code == 401:
             return False, "", "ChatGPT auth failed — please re-login."
         if resp.status_code == 403:
-            return False, "", "ChatGPT access denied (403). Session may be blocked."
+            body = resp.text.lower()
+            # Subscription error → auto-retry with the free model
+            if any(k in body for k in ("subscri", "plus", "upgrade", "not available", "plan")):
+                free_model = get_free_model("chatgpt")
+                if free_model and free_model != model:
+                    logger.info("ChatGPT: model %s requires a paid plan, retrying with %s", model, free_model)
+                    payload["model"] = free_model
+                    resp2 = sess.post(
+                        "https://chatgpt.com/backend-api/conversation",
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "text/event-stream",
+                            "Content-Type": "application/json",
+                        },
+                        timeout=180,
+                    )
+                    if resp2.status_code == 200:
+                        text = _parse_chatgpt_sse(resp2.text)
+                        if text:
+                            note = f"\n\n_(Answered with **GPT-4o mini** — your account doesn't have access to **{model}**. Upgrade to ChatGPT Plus for premium models.)_"
+                            return True, text + note, ""
+            return False, "", (
+                f"ChatGPT access denied (403). "
+                "Your account may not have access to this model — "
+                "try switching to GPT-4o mini (free) on the Sessions page."
+            )
         if resp.status_code == 429:
             return False, "", "ChatGPT rate limit hit. Wait a few minutes and try again."
         if resp.status_code >= 400:
@@ -207,13 +235,55 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
             return False, "", f"Could not create Claude conversation ({conv_resp.status_code})"
         conv_id = conv_resp.json()["uuid"]
 
-        # Send message — SSE stream
-        resp = sess.post(
-            f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{conv_id}/completion",
-            json={"prompt": prompt, "timezone": "UTC", "attachments": [], "files": []},
-            headers={"Accept": "text/event-stream"},
-            timeout=180,
-        )
+        def _claude_completion(mdl: str) -> tuple:
+            """Send the completion request with the given model."""
+            return sess.post(
+                f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{conv_id}/completion",
+                json={
+                    "prompt": prompt,
+                    "model": mdl,
+                    "timezone": "UTC",
+                    "attachments": [],
+                    "files": [],
+                },
+                headers={"Accept": "text/event-stream"},
+                timeout=180,
+            )
+
+        resp = _claude_completion(model)
+
+        # Subscription / model-access error → retry with free model
+        if resp.status_code in (400, 403):
+            body = resp.text.lower()
+            if any(k in body for k in ("subscri", "pro", "upgrade", "not available", "plan", "permission")):
+                free_model = get_free_model("claude")
+                if free_model and free_model != model:
+                    logger.info("Claude: model %s not available, retrying with %s", model, free_model)
+                    # Need a fresh conversation for the retry
+                    conv2 = sess.post(
+                        f"https://claude.ai/api/organizations/{org_id}/chat_conversations",
+                        json={"uuid": str(uuid.uuid4()), "name": ""},
+                        timeout=30,
+                    )
+                    if conv2.status_code in (200, 201):
+                        conv_id2 = conv2.json()["uuid"]
+                        resp = sess.post(
+                            f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{conv_id2}/completion",
+                            json={
+                                "prompt": prompt,
+                                "model": free_model,
+                                "timezone": "UTC",
+                                "attachments": [],
+                                "files": [],
+                            },
+                            headers={"Accept": "text/event-stream"},
+                            timeout=180,
+                        )
+                        if resp.status_code == 200:
+                            text = _parse_claude_sse(resp.text)
+                            if text:
+                                note = f"\n\n_(Answered with **Claude 3.5 Haiku** — your account doesn't have access to **{model}**. Upgrade to Claude Pro for premium models.)_"
+                                return True, text + note, ""
 
         if resp.status_code != 200:
             return False, "", f"Claude error {resp.status_code}: {resp.text[:300]}"
@@ -317,6 +387,20 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
                     continue
                 if resp.status_code == 401:
                     return False, "", "Grok session expired. Please re-login on the Sessions page."
+                if resp.status_code == 403:
+                    body = resp.text.lower()
+                    if any(k in body for k in ("subscri", "premium", "upgrade", "not available", "plan")):
+                        free_model = get_free_model("grok")
+                        if free_model and free_model != model:
+                            logger.info("Grok: model %s not available, retrying with %s", model, free_model)
+                            fallback_payload = {**payload, "modelName": free_model}
+                            resp2 = sess.post(url, json=fallback_payload, timeout=180)
+                            if resp2.status_code == 200:
+                                text = _parse_grok_response(resp2.text)
+                                if text:
+                                    note = f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't have access to **{model}**. Upgrade to X Premium for full Grok access.)_"
+                                    return True, text + note, ""
+                    continue
                 if resp.status_code >= 400:
                     continue
                 text = _parse_grok_response(resp.text)

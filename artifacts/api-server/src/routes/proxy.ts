@@ -30,9 +30,20 @@ function proxyToPython(req: Request, res: Response) {
   }
 
   const proxyReq = http.request(options, (proxyRes) => {
-    res.status(proxyRes.statusCode ?? 200);
-    const chunks: Buffer[] = [];
+    const statusCode = proxyRes.statusCode ?? 200;
+    const contentType = proxyRes.headers["content-type"] ?? "";
 
+    // For binary responses (images etc.) stream raw bytes through
+    if (contentType.startsWith("image/") || contentType === "application/octet-stream") {
+      res.status(statusCode);
+      res.setHeader("Content-Type", contentType);
+      if (proxyRes.headers["cache-control"]) res.setHeader("Cache-Control", proxyRes.headers["cache-control"]);
+      proxyRes.pipe(res);
+      return;
+    }
+
+    res.status(statusCode);
+    const chunks: Buffer[] = [];
     proxyRes.on("data", (chunk: Buffer) => chunks.push(chunk));
     proxyRes.on("end", () => {
       const rawBody = Buffer.concat(chunks).toString("utf8");

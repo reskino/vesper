@@ -354,20 +354,26 @@ def browser_status(ai_id):
 
 @app.route("/api/sessions/browser-screenshot/<ai_id>", methods=["GET"])
 def browser_screenshot(ai_id):
+    """Return the latest browser screenshot as a raw PNG (no base64 overhead)."""
+    # Try the active worker first
     with _workers_lock:
         info = _browser_workers.get(ai_id)
-    if not info:
-        return jsonify({"error": "No active browser session"}), 404
 
-    screenshot_file = os.path.join(info["work_dir"], "latest.png")
+    # Fall back to the last known work dir even if worker has exited
+    if not info:
+        work_dir = os.path.join(tempfile.gettempdir(), f"vesper_browser_{ai_id}")
+        screenshot_file = os.path.join(work_dir, "latest.png")
+    else:
+        screenshot_file = os.path.join(info["work_dir"], "latest.png")
+
     if not os.path.exists(screenshot_file):
-        return jsonify({"error": "Screenshot not yet available"}), 202
+        return ("", 204)  # No content yet — browser will keep polling
 
     try:
-        with open(screenshot_file, "rb") as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode("utf-8")
-        return jsonify({"screenshot": f"data:image/png;base64,{b64}"})
+        response = send_file(screenshot_file, mimetype="image/png")
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

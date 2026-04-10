@@ -24,58 +24,57 @@ interface BrowserViewerProps {
 
 function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
   const { toast } = useToast();
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("starting");
-  const [statusText, setStatusText] = useState("Launching browser…");
+  // tick increments every second — appended to the img src to force a reload
+  const [tick, setTick] = useState(0);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [statusText, setStatusText] = useState("Starting browser…");
+  const [statusColor, setStatusColor] = useState<"yellow" | "green" | "red" | "blue">("yellow");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [active, setActive] = useState(true);
   const imgRef = useRef<HTMLImageElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const savedRef = useRef(false);
 
-  // Poll for screenshots and status
+  // Drive the tick counter — this makes <img src="...?t=N"> refetch every second
   useEffect(() => {
-    pollRef.current = setInterval(async () => {
-      if (!active || savedRef.current) return;
-      try {
-        // Fetch status
-        const statusRes = await fetch(`/api/sessions/browser-status/${aiId}`);
-        const statusData = await statusRes.json();
-        setStatus(statusData.status ?? "starting");
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-        if (statusData.status === "saved" && !savedRef.current) {
+  // Poll status separately (doesn't need to be as fast as screenshots)
+  useEffect(() => {
+    if (savedRef.current) return;
+    const id = setInterval(async () => {
+      if (savedRef.current) return;
+      try {
+        const res = await fetch(`/api/sessions/browser-status/${aiId}`);
+        const data = await res.json();
+        const s = data.status ?? "starting";
+
+        if (s === "saved") {
           savedRef.current = true;
-          clearInterval(pollRef.current!);
+          clearInterval(id);
           setStatusText("Session saved!");
+          setStatusColor("blue");
           toast({ title: "Session saved", description: `${aiName} is now connected.` });
           onSaved();
           setTimeout(onClose, 1200);
-          return;
-        }
-        if (statusData.status === "error") {
-          setError(statusData.error ?? "Unknown error");
+        } else if (s === "error") {
+          setError(data.error ?? "Unknown error");
           setStatusText("Error");
-          return;
-        }
-        if (statusData.status === "ready" || statusData.status === "starting") {
-          setStatusText(statusData.url ? `Viewing: ${statusData.url}` : "Browser starting…");
-        }
-
-        // Fetch screenshot
-        if (statusData.active !== false) {
-          const imgRes = await fetch(`/api/sessions/browser-screenshot/${aiId}`);
-          if (imgRes.ok) {
-            const imgData = await imgRes.json();
-            if (imgData.screenshot) setScreenshot(imgData.screenshot);
-          }
+          setStatusColor("red");
+        } else if (s === "ready") {
+          setStatusText(data.url ? `Loaded: ${data.url}` : "Browser ready");
+          setStatusColor("green");
+        } else {
+          setStatusText("Starting browser…");
+          setStatusColor("yellow");
         }
       } catch {
-        // ignore transient poll errors
+        // ignore transient
       }
-    }, 800);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [aiId, active]);
+    }, 1500);
+    return () => clearInterval(id);
+  }, [aiId]);
 
   const sendAction = useCallback(async (payload: Record<string, unknown>) => {
     try {
@@ -84,54 +83,57 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }, [aiId]);
 
   const handleImgClick = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
     const img = imgRef.current;
     if (!img) return;
     const rect = img.getBoundingClientRect();
-    // Map click coords from display size → 1280×900 browser viewport
-    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1280);
+    const x = Math.round(((e.clientX - rect.left) / rect.width)  * 1280);
     const y = Math.round(((e.clientY - rect.top)  / rect.height) * 900);
     sendAction({ action: "click", x, y });
   }, [sendAction]);
 
-  const handleImgKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     e.preventDefault();
-    // Map common keys
     const KEY_MAP: Record<string, string> = {
       Enter: "Enter", Backspace: "Backspace", Tab: "Tab",
       ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
       ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight",
       Escape: "Escape", Delete: "Delete", Home: "Home", End: "End",
     };
-    if (KEY_MAP[e.key]) {
-      sendAction({ action: "key", key: KEY_MAP[e.key] });
-    } else if (e.key.length === 1) {
-      sendAction({ action: "type", text: e.key });
-    }
+    if (KEY_MAP[e.key]) sendAction({ action: "key", key: KEY_MAP[e.key] });
+    else if (e.key.length === 1) sendAction({ action: "type", text: e.key });
   }, [sendAction]);
 
   const handleSave = async () => {
     setSaving(true);
     setStatusText("Saving session…");
     await sendAction({ action: "save" });
-    // Worker will set status to "saved" which our poll will detect
   };
 
-  const handleQuit = async () => {
-    setActive(false);
+  const handleCancel = async () => {
     await sendAction({ action: "quit" });
     onClose();
   };
 
+  const BADGE_CLS = {
+    yellow: "bg-yellow-500/20 text-yellow-400",
+    green:  "bg-green-500/20 text-green-400",
+    red:    "bg-red-500/20 text-red-400",
+    blue:   "bg-blue-500/20 text-blue-400",
+  }[statusColor];
+
+  // The img src uses the tick as a cache-buster — browser fetches a fresh PNG every second
+  const imgSrc = `/api/sessions/browser-screenshot/${aiId}?t=${tick}`;
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl shadow-2xl flex flex-col overflow-hidden"
-           style={{ maxHeight: "90vh" }}>
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl shadow-2xl flex flex-col"
+        style={{ maxHeight: "90vh" }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -141,81 +143,82 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded-full ${
-              status === "ready" ? "bg-green-500/20 text-green-400" :
-              status === "error" ? "bg-red-500/20 text-red-400" :
-              status === "saved" ? "bg-blue-500/20 text-blue-400" :
-              "bg-yellow-500/20 text-yellow-400"
-            }`}>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${BADGE_CLS}`}>
               {statusText}
             </span>
-            <button onClick={handleQuit} className="p-1 text-gray-400 hover:text-white transition-colors">
+            <button onClick={handleCancel} className="p-1 text-gray-400 hover:text-white">
               <X size={16} />
             </button>
           </div>
         </div>
 
-        {/* Browser screenshot (interactive) */}
+        {/* Live browser view */}
         <div
-          className="flex-1 overflow-hidden bg-black flex items-center justify-center relative outline-none min-h-0"
+          className="flex-1 bg-black flex items-center justify-center relative outline-none"
+          style={{ minHeight: 320 }}
           tabIndex={0}
-          onKeyDown={handleImgKeyDown}
-          style={{ cursor: "default", minHeight: 300 }}
+          onKeyDown={handleKeyDown}
         >
-          {error ? (
+          {/* Loading spinner — shown until first image loads */}
+          {!imgLoaded && !error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
+              <Loader2 size={40} className="text-blue-400 animate-spin mb-3" />
+              <p className="text-gray-300 font-medium">Starting browser…</p>
+              <p className="text-gray-500 text-sm mt-1">This takes a few seconds</p>
+            </div>
+          )}
+
+          {error && (
             <div className="text-center p-8">
               <AlertCircle size={40} className="text-red-400 mx-auto mb-3" />
               <p className="text-red-300 font-medium mb-1">Browser error</p>
               <p className="text-gray-400 text-sm">{error}</p>
             </div>
-          ) : !screenshot ? (
-            <div className="text-center p-8">
-              <Loader2 size={40} className="text-blue-400 mx-auto mb-3 animate-spin" />
-              <p className="text-gray-300 font-medium">Starting browser…</p>
-              <p className="text-gray-500 text-sm mt-1">This takes a few seconds</p>
-            </div>
-          ) : (
-            // eslint-disable-next-line jsx-a11y/click-events-have-key-events
-            <img
-              ref={imgRef}
-              src={screenshot}
-              alt="Browser view"
-              onClick={handleImgClick}
-              className="w-full h-full object-contain"
-              style={{ cursor: "pointer", maxHeight: "calc(90vh - 120px)" }}
-              draggable={false}
-            />
           )}
 
-          {/* Interaction hints overlay */}
-          {screenshot && (
+          {/* The actual browser screenshot — reloads every tick */}
+          <img
+            ref={imgRef}
+            src={imgSrc}
+            alt="Browser"
+            onClick={handleImgClick}
+            onLoad={() => setImgLoaded(true)}
+            onError={() => { /* keep spinner until image loads */ }}
+            className="w-full h-auto object-contain"
+            style={{
+              cursor: "pointer",
+              maxHeight: "calc(90vh - 120px)",
+              display: imgLoaded ? "block" : "none",
+            }}
+            draggable={false}
+          />
+
+          {imgLoaded && (
             <div className="absolute bottom-2 left-2 flex gap-2 pointer-events-none">
               <span className="bg-black/60 text-gray-400 text-[10px] px-2 py-1 rounded flex items-center gap-1">
-                <Mouse size={10} />Click to interact
+                <Mouse size={10} /> Click to interact
               </span>
               <span className="bg-black/60 text-gray-400 text-[10px] px-2 py-1 rounded flex items-center gap-1">
-                <Keyboard size={10} />Click viewer then type
+                <Keyboard size={10} /> Click viewer, then type
               </span>
             </div>
           )}
         </div>
 
-        {/* Footer actions */}
+        {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 flex-shrink-0">
-          <p className="text-xs text-gray-500">
-            Log in with your account, then click Save Session
-          </p>
+          <p className="text-xs text-gray-500">Log in with your account, then click Save Session</p>
           <div className="flex gap-2">
             <button
-              onClick={handleQuit}
+              onClick={handleCancel}
               className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-white text-sm transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || status === "starting" || !!error}
-              className="px-4 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-2"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
               Save Session

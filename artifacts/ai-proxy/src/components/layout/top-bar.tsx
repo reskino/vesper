@@ -245,7 +245,7 @@ function IconBtn({ icon: Icon, label, active, onClick, shortcut }: {
 
 // ── TopBar ────────────────────────────────────────────────────────────────────
 export function TopBar() {
-  const { showChat, toggleChat, showTerminal, toggleTerminal, triggerNewChat } = useIDE();
+  const { showChat, toggleChat, showTerminal, toggleTerminal, triggerNewChat, setShowMobileSettings } = useIDE();
 
   return (
     <header
@@ -305,12 +305,25 @@ export function TopBar() {
           <div className="w-px h-4 bg-[#1a1a24] mx-1.5" />
         </div>
 
-        {/* Sessions / settings */}
+        {/* Sessions / settings — desktop uses sidebar, mobile opens sheet */}
+        <Tooltip delayDuration={400}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setShowMobileSettings(true)}
+              className="h-8 w-8 flex items-center justify-center rounded-lg md:hidden
+                text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
+              aria-label="Providers & Settings"
+            >
+              <Settings className="h-[15px] w-[15px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">Providers & Settings</TooltipContent>
+        </Tooltip>
         <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <Link href="/sessions">
               <button
-                className="h-8 w-8 flex items-center justify-center rounded-lg
+                className="h-8 w-8 items-center justify-center rounded-lg hidden md:flex
                   text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
                 aria-label="Sessions & Settings"
               >

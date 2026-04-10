@@ -14,6 +14,7 @@ import type { ImportedFileNode } from "@/lib/folder-import";
 
 export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "help" | null;
 export type MobileTab     = "chat" | "editor" | "files" | "terminal" | "agent";
+export type MobileSettingsTab = "sessions" | "history" | "help";
 
 interface IDEContextValue {
   // ── Desktop sidebar / panel toggles ───────────────────────────────────────
@@ -34,6 +35,12 @@ interface IDEContextValue {
   setMobileTab: (tab: MobileTab) => void;
   showMobileChatSheet: boolean;
   setShowMobileChatSheet: (v: boolean) => void;
+
+  // ── Mobile settings sheet ──────────────────────────────────────────────────
+  showMobileSettings: boolean;
+  setShowMobileSettings: (v: boolean) => void;
+  mobileSettingsTab: MobileSettingsTab;
+  setMobileSettingsTab: (t: MobileSettingsTab) => void;
 
   // ── AI model selection ─────────────────────────────────────────────────────
   selectedAi: string;
@@ -60,8 +67,10 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [showChat, setShowChat]         = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
 
-  const [mobileTab, setMobileTab]                   = useState<MobileTab>("chat");
+  const [mobileTab, setMobileTab]                     = useState<MobileTab>("chat");
   const [showMobileChatSheet, setShowMobileChatSheet] = useState(false);
+  const [showMobileSettings, setShowMobileSettings]   = useState(false);
+  const [mobileSettingsTab, setMobileSettingsTab]     = useState<MobileSettingsTab>("sessions");
 
   const [selectedAi, setSelectedAi]   = useState("__auto__");
   const [newChatKey, setNewChatKey]   = useState(0);
@@ -92,6 +101,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       showTerminal, setShowTerminal, toggleTerminal,
       mobileTab, setMobileTab,
       showMobileChatSheet, setShowMobileChatSheet,
+      showMobileSettings, setShowMobileSettings,
+      mobileSettingsTab, setMobileSettingsTab,
       selectedAi, setSelectedAi,
       openFileInEditor, onOpenFileRef,
       newChatKey, triggerNewChat,

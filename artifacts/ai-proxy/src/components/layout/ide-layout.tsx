@@ -9,7 +9,7 @@
  *   Editor tab shows a floating "Ask AI" FAB that slides up a bottom-sheet chat.
  */
 import { useEffect, useCallback, type ElementType } from "react";
-import { useIDE, type MobileTab } from "@/contexts/ide-context";
+import { useIDE, type MobileTab, type MobileSettingsTab } from "@/contexts/ide-context";
 import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
 import { FileExplorer } from "@/components/ide/file-explorer";
@@ -25,6 +25,7 @@ import { VesperLogo } from "@/components/vesper-logo";
 import {
   MessageSquare, Code2, FolderOpen, TerminalSquare,
   MessageSquarePlus, X, Sparkles, Bot,
+  ShieldCheck, Clock, BookOpen,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +119,105 @@ function MobileChatSheet() {
         {/* Chat content */}
         <div className="flex-1 min-h-0">
           <ChatPanel newChatKey={newChatKey} compact />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile settings sheet — Sessions | History | Help accessible on mobile
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SETTINGS_TABS: { id: MobileSettingsTab; label: string; icon: ElementType }[] = [
+  { id: "sessions", label: "Providers", icon: ShieldCheck },
+  { id: "history",  label: "History",   icon: Clock       },
+  { id: "help",     label: "Help",      icon: BookOpen    },
+];
+
+function MobileSettingsSheet() {
+  const { showMobileSettings, setShowMobileSettings, mobileSettingsTab, setMobileSettingsTab } = useIDE();
+
+  useEffect(() => {
+    document.body.style.overflow = showMobileSettings ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [showMobileSettings]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={`md:hidden fixed inset-0 z-40 bg-black/80 backdrop-blur-sm
+          transition-opacity duration-300
+          ${showMobileSettings ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setShowMobileSettings(false)}
+        aria-hidden="true"
+      />
+
+      {/* Full-height sheet */}
+      <div
+        role="dialog"
+        aria-label="Settings"
+        aria-modal="true"
+        className={`md:hidden fixed inset-x-0 bottom-0 z-50 flex flex-col
+          bg-[#0a0a0c] border-t border-[#1e1e2e]
+          shadow-[0_-24px_80px_rgba(0,0,0,0.9)]
+          transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
+          ${showMobileSettings ? "translate-y-0" : "translate-y-full"}`}
+        style={{
+          height: "92dvh",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+        }}
+      >
+        {/* Sheet header */}
+        <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#131318]">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10
+              border border-primary/20 flex items-center justify-center">
+              <VesperLogo size={14} />
+            </div>
+            <div>
+              <p className="font-bold text-[13px] text-foreground leading-none">Vesper Settings</p>
+              <p className="text-[10px] text-[#52526e] mt-0.5">Providers · History · Help</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowMobileSettings(false)}
+            className="h-9 w-9 flex items-center justify-center rounded-full
+              bg-[#141420] border border-[#1e1e2e] text-[#52526e]
+              active:scale-95 transition-all"
+            aria-label="Close settings"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Tab pills */}
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-[#131318]">
+          {SETTINGS_TABS.map(({ id, label, icon: Icon }) => {
+            const active = mobileSettingsTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setMobileSettingsTab(id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all
+                  ${active
+                    ? "bg-primary/15 text-primary border border-primary/25"
+                    : "text-[#52526e] hover:text-foreground hover:bg-[#141420] border border-transparent"
+                  }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {mobileSettingsTab === "sessions" && <Sessions />}
+          {mobileSettingsTab === "history"  && <History />}
+          {mobileSettingsTab === "help"     && <HelpPage />}
         </div>
       </div>
     </>
@@ -371,9 +471,10 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
         <MobileWorkspace />
       </div>
 
-      {/* ── Mobile overlays (z-order: FAB < sheet < nav) ─────────────────── */}
+      {/* ── Mobile overlays (z-order: FAB < chat < settings < nav) ───────── */}
       <FloatingChatFAB />
       <MobileChatSheet />
+      <MobileSettingsSheet />
       <MobileNav />
 
       {/* Spacer so content isn't hidden behind the fixed bottom nav */}

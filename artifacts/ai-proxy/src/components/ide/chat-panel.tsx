@@ -38,6 +38,7 @@ import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 import { useIDE } from "@/contexts/ide-context";
+import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +272,13 @@ function ThinkingDots() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => void; connectedCount: number }) {
+  const { setShowMobileSettings, setMobileSettingsTab } = useIDE();
+
+  const openProviders = () => {
+    setMobileSettingsTab("sessions");
+    setShowMobileSettings(true);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
 
@@ -291,7 +299,7 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
         </h2>
         <TypewriterText />
 
-        {/* AI status pill */}
+        {/* AI status pill / CTA */}
         <div className="mt-3.5">
           {connectedCount > 0 ? (
             <span className="inline-flex items-center gap-1.5 text-[11px] font-medium
@@ -301,38 +309,29 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
               {connectedCount} AI provider{connectedCount !== 1 ? "s" : ""} connected
             </span>
           ) : (
-            <div className="flex items-start gap-2 p-3 bg-amber-950/40 border border-amber-900/50
-              rounded-xl text-amber-400/80 text-[11px] max-w-[240px] text-left leading-relaxed">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <span>No AI connected. Add a key in Sessions, or use Pollinations AI for free.</span>
+            <div className="flex flex-col items-center gap-2.5 max-w-[260px]">
+              <div className="flex items-start gap-2 p-3 bg-amber-950/40 border border-amber-900/50
+                rounded-xl text-amber-400/80 text-[11px] text-left leading-relaxed w-full">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>No AI connected. Pollinations AI is always free — or add an API key.</span>
+              </div>
+              {/* Mobile: tappable CTA to open settings */}
+              <button
+                onClick={openProviders}
+                className="md:hidden flex items-center justify-center gap-2 w-full h-10
+                  rounded-xl bg-primary/15 hover:bg-primary/20 border border-primary/25
+                  text-primary text-[13px] font-semibold transition-all active:scale-[0.97]"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                Connect a Provider
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Mobile horizontal scroll (shown below md) ─────────────────────── */}
-      <div className="md:hidden px-3 pb-3">
-        <div
-          className="flex gap-2 overflow-x-auto snap-x"
-          style={{ scrollbarWidth: "none" } as React.CSSProperties}
-        >
-          {QUICK_PROMPTS.map(({ label, icon: Icon }) => (
-            <button
-              key={label}
-              onClick={() => onPrompt(label)}
-              className="shrink-0 snap-start flex items-center gap-2 px-3.5 py-2.5 rounded-xl
-                bg-[#141420] hover:bg-[#1a1a28] border border-[#1a1a24] hover:border-[#2a2a3c]
-                text-[13px] text-[#7070a0] hover:text-foreground transition-all min-h-[44px] whitespace-nowrap"
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0 text-[#52526e]" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Desktop 2-column card grid ────────────────────────────────────── */}
-      <div className="hidden md:block px-3 pb-5">
+      {/* ── Quick prompts — 2-col grid on ALL screens ─────────────────────── */}
+      <div className="px-3 pb-5">
         <p className="text-[10px] font-bold uppercase tracking-widest text-[#2a2a40] mb-2.5 px-0.5 select-none">
           Quick actions
         </p>
@@ -342,8 +341,9 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
               key={label}
               onClick={() => onPrompt(label)}
               className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left
-                bg-[#0f0f16] hover:bg-[#141420] border border-[#1a1a24] hover:border-[#252535]
-                transition-all duration-150 group"
+                bg-[#0f0f16] active:bg-[#141420] hover:bg-[#141420]
+                border border-[#1a1a24] hover:border-[#252535]
+                transition-all duration-150 group min-h-[52px]"
             >
               <div className="mt-0.5 h-6 w-6 rounded-lg bg-[#141420] border border-[#1e1e2e] flex items-center justify-center shrink-0
                 group-hover:bg-[#1a1a2a] group-hover:border-[#2a2a3c] transition-all">
@@ -353,7 +353,7 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
                 <p className="text-[12px] font-medium text-[#7070a0] group-hover:text-foreground transition-colors leading-tight">
                   {label}
                 </p>
-                <p className="text-[10px] text-[#3a3a5c] group-hover:text-[#52526e] mt-0.5 transition-colors">
+                <p className="text-[10px] text-[#3a3a5c] group-hover:text-[#52526e] mt-0.5 transition-colors hidden sm:block">
                   {desc}
                 </p>
               </div>

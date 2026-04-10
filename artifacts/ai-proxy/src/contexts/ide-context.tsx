@@ -46,9 +46,12 @@ interface IDEContextValue {
   selectedAi: string;
   setSelectedAi: (id: string) => void;
 
-  // ── File opening (cross-panel event via ref) ───────────────────────────────
+  // ── File opening (cross-panel event via refs) ──────────────────────────────
   openFileInEditor: (path: string) => void;
+  /** Desktop EditorPanel registers here */
   onOpenFileRef: React.MutableRefObject<((path: string) => void) | null>;
+  /** Mobile EditorPanel registers here */
+  onOpenMobileFileRef: React.MutableRefObject<((path: string) => void) | null>;
 
   // ── Active file path (for terminal "Run" button) ───────────────────────────
   activeFilePath: string | null;
@@ -81,7 +84,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
   const [activeFilePath, setActiveFilePath]   = useState<string | null>(null);
 
-  const onOpenFileRef = useRef<((path: string) => void) | null>(null);
+  const onOpenFileRef       = useRef<((path: string) => void) | null>(null);
+  const onOpenMobileFileRef = useRef<((path: string) => void) | null>(null);
 
   const toggleSidebarPanel = useCallback((p: Exclude<SidebarPanel, null>) => {
     setSidebarPanel(prev => (prev === p ? null : p));
@@ -91,8 +95,11 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const toggleTerminal = useCallback(() => setShowTerminal(v => !v), []);
 
   const openFileInEditor = useCallback((path: string) => {
-    setSidebarPanel("files");
+    // Call BOTH refs — desktop editor always handles it on desktop,
+    // mobile editor always handles it on mobile. Having both open the
+    // file is harmless (only one is visible at a time).
     onOpenFileRef.current?.(path);
+    onOpenMobileFileRef.current?.(path);
     setMobileTab("editor");
     setShowMobileChatSheet(false);
   }, []);
@@ -109,7 +116,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       showMobileSettings, setShowMobileSettings,
       mobileSettingsTab, setMobileSettingsTab,
       selectedAi, setSelectedAi,
-      openFileInEditor, onOpenFileRef,
+      openFileInEditor, onOpenFileRef, onOpenMobileFileRef,
       activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
       importedProject, setImportedProject,

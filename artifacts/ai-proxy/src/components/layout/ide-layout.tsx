@@ -427,7 +427,7 @@ function MobileWorkspace() {
         <ChatPanel newChatKey={newChatKey} />
       </div>
       <div className={`h-full ${mobileTab === "editor"   ? "" : "hidden"}`}>
-        <EditorPanel />
+        <EditorPanel mobile />
       </div>
       <div className={`h-full ${mobileTab === "agent"    ? "" : "hidden"}`}>
         <div className="h-full overflow-y-auto bg-surface"><AgentPage mobile /></div>

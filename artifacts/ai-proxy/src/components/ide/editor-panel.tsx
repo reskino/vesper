@@ -275,8 +275,9 @@ function AiSidePanel({
 }
 
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
-export function EditorPanel() {
-  const { onOpenFileRef, setActiveFilePath } = useIDE();
+export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
+  const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath } = useIDE();
+  const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const { toast } = useToast();
 
   // ── Tab management ──────────────────────────────────────────────────────────
@@ -336,9 +337,9 @@ export function EditorPanel() {
   }, [setActiveTab]);
 
   useEffect(() => {
-    onOpenFileRef.current = openFile;
-    return () => { onOpenFileRef.current = null; };
-  }, [openFile, onOpenFileRef]);
+    theRef.current = openFile;
+    return () => { theRef.current = null; };
+  }, [openFile, theRef]);
 
   // ── Close a tab ─────────────────────────────────────────────────────────────
   const closeTab = useCallback((path: string, e: React.MouseEvent | { stopPropagation: () => void }) => {

@@ -86,22 +86,29 @@ def main():
     context = browser.new_context(
         viewport={"width": 1280, "height": 900},
         user_agent=(
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
     )
     page = context.new_page()
 
+    # Mark ready immediately and take a blank screenshot so the UI shows right away
+    write_status(work_dir, "ready", url=config["url"])
     try:
-        page.goto(config["url"], timeout=30_000)
-    except Exception as e:
-        write_status(work_dir, "error", error=str(e))
-        browser.close()
-        pw.stop()
-        sys.exit(1)
+        page.screenshot(path=screenshot_file, type="png")
+    except Exception:
+        pass
+    logger.info("Browser ready, navigating to %s", config["url"])
 
-    write_status(work_dir, "ready", url=page.url)
-    logger.info("Browser ready at %s", config["url"])
+    # Use wait_until="commit" — returns as soon as the server starts responding,
+    # so we don't block for the full page load / Cloudflare JS challenge.
+    try:
+        page.goto(config["url"], timeout=60_000, wait_until="commit")
+        write_status(work_dir, "ready", url=page.url)
+        logger.info("Navigation committed to %s", page.url)
+    except Exception as e:
+        logger.warning("Navigation warning (non-fatal): %s", e)
+        write_status(work_dir, "ready", url=config["url"])
 
     last_screenshot = 0.0
 

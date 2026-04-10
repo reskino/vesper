@@ -424,7 +424,7 @@ function MobileWorkspace() {
     <div className="flex-1 min-h-0 overflow-hidden">
       {/* Each panel is always mounted once the tab is active, to preserve state */}
       <div className={`h-full ${mobileTab === "chat"     ? "" : "hidden"}`}>
-        <ChatPanel newChatKey={newChatKey} />
+        <ChatPanel newChatKey={newChatKey} mobile />
       </div>
       <div className={`h-full ${mobileTab === "editor"   ? "" : "hidden"}`}>
         <EditorPanel mobile />

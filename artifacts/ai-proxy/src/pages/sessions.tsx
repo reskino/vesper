@@ -120,8 +120,13 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const alreadySaved = !!ai.hasSession;
+
   const handleSave = async () => {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim()) {
+      if (alreadySaved) { onClose(); return; }
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -151,6 +156,16 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
 
   return (
     <div className="space-y-4">
+      {alreadySaved && (
+        <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3 text-xs flex items-start gap-2">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-emerald-400">API key saved &amp; persisted</p>
+            <p className="text-[#52526e] mt-0.5">Your key is stored and will survive server restarts. Enter a new key below only if you want to replace it.</p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 text-xs text-[#52526e] space-y-1">
         <p className="font-medium text-foreground flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5 text-primary" />
@@ -166,7 +181,7 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
           value={apiKey}
           onChange={e => { setApiKey(e.target.value); setError(null); }}
           onKeyDown={e => e.key === "Enter" && handleSave()}
-          placeholder={placeholder}
+          placeholder={alreadySaved ? "Leave blank to keep saved key, or paste new key…" : placeholder}
           className="w-full bg-[#111118] border border-[#1e1e2e] rounded-xl px-3 py-2.5 text-sm text-foreground font-mono focus:outline-none focus:border-primary/50 transition-colors"
           autoFocus
         />
@@ -189,19 +204,21 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
       )}
 
       <div className="flex gap-2 pt-1">
-        <button
-          onClick={onClose}
-          className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#52526e] hover:text-foreground hover:bg-[#111118] text-sm transition-colors"
-        >
-          Cancel
-        </button>
+        {!alreadySaved && (
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#52526e] hover:text-foreground hover:bg-[#111118] text-sm transition-colors"
+          >
+            Cancel
+          </button>
+        )}
         <button
           onClick={handleSave}
-          disabled={!apiKey.trim() || loading}
+          disabled={(!alreadySaved && !apiKey.trim()) || loading}
           className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground text-sm font-medium transition-colors flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
-          Save API Key
+          {alreadySaved && !apiKey.trim() ? "Done" : "Save API Key"}
         </button>
       </div>
     </div>

@@ -1,0 +1,51 @@
+You are a senior React + Tailwind UI engineer who built the agent selector for Cursor and Claude Projects.
+
+Current Vesper layout (from live site):
+- Top bar with Vesper logo and model selector ("Auto · 2 AIs ready")
+- Left sidebar: Explorer
+- Center: Editor area with empty state
+- Right sidebar: Chat panel
+
+Task: Add a clean, modern **Agent Selector** so users can easily switch between different agents.
+
+### Agents to Include:
+1. Vesper Orchestrator (default)
+2. Research Scholar
+3. Search Master
+4. Docs Weaver
+5. Code Surgeon
+6. Test Guardian
+7. Bug Hunter
+
+### Implementation Requirements:
+
+**Desktop Layout:**
+- Add the Agent Selector in the **top bar**, right next to the model selector (or in the left sidebar header above Explorer).
+- Use a clean dropdown or horizontal scrollable tabs/chips.
+- Show current active agent with a highlight.
+- Each agent should have:
+  - Short name
+  - Icon (use emoji or simple SVG)
+  - One-line description (tooltip on hover)
+- When an agent is selected, the system prompt for that agent should be automatically loaded into the chat/agent context.
+- Add a small "i" info icon that shows a short description when hovered.
+
+**Mobile Layout:**
+- On mobile (< 768px), make the selector prominent in the top bar or as part of bottom navigation.
+- Use a compact dropdown or bottom sheet when tapped.
+- Ensure large touch targets.
+
+**Technical Details:**
+- Use React + TypeScript + Tailwind
+- Store active agent in state (useState or Zustand)
+- When agent changes, update the system prompt and show a toast: "Switched to Vesper Orchestrator"
+- Make it look modern and premium (dark theme, subtle glow on active agent, smooth transitions)
+
+Provide:
+- Complete code for the AgentSelector component
+- How to integrate it into the existing top bar
+- Example of how to load different system prompts when switching agents
+- Responsive design with Tailwind breakpoints
+- Sample agent data array (name, icon, description, systemPrompt)
+
+Make the selector feel like a professional multi-agent platform.

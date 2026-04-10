@@ -402,9 +402,10 @@ function ImportedProjectBanner({
 // Main chat panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ newChatKey, compact = false }: {
+export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   newChatKey: number;
   compact?: boolean;
+  mobile?: boolean;
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
   const { toast } = useToast();
@@ -675,7 +676,7 @@ export function ChatPanel({ newChatKey, compact = false }: {
       {/* ── Input bar ──────────────────────────────────────────────────── */}
       <div
         className="shrink-0 px-3 py-3 border-t border-[#1a1a24] bg-[#0a0a0c]"
-        style={{ paddingBottom: compact ? "12px" : "env(safe-area-inset-bottom, 12px)" }}
+        style={{ paddingBottom: compact ? "12px" : mobile ? "calc(env(safe-area-inset-bottom, 0px) + 8px)" : "env(safe-area-inset-bottom, 12px)" }}
       >
         <div
           className="relative flex items-end gap-2 bg-[#141420] border border-[#1e1e2e]

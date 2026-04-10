@@ -249,11 +249,12 @@ export function TopBar() {
 
   return (
     <header
-      className="shrink-0 h-11 flex items-center px-3 gap-2.5
+      className="shrink-0 flex flex-col
         bg-[#080809] border-b border-[#131318] z-20 select-none
         shadow-[0_1px_0_rgba(255,255,255,0.02)]"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
+    <div className="h-14 md:h-11 flex items-center px-3 gap-2.5">
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10
@@ -334,6 +335,7 @@ export function TopBar() {
           <TooltipContent side="bottom" className="text-xs">Sessions & Settings</TooltipContent>
         </Tooltip>
       </div>
+    </div>
     </header>
   );
 }

@@ -462,9 +462,15 @@ def _tool_screenshot_url(params: dict, cwd: str) -> str:
 
     try:
         from playwright.sync_api import sync_playwright
+        from config import find_chromium
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            exe = find_chromium()
+            browser = p.chromium.launch(
+                headless=True,
+                executable_path=exe,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            )
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             try:
                 response = page.goto(url, wait_until="networkidle", timeout=20000)

@@ -224,9 +224,9 @@ export default function AgentPage() {
             <Sparkles className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-sm font-bold">Agent Mode</h1>
-            <p className="text-xs text-muted-foreground hidden sm:block">
-              Describe what to build — the agent plans, codes, runs, and fixes until done
+            <h1 className="text-sm font-extrabold tracking-tight">Agent Mode</h1>
+            <p className="text-xs font-medium text-muted-foreground hidden sm:block">
+              Describe what to build — the agent plans, codes, runs &amp; fixes until done
             </p>
           </div>
           {/* Mobile collapse/expand task input */}
@@ -340,12 +340,15 @@ export default function AgentPage() {
             <div className="p-4 space-y-2">
               {!currentTask && (
                 <div className="flex flex-col items-center justify-center py-20 text-center px-4">
-                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                    <Bot className="h-8 w-8 text-primary" />
+                  <div className="relative mb-5">
+                    <div className="absolute inset-0 blur-2xl bg-primary/20 rounded-full scale-[2] opacity-60" />
+                    <div className="relative h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                      <Bot className="h-8 w-8 text-primary" />
+                    </div>
                   </div>
-                  <h3 className="text-base font-bold mb-1.5">Autonomous Coding Agent</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm">
-                    Describe what you want built. The agent will write code, install packages, run tests, debug errors, and iterate until complete.
+                  <h3 className="text-xl font-black tracking-tight mb-2">Autonomous Coding Agent</h3>
+                  <p className="text-sm font-medium text-muted-foreground max-w-sm leading-relaxed">
+                    Describe what you want built. The agent writes code, installs packages, runs tests, debugs errors, and iterates until complete.
                   </p>
                 </div>
               )}

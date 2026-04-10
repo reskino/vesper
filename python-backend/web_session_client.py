@@ -1,12 +1,11 @@
 """
 web_session_client.py
 
-Sends prompts to ChatGPT / Claude / Grok using saved browser cookies and
-curl_cffi (Chrome TLS-fingerprint impersonation).
+Sends prompts to ChatGPT / Claude / Grok using saved browser cookies.
 
-ChatGPT  → backend-anon + sentinel PoW  (no /api/auth/session needed)
-Claude   → claude.ai internal API
-Grok     → grok.com API  (moved from grok.x.ai)
+ChatGPT  → Playwright (real Chromium, bypasses bot detection) with curl_cffi fallback
+Claude   → curl_cffi Chrome-impersonation → claude.ai internal API
+Grok     → Playwright (real Chromium + route interception) with curl_cffi fallback
 """
 import base64
 import hashlib
@@ -77,6 +76,31 @@ def _chrome_headers(origin: str, referer: str, extra: dict | None = None,
 
 # ─── ChatGPT ──────────────────────────────────────────────────────────────────
 
+# Reasoning models need reasoning_effort in the payload.
+# gpt-5.4 / Pro → high/xhigh; o-series legacy → medium.
+_CHATGPT_REASONING_EFFORT: dict[str, str] = {
+    "gpt-5.4":      "high",
+    "gpt-5.4-pro":  "xhigh",
+    "gpt-5.2":      "medium",
+    "gpt-5.2-pro":  "xhigh",
+    "gpt-5.1":      "medium",
+    "gpt-5":        "medium",
+    "o4-mini":      "medium",
+    "o4-mini-high": "high",
+    "o4":           "high",
+    "o3":           "high",
+    "o3-pro":       "xhigh",
+    "o3-mini":      "medium",
+    "o1":           "medium",
+    "o1-pro":       "high",
+}
+
+_CHATGPT_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+)
+
+
 def _solve_chatgpt_pow(pow_data: dict) -> str:
     """
     Solve ChatGPT's sentinel Proof-of-Work challenge.
@@ -144,16 +168,240 @@ def _parse_chatgpt_sse(text: str) -> str:
     return final.strip()
 
 
+def _chatgpt_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[int, str]:
+    """
+    Send a ChatGPT request via a real Playwright/Chromium browser.
+
+    WHY: curl_cffi triggers OpenAI's "Unusual activity" bot detector even with
+    Chrome TLS-fingerprint impersonation.  A real Chromium binary passes the
+    Cloudflare JS challenge on page.goto() and makes subsequent fetch() calls
+    from a legitimate browser context — bypassing bot detection entirely.
+
+    FLOW:
+    1. Launch system Chromium with user cookies (storage_state).
+    2. Navigate to chatgpt.com → Cloudflare challenge runs, __cf_bm refreshes.
+    3. page.evaluate() → POST /backend-anon/sentinel/chat-requirements in-browser.
+    4. Solve PoW in Python (SHA3-512, rarely required for logged-in users).
+    5. page.evaluate() → POST /backend-anon/conversation in-browser with sentinel token.
+    6. Return (status_code, raw_sse_body).
+    """
+    from playwright.sync_api import sync_playwright  # noqa: PLC0415
+
+    model = {"__auto__": "gpt-5.3"}.get(model, model)
+    effort = _CHATGPT_REASONING_EFFORT.get(model)
+
+    result: dict = {"status": 0, "body": ""}
+
+    with sync_playwright() as p:
+        from config import find_chromium  # noqa: PLC0415
+        _chrome_exe = find_chromium()
+        _launch_kw: dict = {
+            "headless": True,
+            "args": [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+            ],
+        }
+        if _chrome_exe:
+            _launch_kw["executable_path"] = _chrome_exe
+
+        browser = p.chromium.launch(**_launch_kw)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 900},
+            user_agent=_CHATGPT_UA,
+            storage_state=session_path,
+        )
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+        )
+        page = context.new_page()
+        page.set_default_timeout(120_000)
+
+        # ── Navigate to chatgpt.com (Cloudflare challenge runs here) ──────────
+        try:
+            page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=35_000)
+            page.wait_for_timeout(2_000)
+        except Exception as nav_err:
+            logger.warning("ChatGPT Playwright: navigation issue: %s", nav_err)
+
+        # ── Check for auth wall ───────────────────────────────────────────────
+        page_url = page.url or ""
+        page_title = (page.title() or "").lower()
+        if any(k in page_url for k in ("/auth", "/login", "/signin")) or \
+           any(k in page_title for k in ("sign in", "log in", "login")):
+            browser.close()
+            return 401, '{"error": "Not authenticated — cookies appear expired or invalid"}'
+
+        # ── Step 1: sentinel token (from inside browser) ──────────────────────
+        try:
+            sentinel_result = page.evaluate("""
+                async () => {
+                    const deviceId = crypto.randomUUID();
+                    const resp = await fetch('/backend-anon/sentinel/chat-requirements', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'oai-device-id': deviceId },
+                        body: JSON.stringify({}),
+                        credentials: 'include',
+                    });
+                    const data = await resp.json();
+                    return { status: resp.status, data: data, deviceId: deviceId };
+                }
+            """)
+        except Exception as sent_err:
+            browser.close()
+            logger.error("ChatGPT Playwright: sentinel evaluate error: %s", sent_err)
+            return 0, f"Sentinel evaluate error: {sent_err}"
+
+        logger.debug("ChatGPT Playwright: sentinel status=%s", sentinel_result.get("status"))
+
+        if not isinstance(sentinel_result, dict) or sentinel_result.get("status") != 200:
+            browser.close()
+            return sentinel_result.get("status", 0) if isinstance(sentinel_result, dict) else 0, \
+                   "ChatGPT sentinel failed in browser"
+
+        sentinel_data = sentinel_result["data"]
+        sentinel_token = sentinel_data.get("token", "")
+        device_id = sentinel_result["deviceId"]
+
+        # ── Step 2: solve PoW in Python (rarely required for logged-in users) ─
+        proof_token = ""
+        pow_spec = sentinel_data.get("proofofwork") or {}
+        if pow_spec.get("required"):
+            proof_token = _solve_chatgpt_pow(pow_spec)
+
+        # ── Step 3: build conversation payload ────────────────────────────────
+        payload: dict = {
+            "action": "next",
+            "messages": [{
+                "id": str(uuid.uuid4()),
+                "author": {"role": "user"},
+                "content": {"content_type": "text", "parts": [prompt]},
+                "metadata": {},
+            }],
+            "parent_message_id": str(uuid.uuid4()),
+            "model": model,
+            "timezone_offset_min": 0,
+            "history_and_training_disabled": False,
+            "conversation_mode": {"kind": "primary_assistant"},
+        }
+        if effort:
+            payload["reasoning_effort"] = effort
+
+        # ── Step 4: conversation request from inside browser ──────────────────
+        try:
+            conv_result = page.evaluate(
+                """
+                async ({ deviceId, sentinelToken, proofToken, payload }) => {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'oai-device-id': deviceId,
+                        'openai-sentinel-chat-requirements-token': sentinelToken,
+                    };
+                    if (proofToken) headers['openai-sentinel-proof-token'] = proofToken;
+                    const resp = await fetch('/backend-anon/conversation', {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload),
+                        credentials: 'include',
+                    });
+                    const text = await resp.text();
+                    return { status: resp.status, body: text };
+                }
+                """,
+                {
+                    "deviceId": device_id,
+                    "sentinelToken": sentinel_token,
+                    "proofToken": proof_token,
+                    "payload": payload,
+                },
+            )
+        except Exception as conv_err:
+            browser.close()
+            logger.error("ChatGPT Playwright: conversation evaluate error: %s", conv_err)
+            return 0, f"Conversation evaluate error: {conv_err}"
+
+        browser.close()
+
+        if not isinstance(conv_result, dict):
+            return 0, "ChatGPT conversation: unexpected browser return value"
+
+        status = conv_result.get("status", 0)
+        body   = conv_result.get("body", "")
+        logger.debug("ChatGPT Playwright: conversation status=%s body_len=%s", status, len(body))
+        result["status"] = status
+        result["body"]   = body
+
+    return result["status"], result["body"]
+
+
 def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
     """
-    Send a prompt to ChatGPT using the backend-anon API with sentinel PoW.
-    Does NOT require /api/auth/session (avoids Cloudflare block).
-    Session cookies are loaded to associate the request with the user's account.
+    Send a prompt to ChatGPT.
+
+    PRIMARY  : Playwright with real Chromium — passes Cloudflare bot detection.
+    FALLBACK : curl_cffi Chrome-impersonation — used if Playwright is unavailable.
     """
+    # ── PRIMARY: Playwright ────────────────────────────────────────────────────
+    try:
+        status, body = _chatgpt_playwright_fetch(session_path, model, prompt)
+        logger.info("ChatGPT Playwright: status=%s body_len=%s", status, len(body))
+
+        if status == 200:
+            text = _parse_chatgpt_sse(body)
+            if text:
+                return True, text, ""
+            # Empty SSE — could be an unexpected response format; fall through
+            logger.warning("ChatGPT Playwright 200 but no text parsed; body: %s", body[:300])
+
+        if status == 401:
+            return False, "", "ChatGPT: not authenticated — please re-import your cookies."
+
+        if status == 403:
+            body_snippet = body[:400]
+            body_low = body_snippet.lower()
+            free_model = get_free_model("chatgpt")
+            if free_model and free_model != model:
+                logger.info("ChatGPT: 403 on %s, retrying with %s via Playwright", model, free_model)
+                s2, b2 = _chatgpt_playwright_fetch(session_path, free_model, prompt)
+                if s2 == 200:
+                    text = _parse_chatgpt_sse(b2)
+                    if text:
+                        note = (
+                            f"\n\n_(Note: **{model}** returned 403 — answered with **{free_model}** instead. "
+                            f"Your account may need ChatGPT Plus for that model.)_"
+                        )
+                        return True, text + note, ""
+            hint = ""
+            if any(k in body_low for k in ("subscri", "plus", "upgrade", "plan", "not available")):
+                hint = " Your account needs ChatGPT Plus or Pro for this model."
+            elif "unusual activity" in body_low:
+                hint = " OpenAI flagged unusual activity — try again in a moment."
+            elif "cloudflare" in body_low or "just a moment" in body_low:
+                hint = " Cloudflare is blocking — re-export cookies from chatgpt.com."
+            return False, "", f"ChatGPT 403.{hint} Server: {body_snippet[:200]}"
+
+        if status == 429:
+            return False, "", "ChatGPT rate limit hit. Wait a minute and try again."
+
+        if status >= 400:
+            return False, "", f"ChatGPT error {status}: {body[:300]}"
+
+        # status == 0 means Playwright itself failed; drop to curl_cffi fallback
+        if status != 0:
+            return False, "", f"ChatGPT unexpected status {status}: {body[:200]}"
+
+    except Exception as pw_exc:
+        logger.warning("ChatGPT Playwright failed (%s); falling back to curl_cffi", pw_exc)
+
+    # ── FALLBACK: curl_cffi ────────────────────────────────────────────────────
+    logger.info("ChatGPT: using curl_cffi fallback for model=%s", model)
     try:
         from curl_cffi import requests as cf  # noqa: PLC0415
     except ImportError:
-        return False, "", "curl_cffi not installed — run: pip install curl_cffi"
+        return False, "", "curl_cffi not installed and Playwright failed. Cannot send to ChatGPT."
 
     try:
         cookies = _load_cookies(session_path, "")
@@ -162,135 +410,67 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
 
         sess = _impersonate_session(cookies)
         device_id = str(uuid.uuid4())
-
-        base_headers = _chrome_headers(
+        sess.headers.update(_chrome_headers(
             "https://chatgpt.com",
             "https://chatgpt.com/",
             {"oai-device-id": device_id, "Content-Type": "application/json"},
-        )
-        sess.headers.update(base_headers)
+        ))
 
-        # ── Step 1: get sentinel token (+ optional PoW spec) ─────────────────
         req_resp = sess.post(
             "https://chatgpt.com/backend-anon/sentinel/chat-requirements",
-            json={},
-            timeout=30,
+            json={}, timeout=30,
         )
-        logger.debug("ChatGPT sentinel status=%s", req_resp.status_code)
-
-        if req_resp.status_code == 403:
-            return False, "", (
-                "ChatGPT is blocking our request (Cloudflare 403 on sentinel). "
-                "Re-export your cookies while logged in on chatgpt.com, then re-import."
-            )
         if req_resp.status_code != 200:
-            return False, "", f"ChatGPT sentinel failed ({req_resp.status_code})."
+            return False, "", f"ChatGPT sentinel failed ({req_resp.status_code}): {req_resp.text[:200]}"
 
-        try:
-            req_data = req_resp.json()
-        except Exception:
-            return False, "", "ChatGPT sentinel returned unexpected data."
-
+        req_data    = req_resp.json()
         sentinel_token = req_data.get("token", "")
-
-        # ── Step 2: solve PoW if required ─────────────────────────────────────
         proof_token = ""
         pow_spec = req_data.get("proofofwork") or {}
         if pow_spec.get("required"):
             proof_token = _solve_chatgpt_pow(pow_spec)
 
-        # ── Step 3: send conversation ──────────────────────────────────────────
-        # GPT-5 Thinking and o-series models need reasoning_effort in the payload.
-        # GPT-5.x Pro uses xhigh; standard Thinking uses high; o-series uses medium.
-        _REASONING_EFFORT: dict[str, str] = {
-            # GPT-5.x thinking/pro
-            "gpt-5.4":         "high",
-            "gpt-5.4-pro":     "xhigh",
-            "gpt-5.2":         "medium",
-            "gpt-5.2-pro":     "xhigh",
-            "gpt-5.1":         "medium",
-            "gpt-5":           "medium",
-            # o-series (legacy, still in API)
-            "o4-mini":         "medium",
-            "o4-mini-high":    "high",
-            "o4":              "high",
-            "o3":              "high",
-            "o3-pro":          "xhigh",
-            "o3-mini":         "medium",
-            "o1":              "medium",
-            "o1-pro":          "high",
+        real_model = {"__auto__": "gpt-5.3"}.get(model, model)
+        payload: dict = {
+            "action": "next",
+            "messages": [{
+                "id": str(uuid.uuid4()),
+                "author": {"role": "user"},
+                "content": {"content_type": "text", "parts": [prompt]},
+                "metadata": {},
+            }],
+            "parent_message_id": str(uuid.uuid4()),
+            "model": real_model,
+            "timezone_offset_min": 0,
+            "history_and_training_disabled": False,
+            "conversation_mode": {"kind": "primary_assistant"},
         }
-        _MODEL_ALIASES = {"__auto__": "gpt-5.3"}
+        effort = _CHATGPT_REASONING_EFFORT.get(real_model)
+        if effort:
+            payload["reasoning_effort"] = effort
 
-        def _do_conversation(mdl: str):
-            mdl = _MODEL_ALIASES.get(mdl, mdl)
-            payload: dict = {
-                "action": "next",
-                "messages": [{
-                    "id": str(uuid.uuid4()),
-                    "author": {"role": "user"},
-                    "content": {"content_type": "text", "parts": [prompt]},
-                    "metadata": {},
-                }],
-                "parent_message_id": str(uuid.uuid4()),
-                "model": mdl,
-                "timezone_offset_min": 0,
-                "history_and_training_disabled": False,
-                "conversation_mode": {"kind": "primary_assistant"},
-            }
-            effort = _REASONING_EFFORT.get(mdl)
-            if effort:
-                payload["reasoning_effort"] = effort
-            extra = {"openai-sentinel-chat-requirements-token": sentinel_token}
-            if proof_token:
-                extra["openai-sentinel-proof-token"] = proof_token
+        extra = {"openai-sentinel-chat-requirements-token": sentinel_token}
+        if proof_token:
+            extra["openai-sentinel-proof-token"] = proof_token
 
-            return sess.post(
-                "https://chatgpt.com/backend-anon/conversation",
-                json=payload,
-                headers=extra,
-                timeout=180,
-            )
+        resp = sess.post(
+            "https://chatgpt.com/backend-anon/conversation",
+            json=payload, headers=extra, timeout=180,
+        )
+        logger.debug("ChatGPT curl_cffi: status=%s body=%s", resp.status_code, resp.text[:200])
 
-        resp = _do_conversation(model)
-        logger.debug("ChatGPT conversation status=%s body_snippet=%s", resp.status_code, resp.text[:200])
-
+        if resp.status_code == 200:
+            text = _parse_chatgpt_sse(resp.text)
+            if text:
+                return True, text, ""
         if resp.status_code == 401:
             return False, "", "ChatGPT: not authenticated — please re-import your cookies."
-        if resp.status_code == 403:
-            body_raw = resp.text[:400]
-            body = body_raw.lower()
-            free_model = get_free_model("chatgpt")
-            # Always try fallback — model may be paywalled or name invalid
-            if free_model and free_model != model:
-                logger.info("ChatGPT: 403 on %s, retrying with free model %s", model, free_model)
-                resp2 = _do_conversation(free_model)
-                if resp2.status_code == 200:
-                    text = _parse_chatgpt_sse(resp2.text)
-                    if text:
-                        note = (
-                            f"\n\n_(Note: **{model}** returned 403 — answered with **{free_model}** instead. "
-                            f"Your account may need ChatGPT Plus for that model.)_"
-                        )
-                        return True, text + note, ""
-            hint = ""
-            if any(k in body for k in ("subscri", "plus", "upgrade", "plan", "not available")):
-                hint = " Your account needs ChatGPT Plus or Pro for this model."
-            elif "cloudflare" in body or "just a moment" in body:
-                hint = " Cloudflare is blocking the request — re-export cookies while logged into chatgpt.com."
-            return False, "", f"ChatGPT 403 access denied.{hint} Server said: {body_raw[:200]}"
         if resp.status_code == 429:
             return False, "", "ChatGPT rate limit hit. Wait a minute and try again."
-        if resp.status_code >= 400:
-            return False, "", f"ChatGPT error {resp.status_code}: {resp.text[:300]}"
-
-        text = _parse_chatgpt_sse(resp.text)
-        if text:
-            return True, text, ""
-        return False, "", "ChatGPT returned an empty response."
+        return False, "", f"ChatGPT curl_cffi error {resp.status_code}: {resp.text[:300]}"
 
     except Exception as exc:
-        logger.error("ChatGPT send error: %s", exc, exc_info=True)
+        logger.error("ChatGPT curl_cffi fallback error: %s", exc, exc_info=True)
         return False, "", f"ChatGPT error: {exc}"
 
 

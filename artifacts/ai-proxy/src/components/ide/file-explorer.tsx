@@ -19,12 +19,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Folder, FolderOpen, FileIcon, FileCode, FileText, FileJson,
   ChevronRight, ChevronDown, RefreshCw, FilePlus, FolderPlus,
-  Trash2, Upload, Download, Check, X, Loader2, Pencil,
+  Trash2, Upload, Download, Check, X, Loader2, Pencil, Search,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIDE } from "@/contexts/ide-context";
 import { ImportExportModal } from "@/components/import-export-modal";
-import { ImportedTree, FolderImportButton } from "@/components/ide/imported-tree";
+import { ImportedTree, FolderImportButton, FolderImportLargeButton } from "@/components/ide/imported-tree";
 
 // ── File-type icon ─────────────────────────────────────────────────────────────
 function FileIcon2({ name }: { name: string }) {
@@ -234,6 +234,15 @@ function TreeItem({
 interface NewItemState { type: "file" | "folder"; parentPath: string; }
 
 // ── Main FileExplorer ─────────────────────────────────────────────────────────
+// ── Flat file search helper ────────────────────────────────────────────────────
+function findMatchingFiles(node: FileNode, query: string): FileNode[] {
+  if (!node) return [];
+  if (!node.children) {
+    return node.name.toLowerCase().includes(query.toLowerCase()) ? [node] : [];
+  }
+  return node.children.flatMap(child => findMatchingFiles(child, query));
+}
+
 export function FileExplorer({ activePath }: { activePath: string | null }) {
   const { openFileInEditor, importedProject } = useIDE();
   const { toast } = useToast();
@@ -245,6 +254,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
   const [newItemName, setNewItemName] = useState("");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const newItemInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: treeData, isLoading, refetch } = useGetFileTree(
     { path: "", depth: 10 },

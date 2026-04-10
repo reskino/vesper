@@ -403,13 +403,14 @@ export function ImportedTree() {
 // Compact import button — used in the file-explorer header
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function FolderImportButton({ className = "" }: { className?: string }) {
+// ── Hook: shared folder-import logic ─────────────────────────────────────────
+function useFolderImport() {
   const { importedProject, setImportedProject } = useIDE();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleClick = async () => {
+  const trigger = async () => {
     if (isFSAccessSupported()) {
       setLoading(true);
       try {
@@ -445,10 +446,16 @@ export function FolderImportButton({ className = "" }: { className?: string }) {
     }
   };
 
+  return { trigger, loading, importedProject, fileInputRef, handleInputChange };
+}
+
+// ── Compact icon button (used in desktop file-explorer header) ────────────────
+export function FolderImportButton({ className = "" }: { className?: string }) {
+  const { trigger, loading, importedProject, fileInputRef, handleInputChange } = useFolderImport();
   return (
     <>
       <button
-        onClick={handleClick}
+        onClick={trigger}
         disabled={loading}
         className={`h-5 w-5 flex items-center justify-center rounded transition-colors
           ${importedProject
@@ -459,16 +466,36 @@ export function FolderImportButton({ className = "" }: { className?: string }) {
       >
         {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <FolderInput className="h-3 w-3" />}
       </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        /* @ts-ignore */
-        webkitdirectory=""
-        directory=""
-        multiple
-        onChange={handleInputChange}
-      />
+      <input ref={fileInputRef} type="file" className="hidden"
+        /* @ts-ignore */ webkitdirectory="" directory="" multiple onChange={handleInputChange} />
+    </>
+  );
+}
+
+// ── Large mobile button (used in mobile explorer header) ──────────────────────
+export function FolderImportLargeButton() {
+  const { trigger, loading, importedProject, fileInputRef, handleInputChange } = useFolderImport();
+  return (
+    <>
+      <button
+        onClick={trigger}
+        disabled={loading}
+        className={`w-full flex items-center justify-center gap-2.5 h-12 rounded-2xl font-bold text-sm
+          active:scale-[0.98] transition-all shadow-[0_4px_20px_rgba(99,102,241,0.25)]
+          ${importedProject
+            ? "bg-emerald-950/80 text-emerald-300 border border-emerald-900/60"
+            : "bg-primary text-primary-foreground shadow-[0_4px_20px_rgba(99,102,241,0.3)]"
+          }`}
+      >
+        {loading
+          ? <><Loader2 className="h-4.5 w-4.5 animate-spin" /><span>Importing…</span></>
+          : importedProject
+            ? <><FolderOpen className="h-5 w-5" /><span>{importedProject.name} (imported)</span></>
+            : <><FolderInput className="h-5 w-5" /><span>Import Local Folder</span></>
+        }
+      </button>
+      <input ref={fileInputRef} type="file" className="hidden"
+        /* @ts-ignore */ webkitdirectory="" directory="" multiple onChange={handleInputChange} />
     </>
   );
 }

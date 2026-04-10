@@ -13,7 +13,7 @@ import {
 import type { ImportedFileNode } from "@/lib/folder-import";
 
 export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "help" | null;
-export type MobileTab     = "chat" | "editor" | "files" | "history";
+export type MobileTab     = "chat" | "editor" | "files" | "terminal";
 
 interface IDEContextValue {
   // ── Desktop sidebar / panel toggles ───────────────────────────────────────

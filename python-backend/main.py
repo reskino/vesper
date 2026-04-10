@@ -460,6 +460,85 @@ def import_session():
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
+@app.route("/api/sessions/verify/<ai_id>", methods=["GET"])
+def verify_session(ai_id):
+    """Verify saved cookies are valid and return the logged-in username."""
+    if ai_id not in AI_CONFIGS:
+        return jsonify({"success": False, "error": f"Unknown AI: {ai_id}"}), 400
+
+    from playwright_utils import session_exists, get_session_path
+    if not session_exists(ai_id):
+        return jsonify({"success": False, "error": "No session file found"})
+
+    session_path = get_session_path(ai_id)
+
+    try:
+        from web_session_client import _load_cookies, _impersonate_session
+        cookies = _load_cookies(session_path, "")
+        if not cookies:
+            return jsonify({"success": False, "error": "Session file has no cookies"})
+
+        sess = _impersonate_session(cookies)
+
+        if ai_id == "chatgpt":
+            resp = sess.get("https://chatgpt.com/api/auth/session", timeout=15)
+            if resp.status_code == 200:
+                d = resp.json()
+                user = d.get("user") or {}
+                name = user.get("name") or user.get("email") or "Connected"
+                email = user.get("email", "")
+                if d.get("accessToken"):
+                    return jsonify({"success": True, "username": name, "email": email})
+            return jsonify({"success": False,
+                            "error": f"Session invalid ({resp.status_code}) — please re-import cookies"})
+
+        elif ai_id == "claude":
+            resp = sess.get("https://claude.ai/api/organizations", timeout=15)
+            if resp.status_code == 200:
+                orgs = resp.json()
+                if isinstance(orgs, list) and orgs:
+                    # Get account info for the actual email
+                    acc = sess.get("https://claude.ai/api/account", timeout=10)
+                    email = ""
+                    if acc.status_code == 200:
+                        email = acc.json().get("email", "")
+                    name = email or orgs[0].get("name", "Connected")
+                    return jsonify({"success": True, "username": name, "email": email})
+            return jsonify({"success": False,
+                            "error": f"Session invalid ({resp.status_code}) — please re-import cookies"})
+
+        elif ai_id == "grok":
+            # Try to get X/Twitter username via Grok's whoami or X GraphQL
+            for url in [
+                "https://grok.x.ai/api/me",
+                "https://x.com/i/api/graphql/G3KGOASz96M-Ku0e6ch2pw/Viewer",
+            ]:
+                try:
+                    resp = sess.get(url, timeout=10)
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        screen_name = (
+                            d.get("screen_name")
+                            or d.get("username")
+                            or (d.get("data", {}).get("viewer", {})
+                                  .get("user_results", {}).get("result", {})
+                                  .get("legacy", {}).get("screen_name"))
+                        )
+                        if screen_name:
+                            return jsonify({"success": True, "username": f"@{screen_name}"})
+                except Exception:
+                    continue
+            # Fallback — at least confirm cookies exist
+            return jsonify({"success": True, "username": "Connected",
+                            "warning": "Could not fetch X username"})
+
+        return jsonify({"success": False, "error": f"No verifier for {ai_id}"})
+
+    except Exception as exc:
+        logger.error("verify_session error: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": str(exc)})
+
+
 # ─── History ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/history")

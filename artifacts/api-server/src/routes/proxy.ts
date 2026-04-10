@@ -83,6 +83,7 @@ router.delete("/sessions/:aiId/delete", proxyToPython);
 router.get("/sessions/browser-status/:aiId", proxyToPython);
 router.get("/sessions/browser-screenshot/:aiId", proxyToPython);
 router.post("/sessions/browser-action/:aiId", proxyToPython);
+router.get("/sessions/verify/:aiId", proxyToPython);
 
 // History routes
 router.get("/history", proxyToPython);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   useListAis, getListAisQueryKey,
   useListSessions, getListSessionsQueryKey,
@@ -8,8 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ShieldCheck, ShieldAlert, Trash2, Loader2,
-  RefreshCw, Upload, X, ExternalLink,
-  CheckCircle2, LogIn, RotateCcw, Cookie, Copy,
+  RefreshCw, X, ExternalLink,
+  CheckCircle2, LogIn, RotateCcw, Cookie, UserCircle2,
 } from "lucide-react";
 
 // ─── Login Guide Dialog ──────────────────────────────────────────────────────
@@ -248,6 +248,29 @@ export function SessionsPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loginAi, setLoginAi] = useState<{ id: string; name: string; url: string } | null>(null);
+  // username → display name returned by the verify endpoint
+  const [usernames, setUsernames] = useState<Record<string, string>>({});
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+
+  const verifySession = useCallback(async (aiId: string) => {
+    setVerifyingIds(prev => new Set([...prev, aiId]));
+    try {
+      const res = await fetch(`/api/sessions/verify/${aiId}`);
+      const data = await res.json();
+      if (data.success && data.username) {
+        setUsernames(prev => ({ ...prev, [aiId]: data.username }));
+      } else {
+        setUsernames(prev => { const n = { ...prev }; delete n[aiId]; return n; });
+      }
+    } catch { /* ignore */ }
+    setVerifyingIds(prev => { const s = new Set(prev); s.delete(aiId); return s; });
+  }, []);
+
+  // Verify all connected AIs on load
+  useEffect(() => {
+    const ais = aisData?.ais ?? [];
+    ais.filter((ai: any) => ai.hasSession).forEach((ai: any) => verifySession(ai.id));
+  }, [aisData, verifySession]);
 
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
@@ -367,9 +390,24 @@ export function SessionsPage() {
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">{ai.url}</div>
-                      {hasSession && session?.lastUsed && (
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          Saved {new Date(session.lastUsed).toLocaleDateString()}
+                      {hasSession && (
+                        <div className="flex items-center gap-2 mt-1">
+                          {verifyingIds.has(ai.id) ? (
+                            <span className="flex items-center gap-1.5 text-xs text-blue-400">
+                              <Loader2 size={11} className="animate-spin" /> Verifying…
+                            </span>
+                          ) : usernames[ai.id] ? (
+                            <span className="flex items-center gap-1.5 text-xs text-green-400">
+                              <UserCircle2 size={12} /> {usernames[ai.id]}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => verifySession(ai.id)}
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-400 transition-colors"
+                            >
+                              <RefreshCw size={10} /> Verify session
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -408,7 +446,11 @@ export function SessionsPage() {
         <LoginGuide
           ai={loginAi}
           onClose={() => setLoginAi(null)}
-          onSuccess={refreshAll}
+          onSuccess={() => {
+            refreshAll();
+            // Small delay so the new session file is on disk before we verify
+            setTimeout(() => verifySession(loginAi.id), 800);
+          }}
         />
       )}
     </div>

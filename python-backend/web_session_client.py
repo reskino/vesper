@@ -83,9 +83,11 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
         return False, "", "curl_cffi not installed — run: pip install curl_cffi"
 
     try:
-        cookies = _load_cookies(session_path, "chatgpt.com")
+        # Load ALL cookies (no domain filter) — ChatGPT auth tokens live on
+        # .openai.com and chatgpt.com; filtering by domain alone misses them.
+        cookies = _load_cookies(session_path, "")
         if not cookies:
-            return False, "", "No chatgpt.com cookies in session. Please re-login."
+            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
 
         sess = _impersonate_session(cookies)
         sess.headers.update({
@@ -175,9 +177,9 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
         return False, "", "curl_cffi not installed"
 
     try:
-        cookies = _load_cookies(session_path, "claude.ai")
+        cookies = _load_cookies(session_path, "")  # all cookies — no domain filter
         if not cookies:
-            return False, "", "No claude.ai cookies in session. Please re-login."
+            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
 
         sess = _impersonate_session(cookies)
         sess.headers.update({
@@ -278,11 +280,9 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
         return False, "", "curl_cffi not installed"
 
     try:
-        cookies = _load_cookies(session_path, "grok.x.ai")
+        cookies = _load_cookies(session_path, "")  # all cookies — no domain filter
         if not cookies:
-            cookies = _load_cookies(session_path, ".x.ai")
-        if not cookies:
-            return False, "", "No Grok cookies in session. Please re-login."
+            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
 
         sess = _impersonate_session(cookies)
         sess.headers.update({

@@ -1,3 +1,10 @@
+/**
+ * TopBar — global header.
+ *
+ * Desktop: Logo | divider | ModelSelector (centered) | icon actions
+ * Mobile:  Logo + "Vesper" | ModelSelector (compact) | New-chat button
+ *          (panel-toggle icons are hidden on mobile — bottom nav handles them)
+ */
 import { useEffect, useRef, useState } from "react";
 import {
   useListAis, getListAisQueryKey, useSetModel,
@@ -20,7 +27,7 @@ function StatusDot({ hasSession }: { hasSession: boolean }) {
   );
 }
 
-// ── Model tier badge ───────────────────────────────────────────────────────────
+// ── Tier badge ────────────────────────────────────────────────────────────────
 function TierBadge({ tier }: { tier?: string }) {
   if (!tier || tier === "free")
     return <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">Free</span>;
@@ -29,8 +36,8 @@ function TierBadge({ tier }: { tier?: string }) {
   return <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-violet-500/15 text-violet-400">Plus</span>;
 }
 
-// ── Model selector dropdown ───────────────────────────────────────────────────
-function ModelSelector() {
+// ── Model selector ────────────────────────────────────────────────────────────
+export function ModelSelector({ compact = false }: { compact?: boolean }) {
   const { selectedAi, setSelectedAi } = useIDE();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -52,9 +59,9 @@ function ModelSelector() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const isAuto = selectedAi === "__auto__";
-  const ais = aisData?.ais ?? [];
-  const currentAi = isAuto ? null : ais.find((a: any) => a.id === selectedAi);
+  const isAuto     = selectedAi === "__auto__";
+  const ais        = aisData?.ais ?? [];
+  const currentAi  = isAuto ? null : ais.find((a: any) => a.id === selectedAi);
   const activeModel = currentAi?.models?.find((m: any) => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
   const anyConnected = ais.some((a: any) => a.hasSession);
 
@@ -72,43 +79,63 @@ function ModelSelector() {
     );
   };
 
-  if (isLoading) return (
-    <div className="flex items-center gap-1.5 text-[#52526e] text-xs">
-      <Loader2 className="h-3 w-3 animate-spin" /> Loading…
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-1.5 text-[#52526e] text-xs">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        {!compact && "Loading…"}
+      </div>
+    );
+  }
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 h-7 px-3 rounded-lg bg-[#141420] hover:bg-[#1e1e2e] border border-[#1a1a24] text-sm font-semibold text-foreground transition-all"
+        className={`flex items-center gap-2 rounded-lg bg-[#141420] hover:bg-[#1e1e2e] border border-[#1a1a24]
+          font-semibold text-foreground transition-all
+          ${compact ? "h-8 px-2.5 text-xs" : "h-7 px-3 text-sm"}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Select AI model"
       >
         {isAuto ? (
           <>
             <span className={`h-1.5 w-1.5 rounded-full ${anyConnected ? "bg-emerald-400" : "bg-primary animate-pulse"}`} />
             <span>Auto</span>
-            <span className="hidden sm:inline text-[11px] text-[#52526e] font-normal">· Best available</span>
+            {!compact && (
+              <span className="hidden sm:inline text-[11px] text-[#52526e] font-normal">
+                · {anyConnected ? `${ais.filter((a: any) => a.hasSession).length} AI${ais.filter((a: any) => a.hasSession).length !== 1 ? "s" : ""} ready` : "Best available"}
+              </span>
+            )}
           </>
         ) : (
           <>
             {currentAi && <StatusDot hasSession={currentAi.hasSession} />}
-            <span>{currentAi?.name ?? "Select AI"}</span>
-            {activeModel && (
+            <span className="truncate max-w-[100px]">{currentAi?.name ?? "Select AI"}</span>
+            {!compact && activeModel && (
               <span className="hidden sm:inline text-[11px] text-[#52526e] font-normal">· {activeModel.name}</span>
             )}
           </>
         )}
-        <ChevronDown className="h-3 w-3 text-[#52526e]" />
+        <ChevronDown className="h-3 w-3 text-[#52526e] shrink-0" />
       </button>
 
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-72 z-50 rounded-xl border border-[#1a1a24] bg-[#0d0d12] shadow-2xl overflow-hidden max-h-[min(480px,65vh)] flex flex-col">
+        <div
+          role="listbox"
+          aria-label="AI models"
+          className="absolute top-full mt-1.5 w-72 z-[100] rounded-xl border border-[#1a1a24]
+            bg-[#0d0d12] shadow-2xl overflow-hidden max-h-[min(480px,65vh)] flex flex-col
+            left-0 sm:left-1/2 sm:-translate-x-1/2"
+        >
           <div className="overflow-y-auto flex-1 p-1.5 space-y-0.5">
-
-            {/* Auto option */}
+            {/* Auto */}
             <div
-              className={`flex items-center gap-2.5 rounded-lg cursor-pointer transition-colors ${isAuto ? "bg-primary/10" : "hover:bg-[#141420]"}`}
+              role="option"
+              aria-selected={isAuto}
+              className={`flex items-center gap-2.5 rounded-lg cursor-pointer transition-colors
+                ${isAuto ? "bg-primary/10" : "hover:bg-[#141420]"}`}
               onClick={() => { setSelectedAi("__auto__"); setOpen(false); }}
             >
               <div className="flex items-center gap-2.5 flex-1 px-3 py-2.5">
@@ -127,12 +154,13 @@ function ModelSelector() {
             {ais.map((ai: any) => {
               const isSel = !isAuto && selectedAi === ai.id;
               const isExp = expandedAi === ai.id;
-              const mdl = ai.models?.find((m: any) => m.id === ai.currentModel) ?? ai.models?.[0];
+              const mdl   = ai.models?.find((m: any) => m.id === ai.currentModel) ?? ai.models?.[0];
               return (
-                <div key={ai.id}>
-                  <div className={`flex items-center gap-2.5 rounded-lg transition-colors ${isSel ? "bg-primary/10" : "hover:bg-[#141420]"}`}>
+                <div key={ai.id} role="option" aria-selected={isSel}>
+                  <div className={`flex items-center gap-2.5 rounded-lg transition-colors
+                    ${isSel ? "bg-primary/10" : "hover:bg-[#141420]"}`}>
                     <button
-                      className="flex items-center gap-2.5 flex-1 px-3 py-2.5 text-left"
+                      className="flex items-center gap-2.5 flex-1 px-3 py-2.5 text-left min-h-[44px]"
                       onClick={() => { setSelectedAi(ai.id); setOpen(false); setExpandedAi(null); }}
                     >
                       <StatusDot hasSession={ai.hasSession} />
@@ -148,19 +176,22 @@ function ModelSelector() {
                     </button>
                     {ai.models?.length > 1 && (
                       <button
-                        className="pr-3 py-3 text-[#52526e] hover:text-foreground transition-colors"
+                        className="pr-3 py-3 min-h-[44px] text-[#52526e] hover:text-foreground transition-colors"
                         onClick={e => { e.stopPropagation(); setExpandedAi(isExp ? null : ai.id); }}
+                        aria-label={`${isExp ? "Collapse" : "Expand"} ${ai.name} models`}
                       >
                         {isExp ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
                     )}
                   </div>
+
                   {isExp && ai.models && (
                     <div className="ml-3 mr-2 mb-1 rounded-lg border border-[#1a1a24] overflow-hidden bg-[#0a0a0c]">
                       {ai.models.map((m: any) => (
                         <button
                           key={m.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs transition-colors
+                            min-h-[40px] ${
                             ai.currentModel === m.id
                               ? "bg-primary/10 text-primary font-medium"
                               : "text-[#52526e] hover:bg-[#141420] hover:text-foreground"
@@ -193,7 +224,7 @@ function IconBtn({ icon: Icon, label, active, onClick, shortcut }: {
       <TooltipTrigger asChild>
         <button
           onClick={onClick}
-          className={`h-7 w-7 flex items-center justify-center rounded-lg transition-all
+          className={`h-8 w-8 flex items-center justify-center rounded-lg transition-all
             ${active
               ? "bg-primary/20 text-primary border border-primary/30"
               : "text-[#52526e] hover:text-[#a0a0c0] hover:bg-[#141420]"
@@ -215,30 +246,61 @@ export function TopBar() {
   const { showChat, toggleChat, showTerminal, toggleTerminal, triggerNewChat } = useIDE();
 
   return (
-    <header className="shrink-0 h-10 flex items-center px-3 gap-3 bg-[#0a0a0c] border-b border-[#1a1a24] z-20 select-none">
+    <header
+      className="shrink-0 h-12 flex items-center px-3 gap-2 bg-[#0a0a0c] border-b border-[#1a1a24] z-20 select-none"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       {/* Logo */}
       <div className="flex items-center gap-2 shrink-0">
         <VesperLogo size={22} />
-        <span className="hidden sm:block font-extrabold text-sm text-foreground tracking-tight">Vesper</span>
+        <span className="font-extrabold text-sm text-foreground tracking-tight">Vesper</span>
       </div>
 
-      <div className="w-px h-4 bg-[#1a1a24] shrink-0" />
+      <div className="w-px h-5 bg-[#1a1a24] shrink-0 hidden md:block" />
 
-      {/* Model selector — centered */}
-      <div className="flex-1 flex items-center justify-center">
-        <ModelSelector />
+      {/* Model selector — centered on desktop, left-ish on mobile */}
+      <div className="flex-1 flex items-center md:justify-center">
+        {/* Desktop: full selector */}
+        <div className="hidden md:block">
+          <ModelSelector />
+        </div>
+        {/* Mobile: compact selector */}
+        <div className="md:hidden">
+          <ModelSelector compact />
+        </div>
       </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-1 shrink-0">
-        <IconBtn icon={Plus} label="New Chat" shortcut="Ctrl+N" onClick={triggerNewChat} />
-        <IconBtn icon={PanelRight} label="Toggle Chat" shortcut="Ctrl+J" active={showChat} onClick={toggleChat} />
-        <IconBtn icon={TerminalSquare} label="Toggle Terminal" shortcut="Ctrl+`" active={showTerminal} onClick={toggleTerminal} />
-        <div className="w-px h-4 bg-[#1a1a24] mx-1" />
+        {/* New chat — visible everywhere */}
+        <Tooltip delayDuration={400}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={triggerNewChat}
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all"
+              aria-label="New Chat"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">New Chat <span className="text-[#52526e]">Ctrl+N</span></TooltipContent>
+        </Tooltip>
+
+        {/* Desktop-only panel toggles */}
+        <div className="hidden md:flex items-center gap-1">
+          <IconBtn icon={PanelRight}    label="Toggle Chat"     shortcut="Ctrl+J" active={showChat}     onClick={toggleChat} />
+          <IconBtn icon={PanelBottom}   label="Toggle Terminal" shortcut="Ctrl+`" active={showTerminal}  onClick={toggleTerminal} />
+          <div className="w-px h-4 bg-[#1a1a24] mx-1" />
+        </div>
+
+        {/* Settings — both */}
         <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <Link href="/sessions">
-              <button className="h-7 w-7 flex items-center justify-center rounded-lg text-[#52526e] hover:text-[#a0a0c0] hover:bg-[#141420] transition-all" aria-label="Settings">
+              <button
+                className="h-8 w-8 flex items-center justify-center rounded-lg text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all"
+                aria-label="Sessions & Settings"
+              >
                 <Settings className="h-4 w-4" />
               </button>
             </Link>

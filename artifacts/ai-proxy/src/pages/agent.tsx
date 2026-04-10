@@ -499,7 +499,7 @@ export default function AgentPage() {
               {!currentTask && (
                 <div className="flex flex-col items-center justify-center py-20 text-center px-4">
                   <div className="relative mb-5">
-                    <div className="absolute inset-0 blur-2xl bg-primary/20 rounded-full scale-[2] opacity-60" />
+                    <div className="absolute inset-[-40px] blur-2xl bg-primary/20 rounded-full opacity-50 pointer-events-none" style={{zIndex: -1}} />
                     <div className="relative h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
                       <Bot className="h-8 w-8 text-primary" />
                     </div>

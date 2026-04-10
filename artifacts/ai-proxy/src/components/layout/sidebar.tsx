@@ -35,7 +35,7 @@ export function Sidebar() {
     <>
       {/* ── Desktop sidebar ──────────────────────────── */}
       <aside
-        className={`hidden sm:flex shrink-0 flex-col border-r border-border bg-sidebar h-screen transition-all duration-200 ease-in-out
+        className={`hidden sm:flex shrink-0 flex-col border-r border-border bg-sidebar h-screen transition-[width] duration-200 ease-in-out
           ${collapsed ? "w-[60px]" : "w-56"}`}
       >
         {/* Logo row */}

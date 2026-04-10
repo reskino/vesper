@@ -72,22 +72,28 @@ def main():
 
     write_status(work_dir, "starting")
 
-    pw   = sync_playwright().start()
-    browser = pw.chromium.launch(
-        headless=True,
-        args=[
+    from config import find_chromium  # noqa: PLC0415
+    _chrome_exe = find_chromium()
+    _launch_kw: dict = {
+        "headless": True,
+        "args": [
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
             "--disable-software-rasterizer",
         ],
-    )
+    }
+    if _chrome_exe:
+        _launch_kw["executable_path"] = _chrome_exe
+
+    pw   = sync_playwright().start()
+    browser = pw.chromium.launch(**_launch_kw)
     context = browser.new_context(
         viewport={"width": 1280, "height": 900},
         user_agent=(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
         ),
     )
     page = context.new_page()

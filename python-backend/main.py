@@ -978,13 +978,14 @@ def agent_run():
     working_dir = data.get("workingDir")
     max_steps = min(int(data.get("maxSteps", 20)), 50)
     model_id = data.get("modelId") or None
+    agent_type = data.get("agentType", "builder")
 
     if get_agent_status().get("running"):
         return jsonify({"error": "An agent task is already running"}), 409
 
     def _run():
         try:
-            run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps, model_id=model_id)
+            run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps, model_id=model_id, agent_type=agent_type)
         except Exception as e:
             logger.error("Agent thread error: %s", e)
 

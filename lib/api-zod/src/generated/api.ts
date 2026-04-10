@@ -368,6 +368,10 @@ export const RunAgentBody = zod.object({
     .number()
     .default(runAgentBodyMaxStepsDefault)
     .describe("Maximum number of tool calls"),
+  agentType: zod
+    .enum(["builder", "orchestrator"])
+    .default("builder")
+    .describe("Which agent persona to use — builder (default) or orchestrator (multi-role)"),
 });
 
 export const RunAgentResponse = zod.object({

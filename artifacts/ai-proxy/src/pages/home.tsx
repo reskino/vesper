@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   useListAis, getListAisQueryKey,
   useAskAi, useAskAiWithContext, useSetModel,
@@ -174,6 +174,24 @@ export function Home() {
   const [showMobileAiPicker, setShowMobileAiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Session username lookup ──────────────────────────────────────────────
+  const [usernames, setUsernames] = useState<Record<string, string>>({});
+
+  const verifySession = useCallback(async (aiId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/verify/${aiId}`);
+      const data = await res.json();
+      if (data.success && data.username) {
+        setUsernames(prev => ({ ...prev, [aiId]: data.username }));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const ais = aisData?.ais ?? [];
+    ais.filter((ai: any) => ai.hasSession).forEach((ai: any) => verifySession(ai.id));
+  }, [aisData, verifySession]);
+
   const { data: treeData, isLoading: treeLoading } = useGetFileTree(
     { path: "", depth: 10 },
     { query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen } }
@@ -277,11 +295,16 @@ export function Home() {
                 <div key={ai.id} className="space-y-0.5">
                   <div className={`flex items-center gap-1 rounded-xl transition-all ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}>
                     <button
-                      className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5 text-left"
+                      className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2 text-left"
                       onClick={() => setSelectedAi(ai.id)}
                     >
                       <StatusDot ai={ai} />
-                      <p className={`text-sm font-medium truncate ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate leading-tight ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
+                        {ai.hasSession && usernames[ai.id] && (
+                          <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{usernames[ai.id]}</p>
+                        )}
+                      </div>
                     </button>
                     {ai.models && ai.models.length > 0 && (
                       <button
@@ -374,6 +397,14 @@ export function Home() {
               <h2 className="text-xl font-bold mt-5 mb-1 tracking-tight">Vesper</h2>
               <p className="text-xs text-muted-foreground mb-4 font-medium">by Skinopro Tech Solutions</p>
               <TypewriterText />
+              {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+                <div className="mt-5 flex items-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 text-xs px-4 py-2.5 rounded-xl">
+                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                  {currentAi.name} · signed in as <strong className="font-semibold ml-1">{usernames[currentAi.id]}</strong>
+                </div>
+              )}
               {currentAi && !currentAi.hasSession && (
                 <div className="mt-5 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -551,6 +582,14 @@ export function Home() {
                 No session — messages may fail. Add a session first.
               </p>
             )}
+            {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+              <p className="text-[11px] text-green-500/70 flex items-center gap-1.5">
+                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                {currentAi.name} · {usernames[currentAi.id]}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -578,7 +617,11 @@ export function Home() {
                       <StatusDot ai={ai} />
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium ${isSel ? "text-primary" : ""}`}>{ai.name}</p>
-                        {mdl && <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>}
+                        {ai.hasSession && usernames[ai.id] ? (
+                          <p className="text-xs text-green-400 truncate">{usernames[ai.id]}</p>
+                        ) : mdl ? (
+                          <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>
+                        ) : null}
                       </div>
                       {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
                     </button>

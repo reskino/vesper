@@ -1,0 +1,42 @@
+You are a senior frontend engineer who built the file explorer in VS Code Web and Cursor.
+
+Current Explorer in Vesper:
+- Shows a full workspace tree with many files/folders (e.g., artifacts, lib, python-backend, etc.)
+- Clicking a file opens it in the center editor (single file at a time)
+- No multi-select or easy multi-file opening
+- No color coding by file type
+- No toggle/collapse for the entire explorer
+- Import populates the workspace directly (causing clutter with files the user isn't ready to use)
+
+Improvements needed:
+
+1. **Multi-file support & Tabs**:
+   - Allow Ctrl/Cmd + Click or Shift + Click to select multiple files
+   - Add "Open in new tab" or auto-open selected files as tabs above the editor (like VS Code)
+   - Maintain separate Monaco models for each open tab (preserve undo stack, cursor position, scroll)
+   - Show open tabs as a horizontal scrollable bar with close (×) button, unsaved indicator (*)
+   - Clicking a tab switches the editor model
+
+2. **File type coloring & icons**:
+   - Use different colors and icons for file types:
+     - .py → green (Python)
+     - .js/.ts/.tsx → blue (JavaScript/TypeScript)
+     - .json → yellow/orange
+     - .md → purple
+     - Folders → blue folder icon
+   - Use vscode-codicons or simple emoji/SVG for icons
+
+3. **Toggle for Explorer**:
+   - Add a collapse/expand button (<< >>) or click on "EXPLORER" header to toggle the sidebar width (or hide it completely)
+
+4. **Improved Import Handling**:
+   - After successful folder/file import, show a clear toast notification: "Folder imported successfully (X files loaded)"
+   - Option to "View in Explorer" or "Close import dialog"
+   - Do NOT auto-add everything to the main workspace root. Instead, create a separate "Imported Projects" section or let the user choose a target folder
+   - Add a "Clear Workspace" or "Start Fresh" button
+
+Provide:
+- Complete React + TypeScript code for the enhanced Explorer component (with recursive tree, multi-select, icons, colors)
+- Tab bar component above the Monaco editor
+- Integration with Monaco multi-model system (using path as key)
+- Tailwind classes for modern dark look with hover states and active file highlighting

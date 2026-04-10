@@ -982,9 +982,9 @@ components:
           description: Maximum number of tool calls
         agentType:
           type: string
-          enum: [builder, orchestrator, scholar]
+          enum: [builder, orchestrator, scholar, search_master]
           default: builder
-          description: Which agent persona to use — builder (default), orchestrator (multi-role), or scholar (research)
+          description: Which agent persona to use — builder, orchestrator, scholar, or search_master
         modelId:
           type: string
           nullable: true

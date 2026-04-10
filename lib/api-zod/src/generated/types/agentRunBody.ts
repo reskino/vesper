@@ -15,6 +15,6 @@ export interface AgentRunBody {
   workingDir?: string | null;
   /** Maximum number of tool calls */
   maxSteps?: number;
-  /** Which agent persona to use — builder (default), orchestrator (multi-role), or scholar (research) */
-  agentType?: 'builder' | 'orchestrator' | 'scholar';
+  /** Which agent persona to use — builder, orchestrator, scholar, or search_master */
+  agentType?: 'builder' | 'orchestrator' | 'scholar' | 'search_master';
 }

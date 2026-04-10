@@ -4,10 +4,13 @@
  * Desktop: sidebarPanel, showChat, showTerminal control which panels are visible.
  * Mobile:  mobileTab drives the bottom-nav; showMobileChatSheet pops chat
  *          over the editor as a bottom-sheet overlay.
+ * Folder:  importedProject holds a virtual file tree imported from the user's
+ *          local filesystem (read entirely in-browser, never uploaded).
  */
 import {
   createContext, useContext, useState, useCallback, useRef, type ReactNode,
 } from "react";
+import type { ImportedFileNode } from "@/lib/folder-import";
 
 export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "help" | null;
 export type MobileTab     = "chat" | "editor" | "files" | "history";
@@ -27,10 +30,8 @@ interface IDEContextValue {
   toggleTerminal: () => void;
 
   // ── Mobile navigation ──────────────────────────────────────────────────────
-  /** Active tab on mobile bottom nav */
   mobileTab: MobileTab;
   setMobileTab: (tab: MobileTab) => void;
-  /** Whether the chat bottom-sheet is open over the editor (mobile only) */
   showMobileChatSheet: boolean;
   setShowMobileChatSheet: (v: boolean) => void;
 
@@ -45,27 +46,27 @@ interface IDEContextValue {
   // ── New chat trigger ───────────────────────────────────────────────────────
   newChatKey: number;
   triggerNewChat: () => void;
+
+  // ── Imported local project ─────────────────────────────────────────────────
+  /** Virtual file tree imported from the user's local filesystem */
+  importedProject: ImportedFileNode | null;
+  setImportedProject: (node: ImportedFileNode | null) => void;
 }
 
 const IDEContext = createContext<IDEContextValue | null>(null);
 
 export function IDEProvider({ children }: { children: ReactNode }) {
-  // Desktop panel state
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>("files");
   const [showChat, setShowChat]         = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
 
-  // Mobile nav state (default to Chat on mobile)
   const [mobileTab, setMobileTab]                   = useState<MobileTab>("chat");
   const [showMobileChatSheet, setShowMobileChatSheet] = useState(false);
 
-  // AI selection
-  const [selectedAi, setSelectedAi] = useState("__auto__");
+  const [selectedAi, setSelectedAi]   = useState("__auto__");
+  const [newChatKey, setNewChatKey]   = useState(0);
+  const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
 
-  // New chat key
-  const [newChatKey, setNewChatKey] = useState(0);
-
-  // File opener ref (set by EditorPanel on mount)
   const onOpenFileRef = useRef<((path: string) => void) | null>(null);
 
   const toggleSidebarPanel = useCallback((p: Exclude<SidebarPanel, null>) => {
@@ -76,10 +77,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const toggleTerminal = useCallback(() => setShowTerminal(v => !v), []);
 
   const openFileInEditor = useCallback((path: string) => {
-    // Desktop: open sidebar + trigger editor
     setSidebarPanel("files");
     onOpenFileRef.current?.(path);
-    // Mobile: switch to editor tab
     setMobileTab("editor");
     setShowMobileChatSheet(false);
   }, []);
@@ -96,6 +95,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       selectedAi, setSelectedAi,
       openFileInEditor, onOpenFileRef,
       newChatKey, triggerNewChat,
+      importedProject, setImportedProject,
     }}>
       {children}
     </IDEContext.Provider>

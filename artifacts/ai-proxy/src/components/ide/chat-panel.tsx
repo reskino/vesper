@@ -9,6 +9,11 @@
  *   • 48 px min touch targets, 16 px base font
  *   • iOS safe-area padding
  *
+ * Imported project:
+ *   • If the user has imported a local folder via the Files panel, its contents
+ *     are automatically included in every AI request as rich file context.
+ *   • A dismissible banner in the input bar shows the attached project name.
+ *
  * Props:
  *   newChatKey  — bump to clear the chat
  *   compact     — true inside the mobile bottom-sheet (no outer border)
@@ -26,15 +31,18 @@ import {
   Send, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
   AlertCircle, Upload, Copy, Check, RotateCcw, Sparkles,
+  FolderOpen,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 import { useIDE } from "@/contexts/ide-context";
+import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
 const getFileIcon = (name: string) => {
   if (/\.(js|ts|jsx|tsx)$/.test(name)) return <FileCode className="h-3.5 w-3.5 text-blue-400" />;
   if (/\.json$/.test(name)) return <FileJson className="h-3.5 w-3.5 text-yellow-400" />;
@@ -80,6 +88,7 @@ function MiniFileTreeItem({ node, depth = 0, onSelect }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Typewriter
 // ─────────────────────────────────────────────────────────────────────────────
+
 const PHRASES = [
   "Ask anything, build anything.",
   "Debug your code in seconds.",
@@ -124,20 +133,22 @@ function TypewriterText() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Quick prompts
 // ─────────────────────────────────────────────────────────────────────────────
+
 const QUICK_PROMPTS = [
-  { label: "Explain this code",       icon: "🔍" },
-  { label: "Fix the bug",             icon: "🐛" },
-  { label: "Write unit tests",        icon: "✅" },
-  { label: "Refactor for readability",icon: "✨" },
-  { label: "Create a REST API",       icon: "🚀" },
-  { label: "Optimise performance",    icon: "⚡" },
-  { label: "Add TypeScript types",    icon: "📝" },
-  { label: "Write documentation",     icon: "📖" },
+  { label: "Explain this code",        icon: "🔍" },
+  { label: "Fix the bug",              icon: "🐛" },
+  { label: "Write unit tests",         icon: "✅" },
+  { label: "Refactor for readability", icon: "✨" },
+  { label: "Create a REST API",        icon: "🚀" },
+  { label: "Optimise performance",     icon: "⚡" },
+  { label: "Add TypeScript types",     icon: "📝" },
+  { label: "Write documentation",      icon: "📖" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Message bubble
 // ─────────────────────────────────────────────────────────────────────────────
+
 function MessageBubble({ msg, onExecute }: {
   msg: { role: "user" | "assistant"; content: string; aiId?: string; error?: boolean };
   onExecute?: (result: any) => void;
@@ -162,11 +173,9 @@ function MessageBubble({ msg, onExecute }: {
 
   return (
     <div className="px-4 py-1.5 group">
-      {/* AI label */}
       {msg.aiId && (
         <p className="text-[10px] text-[#3a3a5c] font-mono mb-1 pl-1">{msg.aiId}</p>
       )}
-
       <div className={`text-[15px] md:text-sm leading-relaxed ${msg.error ? "text-red-400" : "text-foreground"}`}>
         {msg.error ? (
           <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
@@ -177,8 +186,6 @@ function MessageBubble({ msg, onExecute }: {
           <MarkdownRenderer content={msg.content} onExecute={onExecute} />
         )}
       </div>
-
-      {/* Copy action */}
       <div className="flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={copy}
@@ -197,6 +204,7 @@ function MessageBubble({ msg, onExecute }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Thinking indicator
 // ─────────────────────────────────────────────────────────────────────────────
+
 function ThinkingDots() {
   return (
     <div className="flex items-center gap-1.5 px-4 py-2" aria-label="AI is thinking">
@@ -214,17 +222,16 @@ function ThinkingDots() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Empty state
 // ─────────────────────────────────────────────────────────────────────────────
+
 function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => void; connectedCount: number }) {
   return (
     <div className="flex flex-col items-center justify-start h-full pt-10 pb-4 gap-5 px-4">
-      {/* Logo glow */}
       <div className="relative flex flex-col items-center gap-3">
         <div className="absolute inset-0 blur-3xl bg-primary/15 rounded-full scale-[2.5] opacity-60" />
         <VesperLogo size={48} />
         <TypewriterText />
       </div>
 
-      {/* Status */}
       {connectedCount > 0 ? (
         <div className="flex items-center gap-2 text-xs text-emerald-400/80 bg-emerald-500/10
           border border-emerald-500/20 rounded-full px-3 py-1.5">
@@ -243,7 +250,7 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
       <div className="w-full">
         <div
           className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
-          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {QUICK_PROMPTS.map(({ label, icon }) => (
             <button
@@ -262,7 +269,6 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
         </div>
       </div>
 
-      {/* Grid of prompt cards on larger screens */}
       <div className="hidden md:grid grid-cols-2 gap-2 w-full max-w-sm">
         {QUICK_PROMPTS.slice(0, 4).map(({ label, icon }) => (
           <button
@@ -282,13 +288,46 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Imported project banner (shown above the input bar)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ImportedProjectBanner({
+  name,
+  fileCount,
+  onDetach,
+}: {
+  name: string;
+  fileCount: number;
+  onDetach: () => void;
+}) {
+  return (
+    <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-primary/5 border-t border-primary/20 text-xs">
+      <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+      <span className="flex-1 truncate text-[#a0a0c0]">
+        <span className="text-primary font-semibold">{name}</span>
+        <span className="ml-1 text-[#52526e]">· {fileCount} files in AI context</span>
+      </span>
+      <button
+        onClick={onDetach}
+        className="text-[#52526e] hover:text-foreground transition-colors p-0.5 rounded"
+        title="Remove project from AI context (keeps files in sidebar)"
+        aria-label="Detach project from AI context"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main chat panel
 // ─────────────────────────────────────────────────────────────────────────────
+
 export function ChatPanel({ newChatKey, compact = false }: {
   newChatKey: number;
   compact?: boolean;
 }) {
-  const { selectedAi } = useIDE();
+  const { selectedAi, importedProject, setImportedProject } = useIDE();
   const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
@@ -307,10 +346,11 @@ export function ChatPanel({ newChatKey, compact = false }: {
   const [uploadedFile, setUploadedFile]           = useState<{ name: string; content: string } | null>(null);
   const [isFilePickerOpen, setIsFilePickerOpen]   = useState(false);
   const [showAttachMenu, setShowAttachMenu]       = useState(false);
+  const [projectDetached, setProjectDetached]     = useState(false);
 
-  const fileInputRef  = useRef<HTMLInputElement>(null);
-  const scrollRef     = useRef<HTMLDivElement>(null);
-  const textareaRef   = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef    = useRef<HTMLDivElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
 
   // Reset on new chat
   useEffect(() => {
@@ -321,6 +361,7 @@ export function ChatPanel({ newChatKey, compact = false }: {
     setAttachedFile(null);
     setUploadedFile(null);
     setPrompt("");
+    setProjectDetached(false);
   }, [newChatKey]);
 
   const { data: treeData } = useGetFileTree(
@@ -332,14 +373,12 @@ export function ChatPanel({ newChatKey, compact = false }: {
     { query: { enabled: !!attachedFile, queryKey: getReadFileQueryKey({ path: attachedFile || "" }) } }
   );
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, executionResult]);
 
-  // Close attach menu on outside click
   useEffect(() => {
     if (!showAttachMenu) return;
     const close = (e: MouseEvent) => {
@@ -354,6 +393,9 @@ export function ChatPanel({ newChatKey, compact = false }: {
   const connectedAis = aisData?.ais?.filter((a: any) => a.hasSession) ?? [];
   const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };
 
+  // Whether the imported project is active in this chat
+  const hasImportedProject = !!importedProject && !projectDetached;
+
   const send = useCallback(async (text: string) => {
     if (!text.trim() || isPending) return;
     setMessages(prev => [...prev, { role: "user", content: text }]);
@@ -361,12 +403,31 @@ export function ChatPanel({ newChatKey, compact = false }: {
       const effectiveAiId = isAuto
         ? (aisData?.ais?.find((a: any) => a.hasSession)?.id ?? "pollinations")
         : selectedAi;
-      const payload = { aiId: effectiveAiId, prompt: text, conversationId: conversationId ?? undefined, fallback: isAuto };
+      const payload = {
+        aiId: effectiveAiId,
+        prompt: text,
+        conversationId: conversationId ?? undefined,
+        fallback: isAuto,
+      };
+
+      // Build file context: workspace attachment + imported project
       const fileContent = uploadedFile?.content ?? attachedFileData?.content;
       const filePath    = uploadedFile?.name ?? attachedFile ?? "file";
-      const result = fileContent
-        ? await askAiWithContext.mutateAsync({ data: { ...payload, files: [{ path: filePath, content: fileContent }] } })
+
+      let files: Array<{ path: string; content: string }> = [];
+      if (fileContent) {
+        files.push({ path: filePath, content: fileContent });
+      }
+      if (hasImportedProject && importedProject) {
+        // Build rich context from the imported project and inject it as a special file
+        const projectCtx = buildProjectContext(importedProject);
+        files.push({ path: "__imported_project_context__", content: projectCtx });
+      }
+
+      const result = files.length > 0
+        ? await askAiWithContext.mutateAsync({ data: { ...payload, files } })
         : await askAi.mutateAsync({ data: payload });
+
       if (result.success) {
         setConversationId(result.conversationId);
         setMessages(prev => [...prev, { role: "assistant", content: result.response, aiId: result.aiId }]);
@@ -376,9 +437,9 @@ export function ChatPanel({ newChatKey, compact = false }: {
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
-  }, [isPending, isAuto, selectedAi, aisData, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext]);
+  }, [isPending, isAuto, selectedAi, aisData, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
 
-  const handleSend = () => { send(prompt); setPrompt(""); clearAttachment(); };
+  const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -402,15 +463,22 @@ export function ChatPanel({ newChatKey, compact = false }: {
   };
 
   const attachment = uploadedFile?.name ?? attachedFile;
+  const projectFileCount = importedProject ? countProjectFiles(importedProject) : 0;
 
   return (
     <div className={`flex flex-col h-full bg-[#0d0d12] ${!compact ? "border-l border-[#1a1a24]" : ""}`}>
 
-      {/* ── Desktop header (hidden on mobile — top bar handles controls) ── */}
+      {/* ── Desktop header ─────────────────────────────────────────────── */}
       <div className="hidden md:flex shrink-0 items-center justify-between px-3 h-9 border-b border-[#1a1a24] bg-[#0a0a0c]">
         <div className="flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-bold text-[#52526e] uppercase tracking-wider">Chat</span>
+          {hasImportedProject && (
+            <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded font-bold">
+              <FolderOpen className="h-2.5 w-2.5" />
+              {importedProject!.name}
+            </span>
+          )}
           {isAuto && connectedAis.length > 0 && (
             <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
               {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""}
@@ -435,7 +503,6 @@ export function ChatPanel({ newChatKey, compact = false }: {
           <EmptyState onPrompt={text => { send(text); }} connectedCount={connectedAis.length} />
         ) : (
           <div className="py-3 space-y-0.5">
-            {/* Mobile regen button at top of conversation */}
             {messages.length > 0 && (
               <div className="flex justify-end px-4 pb-2 md:hidden">
                 <button
@@ -449,7 +516,6 @@ export function ChatPanel({ newChatKey, compact = false }: {
                 </button>
               </div>
             )}
-
             {messages.map((msg, i) => (
               <MessageBubble key={i} msg={msg} onExecute={setExecutionResult} />
             ))}
@@ -459,14 +525,21 @@ export function ChatPanel({ newChatKey, compact = false }: {
               </div>
             )}
             {isPending && <ThinkingDots />}
-
-            {/* Bottom padding so content clears the fixed input bar on mobile */}
             <div className="h-2" />
           </div>
         )}
       </div>
 
-      {/* ── Attachment preview ─────────────────────────────────────────── */}
+      {/* ── Imported project banner ────────────────────────────────────── */}
+      {hasImportedProject && (
+        <ImportedProjectBanner
+          name={importedProject!.name}
+          fileCount={projectFileCount}
+          onDetach={() => setProjectDetached(true)}
+        />
+      )}
+
+      {/* ── Workspace file attachment preview ─────────────────────────── */}
       {attachment && (
         <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-[#141420] border-t border-[#1a1a24] text-sm">
           <span className="text-primary shrink-0">📎</span>
@@ -517,7 +590,13 @@ export function ChatPanel({ newChatKey, compact = false }: {
             }}
             onKeyDown={handleKeyDown}
             rows={1}
-            placeholder={isPending ? "Waiting for response…" : "Ask anything… (Enter to send)"}
+            placeholder={
+              isPending
+                ? "Waiting for response…"
+                : hasImportedProject
+                  ? `Ask about ${importedProject!.name}…`
+                  : "Ask anything… (Enter to send)"
+            }
             disabled={isPending}
             aria-label="Chat input"
             className="flex-1 bg-transparent resize-none outline-none text-[16px] md:text-sm
@@ -582,7 +661,6 @@ export function ChatPanel({ newChatKey, compact = false }: {
           </div>
         </div>
 
-        {/* Hint text */}
         <p className="mt-1.5 text-center text-[11px] text-[#3a3a5c] hidden md:block">
           Shift+Enter for new line · Enter to send
         </p>

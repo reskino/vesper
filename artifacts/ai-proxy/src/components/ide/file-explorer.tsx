@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useIDE } from "@/contexts/ide-context";
 import { ImportExportModal } from "@/components/import-export-modal";
+import { ImportedTree, FolderImportButton } from "@/components/ide/imported-tree";
 
 // ── File-type icon ─────────────────────────────────────────────────────────────
 function FileIcon2({ name }: { name: string }) {
@@ -234,8 +235,9 @@ interface NewItemState { type: "file" | "folder"; parentPath: string; }
 
 // ── Main FileExplorer ─────────────────────────────────────────────────────────
 export function FileExplorer({ activePath }: { activePath: string | null }) {
-  const { openFileInEditor } = useIDE();
+  const { openFileInEditor, importedProject } = useIDE();
   const { toast } = useToast();
+  const [showImported, setShowImported] = useState(true);
   const queryClient = useQueryClient();
 
   const [showImportExport, setShowImportExport] = useState(false);
@@ -327,7 +329,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             { icon: FilePlus,    title: "New file",          onClick: () => { setNewItem({ type: "file",   parentPath: "" }); setNewItemName(""); } },
             { icon: FolderPlus, title: "New folder",         onClick: () => { setNewItem({ type: "folder", parentPath: "" }); setNewItemName(""); } },
             { icon: RefreshCw,  title: "Refresh",            onClick: () => refetch() },
-            { icon: Upload,     title: "Import files",       onClick: () => setShowImportExport(true) },
+            { icon: Upload,     title: "Import files (zip/GitHub)", onClick: () => setShowImportExport(true) },
             { icon: Download,   title: "Export workspace",   onClick: exportWorkspace },
           ].map(({ icon: Icon, title, onClick }) => (
             <button
@@ -339,6 +341,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
               <Icon className="h-3 w-3" />
             </button>
           ))}
+          <FolderImportButton />
         </div>
       </div>
 
@@ -378,8 +381,8 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
         </div>
       )}
 
-      {/* File tree */}
-      <ScrollArea className="flex-1">
+      {/* Workspace file tree */}
+      <ScrollArea className={importedProject ? "h-[40%]" : "flex-1"}>
         <div className="p-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-[#52526e]">
@@ -404,6 +407,34 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
           )}
         </div>
       </ScrollArea>
+
+      {/* Imported project section */}
+      {importedProject && (
+        <div className="flex-1 flex flex-col min-h-0 border-t border-[#1a1a24]">
+          <button
+            className="shrink-0 flex items-center justify-between px-3 py-1.5 hover:bg-[#141420] transition-colors"
+            onClick={() => setShowImported(v => !v)}
+          >
+            <div className="flex items-center gap-1.5">
+              {showImported
+                ? <ChevronDown className="h-3 w-3 text-[#52526e]" />
+                : <ChevronRight className="h-3 w-3 text-[#52526e]" />}
+              <FolderOpen className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                {importedProject.name}
+              </span>
+            </div>
+            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 font-bold">
+              AI context
+            </span>
+          </button>
+          {showImported && (
+            <div className="flex-1 min-h-0">
+              <ImportedTree />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Import/Export modal */}
       {showImportExport && (

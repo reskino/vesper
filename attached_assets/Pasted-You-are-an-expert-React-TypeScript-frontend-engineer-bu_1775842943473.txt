@@ -1,0 +1,33 @@
+You are an expert React + TypeScript frontend engineer building an AI coding IDE like Cursor or Continue.dev.
+
+Add full folder import support to Vesper.
+
+Current features: Chat interface, model selector, quick prompts, mobile-optimized layout with bottom input.
+
+New requirement: Users must be able to import an entire project folder (with subfolders) so the AI can see the full project structure and all files for context-aware coding.
+
+Implement TWO options:
+
+Option A (Simple & Broad Support):
+- Add a button "Import Folder" (or attach icon with tooltip "Import files or folder")
+- Use hidden <input type="file" multiple webkitdirectory directory mozdirectory /> 
+- On change, recursively read the folder structure and all file contents
+- Build a virtual file tree (array of objects with path, name, content, isFolder, etc.)
+- Display the imported project in the left sidebar as a collapsible file tree (use recursion)
+- Send the full structure + file contents to the AI context when chatting or using the agent
+
+Option B (Modern - File System Access API):
+- Add "Open Project Folder" button that calls window.showDirectoryPicker()
+- Recursively traverse the directory handle
+- Build the same virtual file tree
+- Provide fallback to Option A if the API is not supported
+
+Deliver:
+- Complete React + TypeScript code for the import handler
+- Recursive function to read folder (for webkitdirectory: use webkitRelativePath)
+- Data structure for the project tree (e.g. type FileNode = { name: string; path: string; content?: string; isFolder: boolean; children?: FileNode[] })
+- Sidebar component to display the tree (collapsible folders)
+- How to include the tree in chat context (e.g. summarize large projects or send relevant files)
+- Mobile-friendly version: Show import button in bottom nav or as FAB; display tree in a bottom sheet or full-screen modal on mobile
+
+Make sure it works well on mobile (large touch targets, no horizontal scroll). Handle large folders gracefully (show progress, limit or summarize very large files).

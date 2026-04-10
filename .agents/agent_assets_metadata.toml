@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "c5Cbd3FIxqtXmbVgx7U5k"
+uri = "file://MIGRATION_GUIDE.md"
+type = "text"
+title = "Vesper — Production Migration Guide (Vercel + Supabase)"

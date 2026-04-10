@@ -19,13 +19,14 @@ AI_CONFIGS = {
         "icon": "pollinations",
         "auth_mode": "none",
         "models": [
+            {"id": "__auto__",          "name": "Auto — Best Available",         "tier": "free"},
             {"id": "openai",            "name": "GPT-4o (via Pollinations)",     "tier": "free"},
             {"id": "openai-large",      "name": "GPT-4.1 (via Pollinations)",    "tier": "free"},
             {"id": "mistral",           "name": "Mistral (via Pollinations)",    "tier": "free"},
             {"id": "claude-sonnet-3-7", "name": "Claude 3.7 (via Pollinations)", "tier": "free"},
             {"id": "deepseek",          "name": "DeepSeek (via Pollinations)",   "tier": "free"},
         ],
-        "defaultModel": "openai",
+        "defaultModel": "__auto__",
         "freeModel":    "openai",
     },
 
@@ -43,13 +44,14 @@ AI_CONFIGS = {
         "key_url_label": "Get free Groq API key (no credit card)",
         "key_note": "Free tier: ~1,000 requests/day. No credit card required.",
         "models": [
+            {"id": "__auto__",                       "name": "Auto — Best Available",  "tier": "free"},
             {"id": "llama-3.3-70b-versatile",        "name": "Llama 3.3 70B",         "tier": "free"},
             {"id": "llama-3.1-8b-instant",           "name": "Llama 3.1 8B",          "tier": "free"},
             {"id": "gemma2-9b-it",                   "name": "Gemma 2 9B",            "tier": "free"},
             {"id": "llama-3.2-90b-vision-preview",   "name": "Llama 3.2 90B Vision",  "tier": "free"},
             {"id": "llama-3.2-11b-vision-preview",   "name": "Llama 3.2 11B Vision",  "tier": "free"},
         ],
-        "defaultModel": "llama-3.3-70b-versatile",
+        "defaultModel": "__auto__",
         "freeModel":    "llama-3.3-70b-versatile",
     },
     "gemini": {
@@ -65,6 +67,7 @@ AI_CONFIGS = {
         "key_url_label": "Get free Gemini API key",
         "key_note": "Free tier: 1,500 req/day on Flash, 50 req/day on Pro. No credit card.",
         "models": [
+            {"id": "__auto__",                       "name": "Auto — Best Available",  "tier": "free"},
             {"id": "gemini-2.5-flash-preview-05-20", "name": "Gemini 2.5 Flash",      "tier": "free"},
             {"id": "gemini-2.0-flash",               "name": "Gemini 2.0 Flash",      "tier": "free"},
             {"id": "gemini-2.0-flash-lite",          "name": "Gemini 2.0 Flash Lite", "tier": "free"},
@@ -73,8 +76,8 @@ AI_CONFIGS = {
             {"id": "gemini-1.5-pro",                 "name": "Gemini 1.5 Pro",        "tier": "free"},
             {"id": "gemini-2.5-pro-preview-06-05",   "name": "Gemini 2.5 Pro",        "tier": "plus"},
         ],
-        "defaultModel": "gemini-2.0-flash",
-        "freeModel":    "gemini-2.0-flash",
+        "defaultModel": "__auto__",
+        "freeModel":    "gemini-2.5-flash-preview-05-20",
     },
     "openrouter": {
         "id": "openrouter",
@@ -89,6 +92,7 @@ AI_CONFIGS = {
         "key_url_label": "Get OpenRouter API key (free credits on signup)",
         "key_note": "Many models are completely free with :free tag. Free credits on signup.",
         "models": [
+            {"id": "__auto__",                                    "name": "Auto — Best Available",         "tier": "free"},
             {"id": "openrouter/free",                             "name": "Auto — Best Free Available",    "tier": "free"},
             {"id": "meta-llama/llama-3.3-70b-instruct:free",     "name": "Llama 3.3 70B",                 "tier": "free"},
             {"id": "openai/gpt-oss-120b:free",                   "name": "OpenAI GPT OSS 120B",           "tier": "free"},
@@ -102,7 +106,7 @@ AI_CONFIGS = {
             {"id": "anthropic/claude-3.5-haiku",                 "name": "Claude 3.5 Haiku",              "tier": "plus"},
             {"id": "openai/gpt-4o-mini",                         "name": "GPT-4o Mini",                   "tier": "plus"},
         ],
-        "defaultModel": "openrouter/free",
+        "defaultModel": "__auto__",
         "freeModel":    "openrouter/free",
     },
     "mistral": {
@@ -118,11 +122,12 @@ AI_CONFIGS = {
         "key_url_label": "Get Mistral API key (free tier available)",
         "key_note": "Free tier available with rate limits. No credit card required initially.",
         "models": [
-            {"id": "mistral-small-latest",   "name": "Mistral Small 3.1", "tier": "free"},
-            {"id": "mistral-large-latest",   "name": "Mistral Large 2",   "tier": "plus"},
-            {"id": "codestral-latest",       "name": "Codestral",         "tier": "plus"},
+            {"id": "__auto__",               "name": "Auto — Best Available", "tier": "free"},
+            {"id": "mistral-small-latest",   "name": "Mistral Small 3.1",     "tier": "free"},
+            {"id": "mistral-large-latest",   "name": "Mistral Large 2",       "tier": "plus"},
+            {"id": "codestral-latest",       "name": "Codestral",             "tier": "plus"},
         ],
-        "defaultModel": "mistral-small-latest",
+        "defaultModel": "__auto__",
         "freeModel":    "mistral-small-latest",
     },
     "cohere": {
@@ -138,11 +143,12 @@ AI_CONFIGS = {
         "key_url_label": "Get free Cohere API key (trial key, no credit card)",
         "key_note": "Trial API keys are free and have generous rate limits for testing.",
         "models": [
-            {"id": "command-r",       "name": "Command R",       "tier": "free"},
-            {"id": "command-r-plus",  "name": "Command R+",      "tier": "free"},
-            {"id": "command-a-03-2025","name": "Command A",       "tier": "plus"},
+            {"id": "__auto__",         "name": "Auto — Best Available", "tier": "free"},
+            {"id": "command-r",        "name": "Command R",             "tier": "free"},
+            {"id": "command-r-plus",   "name": "Command R+",            "tier": "free"},
+            {"id": "command-a-03-2025","name": "Command A",             "tier": "plus"},
         ],
-        "defaultModel": "command-r",
+        "defaultModel": "__auto__",
         "freeModel":    "command-r",
     },
     "together": {
@@ -158,13 +164,14 @@ AI_CONFIGS = {
         "key_url_label": "Get Together AI API key ($5 free credit on signup)",
         "key_note": "$5 free credit on signup. Runs top open-source models.",
         "models": [
-            {"id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",   "name": "Llama 3.3 70B",          "tier": "free"},
+            {"id": "__auto__",                                    "name": "Auto — Best Available",  "tier": "free"},
+            {"id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",    "name": "Llama 3.3 70B",          "tier": "free"},
             {"id": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo","name": "Llama 3.1 8B Turbo",     "tier": "free"},
-            {"id": "mistralai/Mixtral-8x7B-Instruct-v0.1",       "name": "Mixtral 8×7B",           "tier": "free"},
-            {"id": "Qwen/Qwen2.5-72B-Instruct-Turbo",            "name": "Qwen 2.5 72B",           "tier": "free"},
-            {"id": "deepseek-ai/DeepSeek-R1",                     "name": "DeepSeek R1",            "tier": "plus"},
+            {"id": "mistralai/Mixtral-8x7B-Instruct-v0.1",        "name": "Mixtral 8×7B",           "tier": "free"},
+            {"id": "Qwen/Qwen2.5-72B-Instruct-Turbo",             "name": "Qwen 2.5 72B",           "tier": "free"},
+            {"id": "deepseek-ai/DeepSeek-R1",                      "name": "DeepSeek R1",            "tier": "plus"},
         ],
-        "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "defaultModel": "__auto__",
         "freeModel":    "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     },
     "cerebras": {
@@ -180,11 +187,12 @@ AI_CONFIGS = {
         "key_url_label": "Get free Cerebras API key (fastest inference)",
         "key_note": "Free tier with rate limits. Ultra-fast inference on custom AI chips.",
         "models": [
-            {"id": "llama-3.3-70b",  "name": "Llama 3.3 70B",  "tier": "free"},
-            {"id": "llama3.1-8b",    "name": "Llama 3.1 8B",   "tier": "free"},
-            {"id": "qwen-3-32b",     "name": "Qwen 3 32B",     "tier": "free"},
+            {"id": "__auto__",       "name": "Auto — Best Available", "tier": "free"},
+            {"id": "llama-3.3-70b",  "name": "Llama 3.3 70B",         "tier": "free"},
+            {"id": "llama3.1-8b",    "name": "Llama 3.1 8B",          "tier": "free"},
+            {"id": "qwen-3-32b",     "name": "Qwen 3 32B",            "tier": "free"},
         ],
-        "defaultModel": "llama-3.3-70b",
+        "defaultModel": "__auto__",
         "freeModel":    "llama-3.3-70b",
     },
     "deepseek": {
@@ -200,10 +208,11 @@ AI_CONFIGS = {
         "key_url_label": "Get DeepSeek API key (very low cost, ~$0.14/1M tokens)",
         "key_note": "Extremely affordable. DeepSeek R1 rivals o1 at a fraction of the cost.",
         "models": [
-            {"id": "deepseek-chat",    "name": "DeepSeek V3",    "tier": "free"},
-            {"id": "deepseek-reasoner","name": "DeepSeek R1",    "tier": "free"},
+            {"id": "__auto__",         "name": "Auto — Best Available", "tier": "free"},
+            {"id": "deepseek-chat",    "name": "DeepSeek V3",           "tier": "free"},
+            {"id": "deepseek-reasoner","name": "DeepSeek R1",           "tier": "free"},
         ],
-        "defaultModel": "deepseek-chat",
+        "defaultModel": "__auto__",
         "freeModel":    "deepseek-chat",
     },
 
@@ -221,14 +230,15 @@ AI_CONFIGS = {
         "key_url_label": "Get OpenAI API key",
         "key_note": "API key bypasses Cloudflare and gives direct access. Cookies are unreliable from cloud servers.",
         "models": [
-            {"id": "gpt-4o-mini", "name": "GPT-4o Mini",  "tier": "free"},
-            {"id": "gpt-4o",      "name": "GPT-4o",        "tier": "plus"},
-            {"id": "gpt-4",       "name": "GPT-4",         "tier": "plus"},
-            {"id": "o1",          "name": "o1",             "tier": "plus"},
-            {"id": "o3-mini",     "name": "o3-mini",        "tier": "plus"},
-            {"id": "o3",          "name": "o3",             "tier": "pro"},
+            {"id": "__auto__",    "name": "Auto — Best Available", "tier": "free"},
+            {"id": "gpt-4o-mini", "name": "GPT-4o Mini",           "tier": "free"},
+            {"id": "gpt-4o",      "name": "GPT-4o",                "tier": "plus"},
+            {"id": "gpt-4",       "name": "GPT-4",                 "tier": "plus"},
+            {"id": "o1",          "name": "o1",                    "tier": "plus"},
+            {"id": "o3-mini",     "name": "o3-mini",               "tier": "plus"},
+            {"id": "o3",          "name": "o3",                    "tier": "pro"},
         ],
-        "defaultModel": "gpt-4o-mini",
+        "defaultModel": "__auto__",
         "freeModel":    "gpt-4o-mini",
     },
     "grok": {
@@ -239,11 +249,12 @@ AI_CONFIGS = {
         "icon": "xai",
         "auth_mode": "cookies",
         "models": [
-            {"id": "grok-3-mini", "name": "Grok 3 Mini", "tier": "free"},
-            {"id": "grok-2",      "name": "Grok 2",       "tier": "free"},
-            {"id": "grok-3",      "name": "Grok 3",       "tier": "plus"},
+            {"id": "__auto__",    "name": "Auto — Best Available", "tier": "free"},
+            {"id": "grok-3-mini", "name": "Grok 3 Mini",           "tier": "free"},
+            {"id": "grok-2",      "name": "Grok 2",                "tier": "free"},
+            {"id": "grok-3",      "name": "Grok 3",                "tier": "plus"},
         ],
-        "defaultModel": "grok-3-mini",
+        "defaultModel": "__auto__",
         "freeModel":    "grok-3-mini",
     },
     "claude": {
@@ -259,13 +270,14 @@ AI_CONFIGS = {
         "key_url_label": "Get Anthropic API key",
         "key_note": "API key bypasses Cloudflare protection. Cookies are unreliable from cloud servers.",
         "models": [
-            {"id": "claude-3-5-haiku-20241022",  "name": "Claude 3.5 Haiku",  "tier": "free"},
-            {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "tier": "plus"},
-            {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "tier": "plus"},
-            {"id": "claude-sonnet-4-5",          "name": "Claude Sonnet 4.5", "tier": "plus"},
-            {"id": "claude-opus-4-5",            "name": "Claude Opus 4.5",   "tier": "pro"},
+            {"id": "__auto__",                   "name": "Auto — Best Available", "tier": "free"},
+            {"id": "claude-3-5-haiku-20241022",  "name": "Claude 3.5 Haiku",     "tier": "free"},
+            {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet",    "tier": "plus"},
+            {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet",    "tier": "plus"},
+            {"id": "claude-sonnet-4-5",          "name": "Claude Sonnet 4.5",    "tier": "plus"},
+            {"id": "claude-opus-4-5",            "name": "Claude Opus 4.5",      "tier": "pro"},
         ],
-        "defaultModel": "claude-3-5-haiku-20241022",
+        "defaultModel": "__auto__",
         "freeModel":    "claude-3-5-haiku-20241022",
     },
 }
@@ -283,16 +295,27 @@ MAX_RESPONSE_WAIT = 180000
 _active_models: dict = {}
 
 
+AUTO_MODEL_ID = "__auto__"
+
+
 def get_active_model(ai_id: str) -> str:
     if ai_id in _active_models:
         return _active_models[ai_id]
     config = AI_CONFIGS.get(ai_id, {})
-    return config.get("defaultModel", "")
+    return config.get("defaultModel", AUTO_MODEL_ID)
 
 
 def get_free_model(ai_id: str) -> str:
     config = AI_CONFIGS.get(ai_id, {})
-    return config.get("freeModel", get_active_model(ai_id))
+    return config.get("freeModel", "")
+
+
+def resolve_model(ai_id: str, model_id: str) -> str:
+    """Resolve __auto__ to the provider's best real model ID."""
+    if model_id != AUTO_MODEL_ID:
+        return model_id
+    config = AI_CONFIGS.get(ai_id, {})
+    return config.get("freeModel", "") or config.get("defaultModel", "")
 
 
 def set_active_model(ai_id: str, model_id: str) -> bool:

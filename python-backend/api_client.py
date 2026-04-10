@@ -16,7 +16,7 @@ import logging
 import time
 from typing import Tuple
 
-from config import AI_CONFIGS, SESSIONS_DIR, get_active_model
+from config import AI_CONFIGS, SESSIONS_DIR, get_active_model, resolve_model
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
     if not api_key:
         return False, "", f"No API key configured for {ai_id}. Please add one on the API Keys page."
 
-    model = get_active_model(ai_id)
+    model = resolve_model(ai_id, get_active_model(ai_id))
     api_type = config.get("api_type", "openai")
     api_base = config.get("api_base", "https://api.openai.com/v1")
 

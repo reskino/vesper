@@ -30,7 +30,7 @@ def _fix_ld_library_path():
 
 _fix_ld_library_path()
 
-from config import AI_CONFIGS, SESSIONS_DIR, get_active_model
+from config import AI_CONFIGS, SESSIONS_DIR, get_active_model, resolve_model
 from web_session_client import send_prompt_via_session
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
             "Please log in on the Sessions page first."
         )
 
-    model = get_active_model(ai_id)
+    model = resolve_model(ai_id, get_active_model(ai_id))
     logger.info("Sending prompt to %s (model=%s, %d chars)", ai_id, model, len(prompt))
 
     # Pollinations — no auth needed, send directly

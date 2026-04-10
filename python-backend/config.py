@@ -30,8 +30,8 @@ AI_CONFIGS = {
     "grok": {
         "id": "grok",
         "name": "Grok",
-        "url": "https://grok.x.ai",
-        "login_url": "https://grok.x.ai",
+        "url": "https://grok.com",
+        "login_url": "https://grok.com",
         "icon": "xai",
         "models": [
             {"id": "grok-3-mini", "name": "Grok 3 Mini", "tier": "free"},

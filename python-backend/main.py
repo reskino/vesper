@@ -490,6 +490,41 @@ def import_session():
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
+@app.route("/api/sessions/import-key", methods=["POST"])
+def import_api_key():
+    """Store an API key for ChatGPT (OpenAI) or Claude (Anthropic)."""
+    from config import SESSIONS_DIR
+    data = request.get_json()
+    ai_id  = data.get("aiId")
+    api_key = (data.get("apiKey") or "").strip()
+
+    if not ai_id or not api_key:
+        return jsonify({"success": False, "message": "aiId and apiKey are required"}), 400
+    if ai_id not in AI_CONFIGS:
+        return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
+    if ai_id not in ("chatgpt", "claude"):
+        return jsonify({"success": False, "message": "API key mode is only supported for ChatGPT and Claude"}), 400
+
+    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
+    try:
+        with open(key_path, "w") as f:
+            f.write(api_key)
+        return jsonify({"success": True, "message": f"API key saved for {AI_CONFIGS[ai_id]['name']}.", "aiId": ai_id})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+def get_api_key(ai_id: str) -> str:
+    """Return the stored API key for an AI, or '' if none."""
+    from config import SESSIONS_DIR
+    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
+    try:
+        with open(key_path) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
+
+
 @app.route("/api/sessions/verify/<ai_id>", methods=["GET"])
 def verify_session(ai_id):
     """Verify saved cookies are valid and return the logged-in username."""
@@ -497,6 +532,39 @@ def verify_session(ai_id):
         return jsonify({"success": False, "error": f"Unknown AI: {ai_id}"}), 400
 
     from playwright_utils import session_exists, get_session_path
+
+    # Check API key first for ChatGPT / Claude
+    if ai_id in ("chatgpt", "claude"):
+        api_key = get_api_key(ai_id)
+        if api_key:
+            # Verify API key is functional
+            try:
+                if ai_id == "chatgpt":
+                    import urllib.request, urllib.error as _ue
+                    req = urllib.request.Request(
+                        "https://api.openai.com/v1/models",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                    return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
+                elif ai_id == "claude":
+                    import urllib.request, urllib.error as _ue
+                    body = _json.dumps({"model": "claude-3-5-haiku-20241022", "max_tokens": 1,
+                                        "messages": [{"role": "user", "content": "hi"}]}).encode()
+                    req = urllib.request.Request(
+                        "https://api.anthropic.com/v1/messages",
+                        data=body,
+                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                                 "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                    return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
+            except Exception as exc:
+                return jsonify({"success": False, "error": f"API key invalid: {exc}"})
+
     if not session_exists(ai_id):
         return jsonify({"success": False, "error": "No session file found"})
 
@@ -511,16 +579,39 @@ def verify_session(ai_id):
         sess = _impersonate_session(cookies)
 
         if ai_id == "chatgpt":
-            resp = sess.get("https://chatgpt.com/api/auth/session", timeout=15)
-            if resp.status_code == 200:
-                d = resp.json()
-                user = d.get("user") or {}
-                name = user.get("name") or user.get("email") or "Connected"
-                email = user.get("email", "")
-                if d.get("accessToken"):
-                    return jsonify({"success": True, "username": name, "email": email})
+            # Use backend-anon sentinel instead of /api/auth/session (Cloudflare blocks the latter)
+            device_id = str(uuid.uuid4())
+            sess.headers.update({
+                "oai-device-id": device_id,
+                "Origin": "https://chatgpt.com",
+                "Referer": "https://chatgpt.com/",
+                "sec-fetch-site": "same-origin",
+            })
+            req_resp = sess.post(
+                "https://chatgpt.com/backend-anon/sentinel/chat-requirements",
+                json={}, timeout=15,
+            )
+            if req_resp.status_code == 200:
+                # Cookies are valid enough to reach the sentinel endpoint
+                # Try to get a display name from /api/me or user-profile endpoints
+                name = "Connected"
+                for profile_url in [
+                    "https://chatgpt.com/backend-api/me",
+                    "https://chatgpt.com/backend-anon/me",
+                ]:
+                    try:
+                        me = sess.get(profile_url, timeout=10)
+                        if me.status_code == 200:
+                            d = me.json()
+                            n = d.get("name") or d.get("email") or d.get("username")
+                            if n:
+                                name = n
+                                break
+                    except Exception:
+                        continue
+                return jsonify({"success": True, "username": name})
             return jsonify({"success": False,
-                            "error": f"Session invalid ({resp.status_code}) — please re-import cookies"})
+                            "error": f"ChatGPT session invalid ({req_resp.status_code}) — please re-import cookies"})
 
         elif ai_id == "claude":
             resp = sess.get("https://claude.ai/api/organizations", timeout=15)
@@ -538,29 +629,49 @@ def verify_session(ai_id):
                             "error": f"Session invalid ({resp.status_code}) — please re-import cookies"})
 
         elif ai_id == "grok":
-            # Try to get X/Twitter username via Grok's whoami or X GraphQL
+            # Grok moved from grok.x.ai → grok.com in 2025
+            sess.headers.update({
+                "Origin": "https://grok.com",
+                "Referer": "https://grok.com/",
+            })
             for url in [
-                "https://grok.x.ai/api/me",
-                "https://x.com/i/api/graphql/G3KGOASz96M-Ku0e6ch2pw/Viewer",
+                "https://grok.com/api/me",
+                "https://grok.com/api/user",
+                "https://grok.com/rest/app-chat/me",
             ]:
                 try:
                     resp = sess.get(url, timeout=10)
+                    logger.debug("Grok verify %s → %s", url, resp.status_code)
                     if resp.status_code == 200:
                         d = resp.json()
-                        screen_name = (
-                            d.get("screen_name")
-                            or d.get("username")
-                            or (d.get("data", {}).get("viewer", {})
-                                  .get("user_results", {}).get("result", {})
-                                  .get("legacy", {}).get("screen_name"))
+                        name = (
+                            d.get("name") or d.get("username") or
+                            d.get("screen_name") or d.get("email")
                         )
-                        if screen_name:
-                            return jsonify({"success": True, "username": f"@{screen_name}"})
+                        if name:
+                            return jsonify({"success": True, "username": name})
                 except Exception:
                     continue
-            # Fallback — at least confirm cookies exist
+            # Fall back to x.com GraphQL viewer
+            csrf = cookies.get("ct0", "")
+            try:
+                resp = sess.get(
+                    "https://x.com/i/api/graphql/G3KGOASz96M-Ku0e6ch2pw/Viewer",
+                    headers={"x-csrf-token": csrf} if csrf else {},
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    d = resp.json()
+                    sn = (d.get("data", {}).get("viewer", {})
+                          .get("user_results", {}).get("result", {})
+                          .get("legacy", {}).get("screen_name"))
+                    if sn:
+                        return jsonify({"success": True, "username": f"@{sn}"})
+            except Exception:
+                pass
+            # Cookies exist — call it connected even if we can't get the name
             return jsonify({"success": True, "username": "Connected",
-                            "warning": "Could not fetch X username"})
+                            "warning": "Could not fetch Grok username"})
 
         return jsonify({"success": False, "error": f"No verifier for {ai_id}"})
 

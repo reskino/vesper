@@ -9,12 +9,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ShieldCheck, ShieldAlert, Trash2, Loader2,
   RefreshCw, X, ExternalLink,
-  CheckCircle2, LogIn, RotateCcw, Cookie, UserCircle2,
+  CheckCircle2, LogIn, RotateCcw, Cookie, UserCircle2, Key,
+  AlertTriangle,
 } from "lucide-react";
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const CLOUDFLARE_BLOCKED = new Set(["chatgpt", "claude"]);
+
+const API_KEY_LINKS: Record<string, { label: string; url: string }> = {
+  chatgpt: { label: "Get OpenAI API key", url: "https://platform.openai.com/api-keys" },
+  claude:  { label: "Get Anthropic API key", url: "https://console.anthropic.com/settings/keys" },
+};
+
 // ─── Login Guide Dialog ──────────────────────────────────────────────────────
-// Guides the user to export cookies from their own browser using Cookie Editor
-// and paste them here. No headless browser or screenshot proxy needed.
 
 interface LoginGuideProps {
   ai: { id: string; name: string; url: string };
@@ -22,7 +30,166 @@ interface LoginGuideProps {
   onSuccess: () => void;
 }
 
+type Mode = "api_key" | "cookies";
+
 function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
+  const { toast } = useToast();
+  const isCloudflareBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
+  const [mode, setMode] = useState<Mode>(isCloudflareBlocked ? "api_key" : "cookies");
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div className="flex items-center gap-2">
+            <span className="text-white font-semibold">Connect {ai.name}</span>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Mode tabs — only shown for ChatGPT / Claude */}
+        {isCloudflareBlocked && (
+          <div className="flex gap-1 px-5 pt-4">
+            <button
+              onClick={() => setMode("api_key")}
+              className={`flex items-center gap-1.5 flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mode === "api_key"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              <Key size={13} className="mx-auto" />
+              <span>API Key</span>
+              <span className="text-[10px] ml-1 opacity-70">(recommended)</span>
+            </button>
+            <button
+              onClick={() => setMode("cookies")}
+              className={`flex items-center gap-1.5 flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                mode === "cookies"
+                  ? "bg-gray-700 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              <Cookie size={13} className="mx-auto" />
+              <span>Browser Cookies</span>
+            </button>
+          </div>
+        )}
+
+        <div className="px-5 py-4 flex-1">
+          {mode === "api_key" ? (
+            <ApiKeyForm ai={ai} onClose={onClose} onSuccess={onSuccess} />
+          ) : (
+            <CookieForm ai={ai} onClose={onClose} onSuccess={onSuccess} cloudflareBlocked={isCloudflareBlocked} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── API Key Form ─────────────────────────────────────────────────────────────
+
+function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
+  const { toast } = useToast();
+  const [apiKey, setApiKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const link = API_KEY_LINKS[ai.id];
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sessions/import-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiId: ai.id, apiKey: apiKey.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "API key saved!", description: data.message });
+        onSuccess();
+        onClose();
+      } else {
+        setError(data.message ?? "Failed to save API key");
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-500/8 border border-blue-500/20 rounded-xl p-3 text-xs text-blue-200/80 space-y-1">
+        <p className="font-medium text-blue-300">Why API key?</p>
+        <p>
+          {ai.name} protects its web interface with Cloudflare, which blocks cloud server IPs regardless
+          of cookies. An official API key bypasses this and connects directly.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-300">
+          {ai.id === "chatgpt" ? "OpenAI API Key" : "Anthropic API Key"}
+        </label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={e => { setApiKey(e.target.value); setError(null); }}
+          onKeyDown={e => e.key === "Enter" && handleSave()}
+          placeholder={ai.id === "chatgpt" ? "sk-..." : "sk-ant-..."}
+          className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-200 font-mono focus:outline-none focus:border-blue-500 transition-colors"
+          autoFocus
+        />
+        {link && (
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <ExternalLink size={11} /> {link.label}
+          </a>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={onClose}
+          className="flex-1 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!apiKey.trim() || loading}
+          className="flex-1 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
+          Save API Key
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cookie Form (3-step wizard) ──────────────────────────────────────────────
+
+function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuideProps & { cloudflareBlocked: boolean }) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [jsonText, setJsonText] = useState("");
@@ -54,186 +221,150 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
     }
   };
 
-  const STEPS = [
-    {
-      num: 1 as const,
-      title: "Log in to " + ai.name,
-      desc: "Open the site in your browser and sign in to your account.",
-    },
-    {
-      num: 2 as const,
-      title: "Export your cookies",
-      desc: "Use Cookie Editor to copy your session cookies as JSON.",
-    },
-    {
-      num: 3 as const,
-      title: "Paste & save",
-      desc: "Paste the JSON here to connect this AI to the proxy.",
-    },
-  ];
-
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden">
+    <div className="space-y-4">
+      {cloudflareBlocked && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5 text-xs text-amber-300">
+          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+          <p>
+            <strong>Note:</strong> {ai.name} uses Cloudflare bot protection that blocks cloud server IPs.
+            Cookie sessions likely won't work from here — <strong>API Key mode is recommended</strong>.
+          </p>
+        </div>
+      )}
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <Cookie size={18} className="text-blue-400" />
-            <span className="text-white font-semibold">Connect {ai.name}</span>
+      {/* Step indicators */}
+      <div className="flex items-center gap-0">
+        {([1, 2, 3] as const).map((s, i) => (
+          <div key={s} className="flex items-center gap-0 flex-1">
+            <button
+              onClick={() => setStep(s)}
+              className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors flex-shrink-0 ${
+                step === s
+                  ? "bg-blue-500 text-white"
+                  : step > s
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-800 text-gray-500"
+              }`}
+            >
+              {step > s ? <CheckCircle2 size={14} /> : s}
+            </button>
+            {i < 2 && (
+              <div className={`flex-1 h-px mx-1 ${step > s + 1 ? "bg-green-500" : step > s ? "bg-blue-500/50" : "bg-gray-700"}`} />
+            )}
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
-            <X size={18} />
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-white font-medium mb-1">Log in to {ai.name}</p>
+            <p className="text-gray-400 text-sm">Open the site in your browser and sign in.</p>
+          </div>
+          <a
+            href={ai.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors"
+          >
+            <ExternalLink size={15} />
+            Open {ai.name} in a new tab
+          </a>
+          <div className="bg-gray-800/60 rounded-xl p-3 text-xs text-gray-400 space-y-1">
+            <p>• Log in with your {ai.name} account as you normally would</p>
+            <p>• Complete any 2FA or verification steps</p>
+            <p>• Once on the main chat page, come back here and continue</p>
+          </div>
+          <button
+            onClick={() => setStep(2)}
+            className="w-full py-2 rounded-xl border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm font-medium transition-colors"
+          >
+            I'm logged in → Next
           </button>
         </div>
+      )}
 
-        {/* Step indicators */}
-        <div className="flex items-center gap-0 px-5 pt-4">
-          {STEPS.map((s, i) => (
-            <div key={s.num} className="flex items-center gap-0 flex-1">
-              <button
-                onClick={() => setStep(s.num)}
-                className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors flex-shrink-0 ${
-                  step === s.num
-                    ? "bg-blue-500 text-white"
-                    : step > s.num
-                    ? "bg-green-500 text-white"
-                    : "bg-gray-800 text-gray-500"
-                }`}
-              >
-                {step > s.num ? <CheckCircle2 size={14} /> : s.num}
-              </button>
-              {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-px mx-1 ${step > s.num + 1 ? "bg-green-500" : step > s.num ? "bg-blue-500/50" : "bg-gray-700"}`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Step content */}
-        <div className="px-5 py-4 flex-1">
-
-          {/* Step 1 — Open the site */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-white font-medium mb-1">{STEPS[0].title}</p>
-                <p className="text-gray-400 text-sm">{STEPS[0].desc}</p>
-              </div>
-              <a
-                href={ai.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors"
-              >
-                <ExternalLink size={15} />
-                Open {ai.name} in a new tab
+      {step === 2 && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-white font-medium mb-1">Export your cookies</p>
+            <p className="text-gray-400 text-sm">Use Cookie Editor to copy your session cookies as JSON.</p>
+          </div>
+          <div className="bg-gray-800/60 rounded-xl p-3 space-y-2">
+            <p className="text-xs font-medium text-gray-300">1. Install Cookie Editor (free, open-source)</p>
+            <div className="flex gap-2">
+              <a href="https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm"
+                 target="_blank" rel="noopener noreferrer"
+                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs text-white transition-colors">
+                <ExternalLink size={11} /> Chrome
               </a>
-              <div className="bg-gray-800/60 rounded-xl p-3 text-xs text-gray-400 space-y-1">
-                <p>• Log in with your {ai.name} account as you normally would</p>
-                <p>• Complete any 2FA or verification steps</p>
-                <p>• Once you're on the main chat page, come back here and continue</p>
-              </div>
-              <button
-                onClick={() => setStep(2)}
-                className="w-full py-2 rounded-xl border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-sm font-medium transition-colors"
-              >
-                I'm logged in → Next
-              </button>
+              <a href="https://addons.mozilla.org/en-US/firefox/addon/cookie-editor/"
+                 target="_blank" rel="noopener noreferrer"
+                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs text-white transition-colors">
+                <ExternalLink size={11} /> Firefox
+              </a>
             </div>
-          )}
-
-          {/* Step 2 — Cookie Editor */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-white font-medium mb-1">{STEPS[1].title}</p>
-                <p className="text-gray-400 text-sm">{STEPS[1].desc}</p>
-              </div>
-
-              {/* Extension install */}
-              <div className="bg-gray-800/60 rounded-xl p-3 space-y-2">
-                <p className="text-xs font-medium text-gray-300">1. Install Cookie Editor (free, open-source)</p>
-                <div className="flex gap-2">
-                  <a href="https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm"
-                     target="_blank" rel="noopener noreferrer"
-                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs text-white transition-colors">
-                    <ExternalLink size={11} /> Chrome
-                  </a>
-                  <a href="https://addons.mozilla.org/en-US/firefox/addon/cookie-editor/"
-                     target="_blank" rel="noopener noreferrer"
-                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs text-white transition-colors">
-                    <ExternalLink size={11} /> Firefox
-                  </a>
-                </div>
-              </div>
-
-              <div className="bg-gray-800/60 rounded-xl p-3 space-y-1.5 text-xs text-gray-400">
-                <p className="text-gray-300 font-medium">2. Export your cookies</p>
-                <p>• Go to <strong className="text-gray-200">{ai.url}</strong> (the tab you just logged in to)</p>
-                <p>• Click the <strong className="text-gray-200">Cookie Editor</strong> icon in your browser toolbar</p>
-                <p>• Click <strong className="text-gray-200">Export → Export as JSON</strong> — it copies to clipboard</p>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setStep(1)}
-                  className="flex-1 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors"
-                >
-                  ← Back
-                </button>
-                <button
-                  onClick={() => setStep(3)}
-                  className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
-                >
-                  I've exported cookies → Next
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3 — Paste & import */}
-          {step === 3 && (
-            <div className="space-y-3">
-              <div>
-                <p className="text-white font-medium mb-1">{STEPS[2].title}</p>
-                <p className="text-gray-400 text-sm">Paste the JSON you copied from Cookie Editor.</p>
-              </div>
-
-              <textarea
-                value={jsonText}
-                onChange={e => { setJsonText(e.target.value); setError(null); }}
-                placeholder={`[\n  {"name": "session", "value": "...", "domain": ".${ai.url.replace(/https?:\/\//, "")}", ...}\n]`}
-                className="w-full h-36 bg-gray-800 border border-gray-700 rounded-xl p-3 text-xs text-gray-200 font-mono resize-none focus:outline-none focus:border-blue-500 transition-colors"
-                autoFocus
-              />
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setStep(2)}
-                  className="flex-1 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors"
-                >
-                  ← Back
-                </button>
-                <button
-                  onClick={handleImport}
-                  disabled={!jsonText.trim() || loading}
-                  className="flex-1 py-2 rounded-xl bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                  Save Session
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
+          <div className="bg-gray-800/60 rounded-xl p-3 space-y-1.5 text-xs text-gray-400">
+            <p className="text-gray-300 font-medium">2. Export your cookies</p>
+            <p>• Go to <strong className="text-gray-200">{ai.url}</strong></p>
+            <p>• Click the <strong className="text-gray-200">Cookie Editor</strong> icon in your toolbar</p>
+            <p>• Click <strong className="text-gray-200">Export → Export as JSON</strong> — copies to clipboard</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep(1)}
+              className="flex-1 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+            >
+              I've exported cookies → Next
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-white font-medium mb-1">Paste & save</p>
+            <p className="text-gray-400 text-sm">Paste the JSON you copied from Cookie Editor.</p>
+          </div>
+          <textarea
+            value={jsonText}
+            onChange={e => { setJsonText(e.target.value); setError(null); }}
+            placeholder={`[\n  {"name": "session", "value": "...", "domain": ".${ai.url.replace(/https?:\/\//, "")}", ...}\n]`}
+            className="w-full h-36 bg-gray-800 border border-gray-700 rounded-xl p-3 text-xs text-gray-200 font-mono resize-none focus:outline-none focus:border-blue-500 transition-colors"
+            autoFocus
+          />
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep(2)}
+              className="flex-1 py-2 rounded-xl border border-gray-700 text-gray-400 hover:text-white text-sm transition-colors"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={!jsonText.trim() || loading}
+              className="flex-1 py-2 rounded-xl bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              Save Session
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -248,8 +379,8 @@ export function SessionsPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loginAi, setLoginAi] = useState<{ id: string; name: string; url: string } | null>(null);
-  // username → display name returned by the verify endpoint
   const [usernames, setUsernames] = useState<Record<string, string>>({});
+  const [authModes, setAuthModes] = useState<Record<string, string>>({});
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
 
   const verifySession = useCallback(async (aiId: string) => {
@@ -259,6 +390,7 @@ export function SessionsPage() {
       const data = await res.json();
       if (data.success && data.username) {
         setUsernames(prev => ({ ...prev, [aiId]: data.username }));
+        setAuthModes(prev => ({ ...prev, [aiId]: data.authMode ?? "cookies" }));
       } else {
         setUsernames(prev => { const n = { ...prev }; delete n[aiId]; return n; });
       }
@@ -266,7 +398,6 @@ export function SessionsPage() {
     setVerifyingIds(prev => { const s = new Set(prev); s.delete(aiId); return s; });
   }, []);
 
-  // Verify all connected AIs on load
   useEffect(() => {
     const ais = aisData?.ais ?? [];
     ais.filter((ai: any) => ai.hasSession).forEach((ai: any) => verifySession(ai.id));
@@ -317,7 +448,7 @@ export function SessionsPage() {
           <div>
             <h1 className="text-xl font-bold text-white">Sessions</h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              Connect AI services using your existing accounts — no API keys needed
+              Connect AI services via API key or browser cookies
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -336,29 +467,26 @@ export function SessionsPage() {
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-4">
 
-          {/* How it works */}
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-sm">
-            <p className="font-medium text-blue-300 mb-2">How to connect an AI</p>
-            <div className="flex items-start gap-6 text-blue-200/70 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                <span>Click <strong className="text-blue-200">Login</strong> and open the AI site</span>
+          {/* Info banner */}
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-sm space-y-2">
+            <p className="font-medium text-blue-300">How to connect</p>
+            <div className="grid grid-cols-1 gap-1.5 text-blue-200/70 text-xs">
+              <div className="flex items-start gap-2">
+                <Key size={13} className="flex-shrink-0 mt-0.5 text-blue-400" />
+                <span><strong className="text-blue-200">ChatGPT & Claude</strong> — Use an API key (recommended) or browser cookies. API keys work reliably from cloud servers.</span>
               </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
-                <span>Export cookies with <strong className="text-blue-200">Cookie Editor</strong> extension</span>
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-5 h-5 rounded-full bg-blue-500/30 text-blue-300 text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
-                <span>Paste JSON and click <strong className="text-blue-200">Save Session</strong></span>
+              <div className="flex items-start gap-2">
+                <Cookie size={13} className="flex-shrink-0 mt-0.5 text-blue-400" />
+                <span><strong className="text-blue-200">Grok</strong> — Export cookies with Cookie Editor and paste the JSON here.</span>
               </div>
             </div>
           </div>
 
           {/* AI Cards */}
           {ais.map((ai: any) => {
-            const session = getSession(ai.id);
             const hasSession = ai.hasSession;
+            const isBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
+            const mode = authModes[ai.id];
 
             return (
               <div
@@ -377,7 +505,7 @@ export function SessionsPage() {
                       {ai.name[0]}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-white font-semibold">{ai.name}</span>
                         {hasSession ? (
                           <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
@@ -388,10 +516,20 @@ export function SessionsPage() {
                             <ShieldAlert size={11} /> No session
                           </span>
                         )}
+                        {isBlocked && !hasSession && (
+                          <span className="flex items-center gap-1 text-xs text-amber-500/80 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                            <Key size={10} /> API key recommended
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">{ai.url}</div>
                       {hasSession && (
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {mode === "api_key" && (
+                            <span className="flex items-center gap-1 text-xs text-blue-400/80 bg-blue-500/10 px-1.5 py-0.5 rounded-full">
+                              <Key size={10} /> API key
+                            </span>
+                          )}
                           {verifyingIds.has(ai.id) ? (
                             <span className="flex items-center gap-1.5 text-xs text-blue-400">
                               <Loader2 size={11} className="animate-spin" /> Verifying…
@@ -433,7 +571,7 @@ export function SessionsPage() {
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
                   >
                     {hasSession ? <RotateCcw size={14} /> : <LogIn size={14} />}
-                    {hasSession ? "Re-connect" : "Login"}
+                    {hasSession ? "Re-connect" : "Connect"}
                   </button>
                 </div>
               </div>
@@ -448,7 +586,6 @@ export function SessionsPage() {
           onClose={() => setLoginAi(null)}
           onSuccess={() => {
             refreshAll();
-            // Small delay so the new session file is on disk before we verify
             setTimeout(() => verifySession(loginAi.id), 800);
           }}
         />

@@ -45,8 +45,13 @@ def get_session_path(ai_id: str) -> str:
 
 
 def session_exists(ai_id: str) -> bool:
+    """True if we have either a cookie session file OR an API key file for this AI."""
     path = get_session_path(ai_id)
-    return os.path.exists(path) and os.path.getsize(path) > 10
+    if os.path.exists(path) and os.path.getsize(path) > 10:
+        return True
+    # API key fallback (for ChatGPT and Claude, which are Cloudflare-blocked)
+    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
+    return os.path.exists(key_path) and os.path.getsize(key_path) > 5
 
 
 def get_session_info(ai_id: str) -> dict:
@@ -63,9 +68,16 @@ def get_session_info(ai_id: str) -> dict:
 
 def delete_session(ai_id: str) -> Tuple[bool, str]:
     session_path = get_session_path(ai_id)
+    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
+    deleted = []
     if os.path.exists(session_path):
         os.remove(session_path)
-        return True, f"Session deleted for {ai_id}"
+        deleted.append("cookies")
+    if os.path.exists(key_path):
+        os.remove(key_path)
+        deleted.append("API key")
+    if deleted:
+        return True, f"Deleted {' and '.join(deleted)} for {ai_id}"
     return False, f"No session found for {ai_id}"
 
 
@@ -131,16 +143,14 @@ def create_session_interactive(ai_id: str) -> Tuple[bool, str]:
 
 def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
     """
-    Send a prompt to the specified AI using its internal web API
-    and the saved Playwright session cookies.
-
+    Send a prompt to the specified AI.
+    Tries API key first (for ChatGPT/Claude), then falls back to session cookies.
     Returns (success, response_text, error_message).
     """
     config = AI_CONFIGS.get(ai_id)
     if not config:
         return False, "", f"Unknown AI: {ai_id}"
 
-    session_path = get_session_path(ai_id)
     if not session_exists(ai_id):
         return False, "", (
             f"No session found for {ai_id}. "
@@ -149,6 +159,25 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
 
     model = get_active_model(ai_id)
     logger.info("Sending prompt to %s (model=%s, %d chars)", ai_id, model, len(prompt))
+
+    # Check for API key first (bypasses Cloudflare for ChatGPT/Claude)
+    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
+    if os.path.exists(key_path):
+        try:
+            with open(key_path) as f:
+                api_key = f.read().strip()
+            if api_key:
+                from web_session_client import send_via_api_key
+                return send_via_api_key(ai_id, api_key, model, prompt)
+        except Exception as e:
+            logger.warning("API key load failed for %s: %s", ai_id, e)
+
+    session_path = get_session_path(ai_id)
+    if not os.path.exists(session_path) or os.path.getsize(session_path) <= 10:
+        return False, "", (
+            f"No valid session file for {ai_id}. "
+            "Please import cookies or an API key on the Sessions page."
+        )
 
     success, text, error = send_prompt_via_session(ai_id, session_path, model, prompt)
     return success, text, error

@@ -1,30 +1,32 @@
 """
 web_session_client.py
 
-Replaces Playwright UI automation for sending prompts.
-Uses saved session cookies + curl_cffi (Chrome TLS fingerprint impersonation)
-to call each AI's internal web API directly — bypasses Cloudflare and
-eliminates fragile UI selector issues entirely.
+Sends prompts to ChatGPT / Claude / Grok using saved browser cookies and
+curl_cffi (Chrome TLS-fingerprint impersonation).
 
-Login / cookie-saving is still done by Playwright (session_browser_worker).
-This module only handles the "send a prompt and get a response" step.
+ChatGPT  → backend-anon + sentinel PoW  (no /api/auth/session needed)
+Claude   → claude.ai internal API
+Grok     → grok.com API  (moved from grok.x.ai)
 """
+import base64
+import hashlib
 import json
-import uuid
 import logging
-import re
+import time
+import uuid
 from typing import Tuple
 
 from config import get_free_model
 
 logger = logging.getLogger(__name__)
 
-# ─── Cookie helpers ───────────────────────────────────────────────────────────
+
+# ─── Cookie helpers ────────────────────────────────────────────────────────────
 
 def _load_cookies(session_path: str, domain_hint: str = "") -> dict:
     """
     Convert a Playwright storage_state JSON file into a simple {name: value}
-    cookie dict, filtered to cookies whose domain contains domain_hint.
+    cookie dict.  Pass domain_hint="" to load everything.
     """
     try:
         with open(session_path) as f:
@@ -34,7 +36,7 @@ def _load_cookies(session_path: str, domain_hint: str = "") -> dict:
 
     result = {}
     for cookie in state.get("cookies", []):
-        name = cookie.get("name", "")
+        name  = cookie.get("name", "")
         value = cookie.get("value", "")
         domain = cookie.get("domain", "")
         if not name or not value:
@@ -45,14 +47,80 @@ def _load_cookies(session_path: str, domain_hint: str = "") -> dict:
 
 
 def _impersonate_session(cookies: dict):
-    """Return a curl_cffi session with Chrome124 fingerprint and cookies loaded."""
-    from curl_cffi import requests as cf  # noqa: PLC0415 (lazy import)
+    """Return a curl_cffi Session with Chrome 124 TLS fingerprint + cookies."""
+    from curl_cffi import requests as cf
     sess = cf.Session(impersonate="chrome124")
     sess.cookies.update(cookies)
     return sess
 
 
-# ─── ChatGPT ─────────────────────────────────────────────────────────────────
+def _chrome_headers(origin: str, referer: str, extra: dict | None = None) -> dict:
+    """Standard headers that make requests look like Chrome 124."""
+    h = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Origin": origin,
+        "Referer": referer,
+        "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+    }
+    if extra:
+        h.update(extra)
+    return h
+
+
+# ─── ChatGPT ──────────────────────────────────────────────────────────────────
+
+def _solve_chatgpt_pow(pow_data: dict) -> str:
+    """
+    Solve ChatGPT's sentinel Proof-of-Work challenge.
+
+    The server sends { seed, difficulty }.  We increment a counter until
+    SHA3-512(json([seed, counter])) has enough leading zero bits, then
+    base64-encode the winning value as  "gAAAAAB" + b64(json([seed, counter])).
+    """
+    seed       = pow_data.get("seed", "")
+    difficulty = pow_data.get("difficulty", "000000")
+    if not seed:
+        return ""
+
+    # How many leading zero bits are required?
+    required_bits = 0
+    for ch in difficulty:
+        nibble = int(ch, 16)
+        if nibble == 0:
+            required_bits += 4
+        else:
+            required_bits += 4 - nibble.bit_length()
+            break
+
+    start = time.time()
+    for counter in range(10_000_000):
+        candidate = json.dumps([seed, counter], separators=(",", ":"))
+        digest = hashlib.sha3_512(candidate.encode()).digest()
+
+        # Count leading zero bits
+        bits = 0
+        for byte in digest:
+            if byte == 0:
+                bits += 8
+            else:
+                bits += 8 - byte.bit_length()
+                break
+
+        if bits >= required_bits:
+            token = "gAAAAAB" + base64.b64encode(candidate.encode()).decode()
+            logger.debug("ChatGPT PoW solved in %d attempts (%.2fs)", counter, time.time() - start)
+            return token
+
+    logger.warning("ChatGPT PoW: could not solve in 10M attempts")
+    return ""
+
 
 def _parse_chatgpt_sse(text: str) -> str:
     """Walk ChatGPT SSE lines and return the last complete assistant message."""
@@ -67,11 +135,8 @@ def _parse_chatgpt_sse(text: str) -> str:
             data = json.loads(raw)
             msg = data.get("message") or {}
             if msg.get("author", {}).get("role") == "assistant":
-                status = msg.get("status", "")
                 parts = msg.get("content", {}).get("parts", [])
-                if parts and isinstance(parts[0], str) and status != "in_progress":
-                    final = parts[0]
-                elif parts and isinstance(parts[0], str):
+                if parts and isinstance(parts[0], str):
                     final = parts[0]
         except (json.JSONDecodeError, TypeError, KeyError):
             pass
@@ -79,108 +144,113 @@ def _parse_chatgpt_sse(text: str) -> str:
 
 
 def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """
+    Send a prompt to ChatGPT using the backend-anon API with sentinel PoW.
+    Does NOT require /api/auth/session (avoids Cloudflare block).
+    Session cookies are loaded to associate the request with the user's account.
+    """
     try:
         from curl_cffi import requests as cf  # noqa: PLC0415
     except ImportError:
         return False, "", "curl_cffi not installed — run: pip install curl_cffi"
 
     try:
-        # Load ALL cookies (no domain filter) — ChatGPT auth tokens live on
-        # .openai.com and chatgpt.com; filtering by domain alone misses them.
         cookies = _load_cookies(session_path, "")
         if not cookies:
-            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
+            return False, "", "Session file is empty. Please re-import your ChatGPT cookies."
 
         sess = _impersonate_session(cookies)
-        sess.headers.update({
-            "Origin": "https://chatgpt.com",
-            "Referer": "https://chatgpt.com/",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "sec-ch-ua": '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "X-Requested-With": "XMLHttpRequest",
-        })
+        device_id = str(uuid.uuid4())
 
-        # Exchange session cookie → short-lived access token
-        resp = sess.get("https://chatgpt.com/api/auth/session", timeout=30)
-        logger.debug("ChatGPT auth/session status=%s body_len=%d body=%s", resp.status_code, len(resp.text), resp.text[:200])
-        if resp.status_code == 403:
-            return False, "", "ChatGPT blocked the session check (Cloudflare). Try re-importing newer cookies."
-        try:
-            data = resp.json() if resp.text.strip() else {}
-        except Exception:
-            data = {}
-        token = data.get("accessToken", "")
-        if not token:
+        base_headers = _chrome_headers(
+            "https://chatgpt.com",
+            "https://chatgpt.com/",
+            {"oai-device-id": device_id, "Content-Type": "application/json"},
+        )
+        sess.headers.update(base_headers)
+
+        # ── Step 1: get sentinel token (+ optional PoW spec) ─────────────────
+        req_resp = sess.post(
+            "https://chatgpt.com/backend-anon/sentinel/chat-requirements",
+            json={},
+            timeout=30,
+        )
+        logger.debug("ChatGPT sentinel status=%s", req_resp.status_code)
+
+        if req_resp.status_code == 403:
             return False, "", (
-                "ChatGPT session expired — the cookies don't contain a valid session token. "
-                "Make sure you copy ALL cookies from chatgpt.com (not just a few), then re-import."
+                "ChatGPT is blocking our request (Cloudflare 403 on sentinel). "
+                "Re-export your cookies while logged in on chatgpt.com, then re-import."
+            )
+        if req_resp.status_code != 200:
+            return False, "", f"ChatGPT sentinel failed ({req_resp.status_code})."
+
+        try:
+            req_data = req_resp.json()
+        except Exception:
+            return False, "", "ChatGPT sentinel returned unexpected data."
+
+        sentinel_token = req_data.get("token", "")
+
+        # ── Step 2: solve PoW if required ─────────────────────────────────────
+        proof_token = ""
+        pow_spec = req_data.get("proofofwork") or {}
+        if pow_spec.get("required"):
+            proof_token = _solve_chatgpt_pow(pow_spec)
+
+        # ── Step 3: send conversation ──────────────────────────────────────────
+        def _do_conversation(mdl: str):
+            payload = {
+                "action": "next",
+                "messages": [{
+                    "id": str(uuid.uuid4()),
+                    "author": {"role": "user"},
+                    "content": {"content_type": "text", "parts": [prompt]},
+                    "metadata": {},
+                }],
+                "parent_message_id": str(uuid.uuid4()),
+                "model": mdl,
+                "timezone_offset_min": 0,
+                "history_and_training_disabled": False,
+                "conversation_mode": {"kind": "primary_assistant"},
+            }
+            extra = {"openai-sentinel-chat-requirements-token": sentinel_token}
+            if proof_token:
+                extra["openai-sentinel-proof-token"] = proof_token
+
+            return sess.post(
+                "https://chatgpt.com/backend-anon/conversation",
+                json=payload,
+                headers=extra,
+                timeout=180,
             )
 
-        payload = {
-            "action": "next",
-            "messages": [{
-                "id": str(uuid.uuid4()),
-                "author": {"role": "user"},
-                "content": {"content_type": "text", "parts": [prompt]},
-                "metadata": {},
-            }],
-            "parent_message_id": str(uuid.uuid4()),
-            "model": model,
-            "timezone_offset_min": 0,
-            "history_and_training_disabled": False,
-            "conversation_mode": {"kind": "primary_assistant"},
-        }
-
-        resp = sess.post(
-            "https://chatgpt.com/backend-api/conversation",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "text/event-stream",
-                "Content-Type": "application/json",
-            },
-            timeout=180,
-        )
+        resp = _do_conversation(model)
+        logger.debug("ChatGPT conversation status=%s", resp.status_code)
 
         if resp.status_code == 401:
-            return False, "", "ChatGPT auth failed — please re-login."
+            return False, "", "ChatGPT: not authenticated — please re-import your cookies."
         if resp.status_code == 403:
             body = resp.text.lower()
-            # Subscription error → auto-retry with the free model
             if any(k in body for k in ("subscri", "plus", "upgrade", "not available", "plan")):
                 free_model = get_free_model("chatgpt")
                 if free_model and free_model != model:
-                    logger.info("ChatGPT: model %s requires a paid plan, retrying with %s", model, free_model)
-                    payload["model"] = free_model
-                    resp2 = sess.post(
-                        "https://chatgpt.com/backend-api/conversation",
-                        json=payload,
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Accept": "text/event-stream",
-                            "Content-Type": "application/json",
-                        },
-                        timeout=180,
-                    )
+                    logger.info("ChatGPT: %s requires paid plan, retrying with %s", model, free_model)
+                    resp2 = _do_conversation(free_model)
                     if resp2.status_code == 200:
                         text = _parse_chatgpt_sse(resp2.text)
                         if text:
-                            note = f"\n\n_(Answered with **GPT-4o mini** — your account doesn't have access to **{model}**. Upgrade to ChatGPT Plus for premium models.)_"
+                            note = (
+                                f"\n\n_(Answered with **GPT-4o mini** — your account doesn't have "
+                                f"access to **{model}**. Upgrade to ChatGPT Plus for premium models.)_"
+                            )
                             return True, text + note, ""
             return False, "", (
-                f"ChatGPT access denied (403). "
-                "Your account may not have access to this model — "
-                "try switching to GPT-4o mini (free) on the Sessions page."
+                "ChatGPT access denied (403). Your account may need a subscription "
+                "for this model — try switching to GPT-4o mini (free)."
             )
         if resp.status_code == 429:
-            return False, "", "ChatGPT rate limit hit. Wait a few minutes and try again."
+            return False, "", "ChatGPT rate limit hit. Wait a minute and try again."
         if resp.status_code >= 400:
             return False, "", f"ChatGPT error {resp.status_code}: {resp.text[:300]}"
 
@@ -191,7 +261,7 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
 
     except Exception as exc:
         logger.error("ChatGPT send error: %s", exc, exc_info=True)
-        return False, "", f"ChatGPT: {exc}"
+        return False, "", f"ChatGPT error: {exc}"
 
 
 # ─── Claude ───────────────────────────────────────────────────────────────────
@@ -224,24 +294,29 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
         return False, "", "curl_cffi not installed"
 
     try:
-        cookies = _load_cookies(session_path, "")  # all cookies — no domain filter
+        cookies = _load_cookies(session_path, "")
         if not cookies:
-            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
+            return False, "", "Session file is empty. Please re-import your Claude cookies."
 
         sess = _impersonate_session(cookies)
-        sess.headers.update({
-            "Content-Type": "application/json",
-            "Origin": "https://claude.ai",
-            "Referer": "https://claude.ai/",
-        })
+        sess.headers.update(_chrome_headers(
+            "https://claude.ai",
+            "https://claude.ai/",
+            {"Content-Type": "application/json"},
+        ))
 
         # Discover the org UUID
         resp = sess.get("https://claude.ai/api/organizations", timeout=30)
+        if resp.status_code == 403:
+            return False, "", "Claude blocked the request — re-import cookies from claude.ai."
         if resp.status_code != 200:
-            return False, "", f"Claude session error ({resp.status_code}). Please re-login."
-        orgs = resp.json()
+            return False, "", f"Claude session error ({resp.status_code}). Please re-import cookies."
+        try:
+            orgs = resp.json()
+        except Exception:
+            return False, "", "Claude returned unexpected data on org check."
         if not orgs or not isinstance(orgs, list):
-            return False, "", "Claude session expired. Please re-login on the Sessions page."
+            return False, "", "Claude session expired. Please re-import cookies from claude.ai."
         org_id = orgs[0]["uuid"]
 
         # Open a new conversation
@@ -254,10 +329,9 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
             return False, "", f"Could not create Claude conversation ({conv_resp.status_code})"
         conv_id = conv_resp.json()["uuid"]
 
-        def _claude_completion(mdl: str) -> tuple:
-            """Send the completion request with the given model."""
+        def _claude_completion(mdl: str, cid: str):
             return sess.post(
-                f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{conv_id}/completion",
+                f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{cid}/completion",
                 json={
                     "prompt": prompt,
                     "model": mdl,
@@ -269,39 +343,28 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
                 timeout=180,
             )
 
-        resp = _claude_completion(model)
+        resp = _claude_completion(model, conv_id)
 
-        # Subscription / model-access error → retry with free model
         if resp.status_code in (400, 403):
             body = resp.text.lower()
             if any(k in body for k in ("subscri", "pro", "upgrade", "not available", "plan", "permission")):
                 free_model = get_free_model("claude")
                 if free_model and free_model != model:
-                    logger.info("Claude: model %s not available, retrying with %s", model, free_model)
-                    # Need a fresh conversation for the retry
+                    logger.info("Claude: %s unavailable, retrying with %s", model, free_model)
                     conv2 = sess.post(
                         f"https://claude.ai/api/organizations/{org_id}/chat_conversations",
                         json={"uuid": str(uuid.uuid4()), "name": ""},
                         timeout=30,
                     )
                     if conv2.status_code in (200, 201):
-                        conv_id2 = conv2.json()["uuid"]
-                        resp = sess.post(
-                            f"https://claude.ai/api/organizations/{org_id}/chat_conversations/{conv_id2}/completion",
-                            json={
-                                "prompt": prompt,
-                                "model": free_model,
-                                "timezone": "UTC",
-                                "attachments": [],
-                                "files": [],
-                            },
-                            headers={"Accept": "text/event-stream"},
-                            timeout=180,
-                        )
+                        resp = _claude_completion(free_model, conv2.json()["uuid"])
                         if resp.status_code == 200:
                             text = _parse_claude_sse(resp.text)
                             if text:
-                                note = f"\n\n_(Answered with **Claude 3.5 Haiku** — your account doesn't have access to **{model}**. Upgrade to Claude Pro for premium models.)_"
+                                note = (
+                                    f"\n\n_(Answered with **Claude 3.5 Haiku** — your account doesn't "
+                                    f"have access to **{model}**. Upgrade to Claude Pro for premium models.)_"
+                                )
                                 return True, text + note, ""
 
         if resp.status_code != 200:
@@ -314,15 +377,14 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
 
     except Exception as exc:
         logger.error("Claude send error: %s", exc, exc_info=True)
-        return False, "", f"Claude: {exc}"
+        return False, "", f"Claude error: {exc}"
 
 
-# ─── Grok ────────────────────────────────────────────────────────────────────
+# ─── Grok ─────────────────────────────────────────────────────────────────────
 
 def _parse_grok_response(text: str) -> str:
     """
-    Grok streams NDJSON (one JSON object per line).
-    Each line may carry a token or the final complete message.
+    Grok streams NDJSON.  Each line may carry a token or the final complete message.
     """
     tokens: list[str] = []
     final = ""
@@ -337,13 +399,13 @@ def _parse_grok_response(text: str) -> str:
         except (json.JSONDecodeError, ValueError):
             continue
 
-        # Streaming token format
+        # Streaming token
         token = obj.get("token", "")
         if token:
             tokens.append(token)
             continue
 
-        # Final message in various possible shapes
+        # Final message — various shapes
         for path in (
             ("result", "message"),
             ("message",),
@@ -357,30 +419,34 @@ def _parse_grok_response(text: str) -> str:
                 final = val
                 break
 
-    if tokens:
-        return "".join(tokens).strip()
-    return final.strip()
+    return ("".join(tokens) if tokens else final).strip()
 
 
 def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """
+    Send a prompt to Grok via grok.com (the domain moved from grok.x.ai in 2025).
+    Falls back to x.com API if grok.com fails.
+    """
     try:
         from curl_cffi import requests as cf  # noqa: PLC0415
     except ImportError:
         return False, "", "curl_cffi not installed"
 
     try:
-        cookies = _load_cookies(session_path, "")  # all cookies — no domain filter
+        cookies = _load_cookies(session_path, "")
         if not cookies:
-            return False, "", "Session file is empty. Please re-import cookies on the Sessions page."
+            return False, "", "Session file is empty. Please re-import your Grok cookies."
 
         sess = _impersonate_session(cookies)
-        sess.headers.update({
-            "Content-Type": "application/json",
-            "Origin": "https://grok.x.ai",
-            "Referer": "https://grok.x.ai/",
-        })
 
-        payload = {
+        # ── Try grok.com first (primary domain as of 2025) ─────────────────────
+        grok_headers = _chrome_headers(
+            "https://grok.com",
+            "https://grok.com/",
+            {"Content-Type": "application/json"},
+        )
+
+        payload_grok_com = {
             "temporary": True,
             "modelName": model,
             "message": prompt,
@@ -392,32 +458,38 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
             "sendFinalMetadata": True,
         }
 
-        # Try the primary endpoint first, then fallbacks
-        endpoints = [
-            "https://grok.x.ai/api/conversations/new",
-            "https://grok.x.ai/api/ask",
-            "https://grok.x.ai/api/rpc",
+        grok_com_endpoints = [
+            "https://grok.com/api/conversations",
+            "https://grok.com/rest/app-chat/conversations/new",
+            "https://grok.com/api/rpc",
         ]
 
-        for url in endpoints:
+        for url in grok_com_endpoints:
             try:
-                resp = sess.post(url, json=payload, timeout=180)
+                resp = sess.post(url, json=payload_grok_com, headers=grok_headers, timeout=120)
+                logger.debug("Grok grok.com %s → %s", url, resp.status_code)
                 if resp.status_code == 404:
                     continue
                 if resp.status_code == 401:
-                    return False, "", "Grok session expired. Please re-login on the Sessions page."
+                    return False, "", "Grok session expired — please re-import cookies from grok.com."
                 if resp.status_code == 403:
                     body = resp.text.lower()
-                    if any(k in body for k in ("subscri", "premium", "upgrade", "not available", "plan")):
+                    if any(k in body for k in ("subscri", "premium", "upgrade", "plan")):
                         free_model = get_free_model("grok")
                         if free_model and free_model != model:
-                            logger.info("Grok: model %s not available, retrying with %s", model, free_model)
-                            fallback_payload = {**payload, "modelName": free_model}
-                            resp2 = sess.post(url, json=fallback_payload, timeout=180)
+                            resp2 = sess.post(
+                                url,
+                                json={**payload_grok_com, "modelName": free_model},
+                                headers=grok_headers,
+                                timeout=120,
+                            )
                             if resp2.status_code == 200:
                                 text = _parse_grok_response(resp2.text)
                                 if text:
-                                    note = f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't have access to **{model}**. Upgrade to X Premium for full Grok access.)_"
+                                    note = (
+                                        f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't "
+                                        f"have access to **{model}**.)_"
+                                    )
                                     return True, text + note, ""
                     continue
                 if resp.status_code >= 400:
@@ -425,20 +497,145 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
                 text = _parse_grok_response(resp.text)
                 if text:
                     return True, text, ""
-            except Exception:
+            except Exception as e:
+                logger.debug("Grok grok.com %s failed: %s", url, e)
+                continue
+
+        # ── Fallback: x.com API (older Grok access via X/Twitter) ────────────
+        x_headers = _chrome_headers(
+            "https://x.com",
+            "https://x.com/",
+            {"Content-Type": "application/json"},
+        )
+        # x.com needs the CSRF token from cookies
+        csrf = cookies.get("ct0", "")
+        if csrf:
+            x_headers["x-csrf-token"] = csrf
+
+        payload_x = {
+            "query": prompt,
+            "conversationId": str(uuid.uuid4()),
+            "model": model,
+        }
+
+        x_endpoints = [
+            "https://x.com/i/api/2/grok/add_response.json",
+            "https://x.com/i/api/2/grok/conversation.json",
+        ]
+
+        for url in x_endpoints:
+            try:
+                resp = sess.post(url, json=payload_x, headers=x_headers, timeout=120)
+                logger.debug("Grok x.com %s → %s", url, resp.status_code)
+                if resp.status_code == 404:
+                    continue
+                if resp.status_code in (401, 403):
+                    continue
+                if resp.status_code >= 400:
+                    continue
+                text = _parse_grok_response(resp.text)
+                if text:
+                    return True, text, ""
+            except Exception as e:
+                logger.debug("Grok x.com %s failed: %s", url, e)
                 continue
 
         return False, "", (
-            "Could not reach Grok's API. The endpoint may have changed. "
-            "Please re-login on the Sessions page to refresh your session."
+            "Grok API is unreachable. Please re-import cookies — make sure you export "
+            "them from grok.com (not x.com) while logged in."
         )
 
     except Exception as exc:
         logger.error("Grok send error: %s", exc, exc_info=True)
-        return False, "", f"Grok: {exc}"
+        return False, "", f"Grok error: {exc}"
 
 
-# ─── Dispatcher ──────────────────────────────────────────────────────────────
+# ─── Official API key senders (bypass Cloudflare) ────────────────────────────
+
+def _send_chatgpt_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via official OpenAI API (api.openai.com) using an API key."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "OpenAI API key is invalid or expired. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "OpenAI rate limit hit. Wait a moment and try again."
+        return False, "", f"OpenAI API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("ChatGPT API key send error: %s", exc, exc_info=True)
+        return False, "", f"ChatGPT (API key): {exc}"
+
+
+def _send_claude_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via official Anthropic API (api.anthropic.com) using an API key."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["content"][0]["text"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Anthropic API key is invalid or expired. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Anthropic rate limit hit. Wait a moment and try again."
+        return False, "", f"Anthropic API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Claude API key send error: %s", exc, exc_info=True)
+        return False, "", f"Claude (API key): {exc}"
+
+
+_API_KEY_DISPATCH = {
+    "chatgpt": _send_chatgpt_api,
+    "claude":  _send_claude_api,
+}
+
+
+def send_via_api_key(ai_id: str, api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send a prompt using the stored API key (bypasses Cloudflare web session issues)."""
+    fn = _API_KEY_DISPATCH.get(ai_id)
+    if fn is None:
+        return False, "", f"No API key handler for '{ai_id}'"
+    logger.info("Sending to %s via API key (model=%s)", ai_id, model)
+    return fn(api_key, model, prompt)
+
+
+# ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 _DISPATCH = {
     "chatgpt": send_chatgpt,

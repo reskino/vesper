@@ -296,7 +296,7 @@ function MaxStepsControl({ value, onChange, disabled }: { value: number; onChang
 
 export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   const [task, setTask]               = useState("");
-  const [agentType, setAgentType]     = useState<"builder" | "orchestrator" | "scholar">("builder");
+  const [agentType, setAgentType]     = useState<"builder" | "orchestrator" | "scholar" | "search_master">("builder");
   const [selectedAi, setSelectedAi]   = useState("pollinations");
   const [selectedModel, setSelectedModel] = useState("openai");
   const [maxSteps, setMaxSteps]       = useState(20);
@@ -528,14 +528,13 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
             {/* Agent Persona selector */}
             <div className="space-y-1.5">
               <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Agent Persona</label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {([
                   {
                     id: "builder",
                     label: "Builder",
                     icon: <Zap className="h-3.5 w-3.5" />,
                     desc: "Plan, code, test & ship",
-                    gradient: "from-blue-500/20 to-primary/10",
                     active: "border-primary/40 bg-primary/10 text-primary",
                     inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
                   },
@@ -543,8 +542,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     id: "orchestrator",
                     label: "Orchestrator",
                     icon: <Sparkles className="h-3.5 w-3.5" />,
-                    desc: "5 roles in one brain",
-                    gradient: "from-violet-500/20 to-pink-500/10",
+                    desc: "8 specialist roles",
                     active: "border-violet-500/40 bg-violet-500/10 text-violet-400",
                     inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
                   },
@@ -553,8 +551,15 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     label: "Scholar",
                     icon: <FileText className="h-3.5 w-3.5" />,
                     desc: "Research & papers",
-                    gradient: "from-emerald-500/20 to-teal-500/10",
                     active: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+                    inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
+                  },
+                  {
+                    id: "search_master",
+                    label: "Search Master",
+                    icon: <Globe className="h-3.5 w-3.5" />,
+                    desc: "Deep web research",
+                    active: "border-sky-500/40 bg-sky-500/10 text-sky-400",
                     inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                 ] as const).map(({ id, label, icon, desc, active, inactive }) => (
@@ -562,13 +567,15 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     key={id}
                     onClick={() => setAgentType(id)}
                     disabled={isRunning}
-                    className={`flex flex-col items-center gap-1.5 px-2 py-2.5 rounded-xl border text-center
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left
                       transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed
                       ${agentType === id ? active : inactive}`}
                   >
                     <span className="shrink-0">{icon}</span>
-                    <span className="text-[11px] font-bold leading-none">{label}</span>
-                    <span className="text-[9px] leading-tight opacity-70">{desc}</span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold leading-none truncate">{label}</p>
+                      <p className="text-[9px] leading-tight opacity-70 mt-0.5">{desc}</p>
+                    </div>
                   </button>
                 ))}
               </div>

@@ -480,46 +480,34 @@ _GROK_UA = (
 
 def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[int, str]:
     """
-    Make the Grok API POST from inside a real Playwright Chromium browser.
+    Send a Grok request via a real Playwright browser using UI-trigger + route
+    interception.
 
-    Why this works where curl_cffi fails:
-    - Cloudflare Bot Management generates __cf_bm via a JavaScript challenge.
-      curl_cffi impersonates TLS but cannot run JS, so Cloudflare rejects it.
-    - A real browser (Playwright + Chromium) runs Cloudflare's JS, receives a
-      valid __cf_bm cookie, and then our fetch() inside the page carries all
-      the right cookies automatically.
-    - We also mask navigator.webdriver so Cloudflare's JS can't detect Playwright.
+    WHY THE PREVIOUS page.evaluate(fetch()) APPROACH FAILED:
+    Grok's React app wraps every API call through its own fetch interceptors
+    (Axios/React-Query middleware or a custom fetch wrapper).  Those interceptors
+    inject anti-bot request headers — things like sentry-trace, baggage, and
+    per-request tokens — that Grok's backend validates.  A raw fetch() we write
+    ourselves never passes through those interceptors, so those headers are absent
+    and Grok's backend replies: "Request rejected by anti-bot rules." (code 7).
+
+    THE SOLUTION — hijack a real UI-triggered request:
+    1.  page.route() intercepts the actual request that Grok's own React code makes,
+        complete with every header the interceptors added.
+    2.  We call route.fetch(post_data=our_payload) — same headers, our body.
+    3.  Grok's backend sees a legitimate request and responds normally.
+
+    Playwright also hides navigator.webdriver and runs Cloudflare's JS challenge
+    during the initial page.goto(), giving us a fresh __cf_bm cookie.
 
     Returns (http_status_code, response_body_text).
     """
     from playwright.sync_api import sync_playwright  # noqa: PLC0415
 
-    payload = dict(_GROK_PAYLOAD_TEMPLATE, modelName=model, message=prompt)
+    actual_payload = dict(_GROK_PAYLOAD_TEMPLATE, modelName=model, message=prompt)
+    actual_payload_bytes = json.dumps(actual_payload).encode()
 
-    # JS snippet run inside the browser — credentials:'include' sends all cookies
-    _fetch_js = """
-    async (payload) => {
-        try {
-            const resp = await fetch(
-                'https://grok.com/rest/app-chat/conversations/new',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json, text/javascript, */*; q=0.01',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify(payload),
-                    credentials: 'include',
-                }
-            );
-            const body = await resp.text();
-            return { status: resp.status, body: body };
-        } catch (err) {
-            return { status: 0, body: String(err) };
-        }
-    }
-    """
+    result: dict = {"status": 0, "body": ""}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -536,28 +524,129 @@ def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[
             user_agent=_GROK_UA,
             storage_state=session_path,
         )
-        # Mask navigator.webdriver before any page script runs
+        # Mask automation signals before any page JS runs
         context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
         page = context.new_page()
-        page.set_default_timeout(130_000)  # 130 s — generous for slow Cloudflare challenges
+        page.set_default_timeout(130_000)
 
-        # Navigate to grok.com so Cloudflare runs its JS challenge and sets __cf_bm
+        # ── Route interceptor ──────────────────────────────────────────────────
+        # Catches the real /conversations/new request that Grok's React code sends.
+        # Keeps ALL original headers (anti-bot headers included); replaces the body.
+        def _handle_route(route):
+            try:
+                # route.request.headers = real headers Grok's JS interceptors added
+                # route.fetch(...) sends the request via the browser's network stack
+                response = route.fetch(post_data=actual_payload_bytes)
+                result["status"] = response.status
+                result["body"] = response.body().decode("utf-8", errors="replace")
+                logger.info(
+                    "Grok route interceptor → status=%s body_len=%s",
+                    result["status"], len(result["body"]),
+                )
+                # Fulfil the page's copy of the request so the UI doesn't hang
+                route.fulfill(
+                    status=response.status,
+                    headers=dict(response.headers),
+                    body=response.body(),
+                )
+            except Exception as route_err:
+                logger.error("Grok route handler error: %s", route_err)
+                result["body"] = str(route_err)
+                try:
+                    route.continue_()
+                except Exception:
+                    pass
+
+        page.route("**/rest/app-chat/conversations/new", _handle_route)
+
+        # ── Navigate to grok.com ───────────────────────────────────────────────
+        # Cloudflare's JS challenge runs here → fresh __cf_bm is set
         try:
             page.goto("https://grok.com/", timeout=30_000, wait_until="domcontentloaded")
-            # Give Cloudflare's inline JS 3 s to issue __cf_bm
-            page.wait_for_timeout(3_000)
+            page.wait_for_timeout(2_500)
         except Exception as nav_err:
-            logger.warning("Grok: pre-flight nav issue (still attempting fetch): %s", nav_err)
+            logger.warning("Grok: navigation issue (continuing): %s", nav_err)
 
-        result = page.evaluate(_fetch_js, payload)
+        # ── Find the chat input ────────────────────────────────────────────────
+        input_el = None
+        for sel in [
+            "div.ProseMirror",
+            "[contenteditable='true']",
+            "textarea",
+        ]:
+            try:
+                el = page.wait_for_selector(sel, timeout=10_000, state="visible")
+                if el:
+                    input_el = el
+                    break
+            except Exception:
+                pass
+
+        if not input_el:
+            # Fallback: fire a raw fetch() from the page.  Less ideal but tries.
+            logger.warning("Grok: chat input not found — falling back to page.evaluate fetch")
+            js_result = page.evaluate(
+                """async (p) => {
+                    try {
+                        const r = await fetch('https://grok.com/rest/app-chat/conversations/new',
+                            { method:'POST',
+                              headers:{'Content-Type':'application/json','Accept':'application/json'},
+                              body: JSON.stringify(p),
+                              credentials: 'include' });
+                        return { status: r.status, body: await r.text() };
+                    } catch(e) { return { status: 0, body: String(e) }; }
+                }""",
+                actual_payload,
+            )
+            browser.close()
+            s = js_result.get("status", 0) if isinstance(js_result, dict) else 0
+            b = js_result.get("body",   "") if isinstance(js_result, dict) else str(js_result)
+            return s, b
+
+        # ── Type a minimal trigger message ────────────────────────────────────
+        # The route interceptor will replace the body with our actual prompt.
+        input_el.click()
+        page.keyboard.type("hi", delay=40)
+        page.wait_for_timeout(400)
+
+        # ── Submit ────────────────────────────────────────────────────────────
+        submitted = False
+        for btn_sel in [
+            "button[type='submit']",
+            "button[aria-label*='Send']",
+            "button[aria-label*='send']",
+            "[data-testid='send-button']",
+            "button[aria-label*='Submit']",
+        ]:
+            try:
+                btn = page.wait_for_selector(btn_sel, timeout=3_000, state="visible")
+                if btn:
+                    btn.click()
+                    submitted = True
+                    break
+            except Exception:
+                pass
+
+        if not submitted:
+            page.keyboard.press("Enter")
+
+        # ── Wait for the route handler to fire (up to 120 s) ─────────────────
+        waited_ms = 0
+        while waited_ms < 120_000:
+            if result["status"] != 0 or result["body"]:
+                break
+            page.wait_for_timeout(500)
+            waited_ms += 500
+
         browser.close()
 
-    status = result.get("status", 0) if isinstance(result, dict) else 0
-    body   = result.get("body",   "") if isinstance(result, dict) else str(result)
-    logger.info("Grok Playwright fetch → status=%s body_len=%s", status, len(body))
-    return status, body
+    logger.info(
+        "Grok Playwright complete → status=%s body_len=%s",
+        result["status"], len(result["body"]),
+    )
+    return result["status"], result["body"]
 
 
 def _grok_curl_fetch(session_path: str, model: str, prompt: str) -> Tuple[int, str]:
@@ -628,6 +717,14 @@ def _grok_handle_status(
                             f"doesn't have access to **{model}**.)_"
                         )
                         return True, text2 + note, ""
+
+        # Grok application-level anti-bot (code 7)
+        if "anti-bot" in body_lc or '"code":7' in body or '"code": 7' in body:
+            return False, "", (
+                "Grok's anti-bot system rejected the request (code 7). "
+                "This can happen when cookies are very old. "
+                "Please re-export your cookies from a fresh grok.com session and re-import them."
+            )
 
         # Cloudflare / bot block
         if any(k in body_lc for k in ("cloudflare", "cf-ray", "just a moment", "ddos", "checking")):

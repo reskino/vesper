@@ -95,14 +95,33 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
         sess.headers.update({
             "Origin": "https://chatgpt.com",
             "Referer": "https://chatgpt.com/",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "sec-ch-ua": '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "X-Requested-With": "XMLHttpRequest",
         })
 
         # Exchange session cookie → short-lived access token
         resp = sess.get("https://chatgpt.com/api/auth/session", timeout=30)
-        data = resp.json()
+        logger.debug("ChatGPT auth/session status=%s body_len=%d body=%s", resp.status_code, len(resp.text), resp.text[:200])
+        if resp.status_code == 403:
+            return False, "", "ChatGPT blocked the session check (Cloudflare). Try re-importing newer cookies."
+        try:
+            data = resp.json() if resp.text.strip() else {}
+        except Exception:
+            data = {}
         token = data.get("accessToken", "")
         if not token:
-            return False, "", "ChatGPT session expired. Please re-login on the Sessions page."
+            return False, "", (
+                "ChatGPT session expired — the cookies don't contain a valid session token. "
+                "Make sure you copy ALL cookies from chatgpt.com (not just a few), then re-import."
+            )
 
         payload = {
             "action": "next",

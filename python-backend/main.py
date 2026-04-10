@@ -27,7 +27,7 @@ from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
 from agent import run_agent, get_status as get_agent_status, get_screenshot_path
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
@@ -90,6 +90,7 @@ def ask_ai():
     start_time = time.time()
     fallback_used = False
     tried_ais = []
+    ai_errors: dict = {}
 
     ais_to_try = [ai_id]
     if use_fallback:
@@ -100,6 +101,7 @@ def ask_ai():
     for current_ai in ais_to_try:
         if not session_exists(current_ai):
             tried_ais.append(current_ai)
+            ai_errors[current_ai] = "no session"
             continue
 
         if current_ai != ai_id:
@@ -122,6 +124,7 @@ def ask_ai():
             })
 
         tried_ais.append(current_ai)
+        ai_errors[current_ai] = error
         logger.warning("AI %s failed: %s", current_ai, error)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
@@ -132,10 +135,10 @@ def ask_ai():
             "browser cookies for ChatGPT, Grok, or Claude to start chatting."
         )
     else:
-        err_msg = (
-            f"All AIs failed ({', '.join(tried_ais)}). "
-            "Your session cookies may have expired — re-import them on the Sessions page."
+        details = "; ".join(
+            f"{ai}: {msg}" for ai, msg in ai_errors.items() if msg != "no session"
         )
+        err_msg = f"All AIs failed. {details}" if details else "All AIs failed — session cookies may have expired."
     return jsonify({
         "success": False,
         "aiId": ai_id,
@@ -191,9 +194,12 @@ def ask_ai_with_context():
             if fallback_ai != ai_id and fallback_ai not in ais_to_try:
                 ais_to_try.append(fallback_ai)
 
+    ai_errors: dict = {}
+
     for current_ai in ais_to_try:
         if not session_exists(current_ai):
             tried_ais.append(current_ai)
+            ai_errors[current_ai] = "no session"
             continue
 
         if current_ai != ai_id:
@@ -215,6 +221,8 @@ def ask_ai_with_context():
             })
 
         tried_ais.append(current_ai)
+        ai_errors[current_ai] = error
+        logger.warning("AI %s failed: %s", current_ai, error)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
     has_any_session = any(session_exists(a) for a in ais_to_try)
@@ -224,10 +232,10 @@ def ask_ai_with_context():
             "browser cookies for ChatGPT, Grok, or Claude to start chatting."
         )
     else:
-        err_msg = (
-            f"All AIs failed ({', '.join(tried_ais)}). "
-            "Your session cookies may have expired — re-import them on the Sessions page."
+        details = "; ".join(
+            f"{ai}: {msg}" for ai, msg in ai_errors.items() if msg != "no session"
         )
+        err_msg = f"All AIs failed. {details}" if details else "All AIs failed — session cookies may have expired."
     return jsonify({
         "success": False,
         "aiId": ai_id,

@@ -727,13 +727,18 @@ def _send_openrouter_api(api_key: str, model: str, prompt: str) -> Tuple[bool, s
         with urllib.request.urlopen(req, timeout=180) as resp:
             data = json.loads(resp.read())
         text = data["choices"][0]["message"]["content"].strip()
+        actual_model = data.get("model", model)
+        if actual_model != model:
+            logger.info("OpenRouter routed to: %s", actual_model)
         return True, text, ""
     except urllib.error.HTTPError as exc:
-        body_text = exc.read().decode(errors="replace")[:300]
+        body_text = exc.read().decode(errors="replace")[:400]
         if exc.code == 401:
             return False, "", "OpenRouter API key is invalid. Update it on the Sessions page."
         if exc.code == 429:
-            return False, "", "OpenRouter rate limit hit. Try again later."
+            return False, "", "OpenRouter rate limit hit — try again in a moment or switch to another model."
+        if exc.code == 404 or "No endpoints found" in body_text:
+            return False, "", f"OpenRouter: model '{model}' has no active providers right now. Try 'Auto — Best Free Available' instead."
         return False, "", f"OpenRouter API error {exc.code}: {body_text}"
     except Exception as exc:
         logger.error("OpenRouter send error: %s", exc, exc_info=True)

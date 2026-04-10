@@ -708,12 +708,17 @@ def verify_session(ai_id):
                     "Chrome/136.0.0.0 Safari/537.36"
                 )
                 with _spw() as _pw:
-                    _br = _pw.chromium.launch(
-                        headless=True,
-                        args=["--no-sandbox", "--disable-setuid-sandbox",
-                              "--disable-dev-shm-usage",
-                              "--disable-blink-features=AutomationControlled"],
-                    )
+                    from config import find_chromium as _fc  # noqa: PLC0415
+                    _chrome_exe = _fc()
+                    _lkw: dict = {
+                        "headless": True,
+                        "args": ["--no-sandbox", "--disable-setuid-sandbox",
+                                 "--disable-dev-shm-usage", "--disable-gpu",
+                                 "--disable-blink-features=AutomationControlled"],
+                    }
+                    if _chrome_exe:
+                        _lkw["executable_path"] = _chrome_exe
+                    _br = _pw.chromium.launch(**_lkw)
                     _ctx = _br.new_context(
                         viewport={"width": 1280, "height": 900},
                         user_agent=_grok_ua,
@@ -730,49 +735,50 @@ def verify_session(ai_id):
                         _pg.wait_for_timeout(2_000)
                     except Exception:
                         pass
-                    # Try /api/me from inside the browser (Cloudflare passes real browser JS)
-                    for _api_url in [
-                        "https://grok.com/api/me",
-                        "https://grok.com/rest/app-chat/user/me",
-                    ]:
-                        try:
-                            _js = _pg.evaluate(
-                                f"""async () => {{
-                                    try {{
-                                        const r = await fetch('{_api_url}',
-                                            {{credentials:'include',headers:{{'Accept':'application/json'}}}});
-                                        if (r.ok) return await r.json();
-                                    }} catch(e) {{}}
-                                    return null;
-                                }}"""
-                            )
-                            if isinstance(_js, dict):
-                                grok_username = (
-                                    _js.get("username") or _js.get("screen_name") or
-                                    _js.get("name") or _js.get("email")
-                                )
-                                if grok_username:
-                                    break
-                        except Exception:
-                            continue
-                    # If API didn't work, try extracting from the page DOM
+                    # Grok doesn't expose a simple /api/me JSON endpoint.
+                    # Extract username directly from the page DOM.
                     if not grok_username:
                         try:
-                            # Look for the user's handle in sidebar / profile area
                             _handle = _pg.evaluate(
                                 """() => {
-                                    const el = document.querySelector(
-                                        '[data-testid="UserAvatar"] + * span, '
-                                        + '.username, [class*="username"], '
-                                        + '[class*="screenName"], [aria-label*="@"]'
-                                    );
-                                    return el ? el.textContent.trim() : null;
+                                    // Walk all visible text nodes looking for @handle patterns
+                                    // or find elements with username-like aria-labels / data attributes
+                                    const selectors = [
+                                        '[data-testid*="user"] [aria-label]',
+                                        '[class*="screen"] span',
+                                        '[aria-label*="@"]',
+                                        'a[href*="/profile"] span',
+                                        'button[aria-label*="account"] span',
+                                        'nav a[aria-label] span',
+                                    ];
+                                    for (const sel of selectors) {
+                                        const el = document.querySelector(sel);
+                                        if (el) {
+                                            const t = el.textContent.trim();
+                                            if (t.length > 0) return t;
+                                        }
+                                    }
+                                    // Look for any @mention pattern in visible text
+                                    const walker = document.createTreeWalker(
+                                        document.body, NodeFilter.SHOW_TEXT, null);
+                                    let node;
+                                    while (node = walker.nextNode()) {
+                                        const m = node.textContent.match(/@([A-Za-z0-9_]{1,50})/);
+                                        if (m) return '@' + m[1];
+                                    }
+                                    return null;
                                 }"""
                             )
                             if _handle and len(_handle) > 0:
                                 grok_username = _handle
                         except Exception:
                             pass
+                    # If DOM extraction failed, fall back to x-userid cookie short ID
+                    if not grok_username:
+                        for _ck in _ctx.cookies():
+                            if _ck.get("name") == "x-userid" and _ck.get("value"):
+                                grok_username = f"SuperGrok ({_ck['value'][:8]}…)"
+                                break
                     _br.close()
             except Exception as _pw_err:
                 logger.warning("Grok Playwright verify failed: %s", _pw_err)

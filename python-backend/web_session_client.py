@@ -539,15 +539,21 @@ def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[
     result: dict = {"status": 0, "body": ""}
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
+        from config import find_chromium  # noqa: PLC0415
+        _chrome_exe = find_chromium()
+        _launch_kwargs: dict = {
+            "headless": True,
+            "args": [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
+                "--disable-gpu",
                 "--disable-blink-features=AutomationControlled",
             ],
-        )
+        }
+        if _chrome_exe:
+            _launch_kwargs["executable_path"] = _chrome_exe
+        browser = p.chromium.launch(**_launch_kwargs)
         context = browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent=_GROK_UA,

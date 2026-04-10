@@ -85,10 +85,16 @@ def delete_session(ai_id: str) -> Tuple[bool, str]:
 # ─── Browser launch helpers (for login flow only) ────────────────────────────
 
 def _launch_browser(playwright, headless: bool = True, storage_state: Optional[str] = None):
-    browser = playwright.chromium.launch(
-        headless=headless,
-        args=["--no-sandbox", "--disable-setuid-sandbox"],
-    )
+    from config import find_chromium  # noqa: PLC0415
+    _chrome_exe = find_chromium()
+    _launch_kw: dict = {
+        "headless": headless,
+        "args": ["--no-sandbox", "--disable-setuid-sandbox",
+                 "--disable-dev-shm-usage", "--disable-gpu"],
+    }
+    if _chrome_exe:
+        _launch_kw["executable_path"] = _chrome_exe
+    browser = playwright.chromium.launch(**_launch_kw)
     context_kwargs: dict = {
         "viewport": {"width": 1280, "height": 900},
         "user_agent": (

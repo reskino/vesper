@@ -1,7 +1,31 @@
 import os
+import shutil
 
 SESSIONS_DIR = os.path.join(os.path.dirname(__file__), "sessions")
 LOGS_DIR = os.path.join(os.path.dirname(__file__), "logs")
+
+
+def find_chromium() -> str | None:
+    """
+    Return a path to a working Chromium/Chrome binary, or None to let
+    Playwright use its own bundled headless-shell (which crashes in Replit's
+    NixOS sandbox with SIGSEGV).
+
+    Priority order:
+      1. CHROMIUM_PATH env-var (user override)
+      2. System chromium / chromium-browser on $PATH  (Nix-provided)
+      3. google-chrome on $PATH (fallback)
+    """
+    override = os.environ.get("CHROMIUM_PATH", "").strip()
+    if override and os.path.isfile(override):
+        return override
+
+    for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"):
+        path = shutil.which(name)
+        if path:
+            return path
+
+    return None
 
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)

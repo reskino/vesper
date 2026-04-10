@@ -591,31 +591,47 @@ def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[
         page.route("**/rest/app-chat/conversations/new", _handle_route)
 
         # ── Navigate to grok.com ───────────────────────────────────────────────
-        # Cloudflare's JS challenge runs here → fresh __cf_bm is set
+        # Cloudflare's JS challenge runs here → fresh __cf_bm is set.
+        # wait_until="load" gives React time to mount before we look for elements.
         try:
-            page.goto("https://grok.com/", timeout=30_000, wait_until="domcontentloaded")
-            page.wait_for_timeout(2_500)
+            page.goto("https://grok.com/", timeout=40_000, wait_until="load")
+            page.wait_for_timeout(3_000)
         except Exception as nav_err:
             logger.warning("Grok: navigation issue (continuing): %s", nav_err)
 
+        # ── Detect login / auth wall ───────────────────────────────────────────
+        page_url = page.url or ""
+        page_title = (page.title() or "").lower()
+        login_keywords = ("sign in", "log in", "login", "signin", "auth")
+        if any(k in page_title for k in login_keywords) or "/login" in page_url or "/signin" in page_url:
+            browser.close()
+            result["status"] = 401
+            result["body"] = '{"error": "Not authenticated — cookies appear expired or invalid"}'
+            return result["status"], result["body"]
+
         # ── Find the chat input ────────────────────────────────────────────────
+        # Try multiple selectors in order of specificity
         input_el = None
         for sel in [
+            "div.ProseMirror[contenteditable='true']",
             "div.ProseMirror",
             "[contenteditable='true']",
+            "textarea[placeholder]",
             "textarea",
         ]:
             try:
-                el = page.wait_for_selector(sel, timeout=10_000, state="visible")
+                el = page.wait_for_selector(sel, timeout=8_000, state="visible")
                 if el:
                     input_el = el
+                    logger.info("Grok: found input with selector %r", sel)
                     break
             except Exception:
                 pass
 
         if not input_el:
-            # Fallback: fire a raw fetch() from the page.  Less ideal but tries.
-            logger.warning("Grok: chat input not found — falling back to page.evaluate fetch")
+            logger.warning("Grok: chat input not found on %s — page title: %r", page.url, page.title())
+            # Take a best-effort raw fetch() from within the page.
+            # This may get code-7 but gives a meaningful error to the user.
             js_result = page.evaluate(
                 """async (p) => {
                     try {
@@ -637,29 +653,38 @@ def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[
         # ── Type a minimal trigger message ────────────────────────────────────
         # The route interceptor will replace the body with our actual prompt.
         input_el.click()
-        page.keyboard.type("hi", delay=40)
-        page.wait_for_timeout(400)
+        page.wait_for_timeout(300)
+        page.keyboard.type("hi", delay=50)
+        page.wait_for_timeout(500)
 
-        # ── Submit ────────────────────────────────────────────────────────────
+        # ── Submit ─────────────────────────────────────────────────────────────
+        # Try button selectors first, then keyboard shortcuts
         submitted = False
         for btn_sel in [
+            "button[aria-label='Send message']",
+            "button[aria-label='Send']",
+            "button[aria-label='send']",
+            "[data-testid='send-button']",
             "button[type='submit']",
             "button[aria-label*='Send']",
-            "button[aria-label*='send']",
-            "[data-testid='send-button']",
             "button[aria-label*='Submit']",
+            "form button:last-of-type",
         ]:
             try:
-                btn = page.wait_for_selector(btn_sel, timeout=3_000, state="visible")
-                if btn:
+                btn = page.wait_for_selector(btn_sel, timeout=2_000, state="visible")
+                if btn and btn.is_enabled():
                     btn.click()
                     submitted = True
+                    logger.info("Grok: submitted via button %r", btn_sel)
                     break
             except Exception:
                 pass
 
         if not submitted:
+            # ProseMirror blocks plain Enter (inserts newline); use Mod+Enter or
+            # just Enter depending on the Grok version
             page.keyboard.press("Enter")
+            logger.info("Grok: submitted via Enter key fallback")
 
         # ── Wait for the route handler to fire (up to 120 s) ─────────────────
         waited_ms = 0

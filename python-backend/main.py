@@ -463,16 +463,27 @@ def import_session():
     # Playwright expects:                 {"cookies": [...], "origins": [...]}
     if isinstance(parsed, list):
         # Convert Cookie Editor / Netscape-JSON array → Playwright format
+        # Cookie Editor / browser export values → Playwright's required enum
+        _SAME_SITE_MAP = {
+            "strict":         "Strict",
+            "lax":            "Lax",
+            "none":           "None",
+            "no_restriction": "None",   # Cookie Editor calls SameSite=None "no_restriction"
+            "unspecified":    "Lax",
+            "":               "Lax",
+        }
+
         def _norm_cookie(c: dict) -> dict:
             """Map Cookie Editor fields to Playwright cookie fields."""
+            raw_ss = str(c.get("sameSite") or "").strip().lower()
             out: dict = {
-                "name":   c.get("name", ""),
-                "value":  c.get("value", ""),
-                "domain": c.get("domain", ""),
-                "path":   c.get("path", "/"),
-                "secure": bool(c.get("secure", False)),
+                "name":     c.get("name", ""),
+                "value":    c.get("value", ""),
+                "domain":   c.get("domain", ""),
+                "path":     c.get("path", "/"),
+                "secure":   bool(c.get("secure", False)),
                 "httpOnly": bool(c.get("httpOnly", False)),
-                "sameSite": c.get("sameSite", "Lax").capitalize(),
+                "sameSite": _SAME_SITE_MAP.get(raw_ss, "Lax"),
             }
             # Playwright uses "expires" (float epoch); Cookie Editor uses "expirationDate"
             exp = c.get("expirationDate") or c.get("expires")
@@ -685,47 +696,93 @@ def verify_session(ai_id):
                             "error": f"Session invalid ({resp.status_code}) — please re-import cookies"})
 
         elif ai_id == "grok":
-            # Grok moved from grok.x.ai → grok.com in 2025
-            sess.headers.update({
-                "Origin": "https://grok.com",
-                "Referer": "https://grok.com/",
-            })
-            for url in [
-                "https://grok.com/api/me",
-                "https://grok.com/api/user",
-                "https://grok.com/rest/app-chat/me",
-            ]:
-                try:
-                    resp = sess.get(url, timeout=10)
-                    logger.debug("Grok verify %s → %s", url, resp.status_code)
-                    if resp.status_code == 200:
-                        d = resp.json()
-                        name = (
-                            d.get("name") or d.get("username") or
-                            d.get("screen_name") or d.get("email")
-                        )
-                        if name:
-                            return jsonify({"success": True, "username": name})
-                except Exception:
-                    continue
-            # Fall back to x.com GraphQL viewer
-            csrf = cookies.get("ct0", "")
+            # Grok is behind Cloudflare — curl_cffi GET requests are challenged.
+            # Use a real Playwright browser (cookies already loaded) to hit the
+            # /api/me endpoint from inside the page context, which bypasses CF.
+            grok_username = None
             try:
-                resp = sess.get(
-                    "https://x.com/i/api/graphql/G3KGOASz96M-Ku0e6ch2pw/Viewer",
-                    headers={"x-csrf-token": csrf} if csrf else {},
-                    timeout=10,
+                from playwright.sync_api import sync_playwright as _spw
+                _grok_ua = (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/136.0.0.0 Safari/537.36"
                 )
-                if resp.status_code == 200:
-                    d = resp.json()
-                    sn = (d.get("data", {}).get("viewer", {})
-                          .get("user_results", {}).get("result", {})
-                          .get("legacy", {}).get("screen_name"))
-                    if sn:
-                        return jsonify({"success": True, "username": f"@{sn}"})
-            except Exception:
-                pass
-            # Cookies exist — call it connected even if we can't get the name
+                with _spw() as _pw:
+                    _br = _pw.chromium.launch(
+                        headless=True,
+                        args=["--no-sandbox", "--disable-setuid-sandbox",
+                              "--disable-dev-shm-usage",
+                              "--disable-blink-features=AutomationControlled"],
+                    )
+                    _ctx = _br.new_context(
+                        viewport={"width": 1280, "height": 900},
+                        user_agent=_grok_ua,
+                        storage_state=session_path,
+                    )
+                    _ctx.add_init_script(
+                        "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+                    )
+                    _pg = _ctx.new_page()
+                    _pg.set_default_timeout(30_000)
+                    try:
+                        _pg.goto("https://grok.com/", timeout=30_000,
+                                 wait_until="domcontentloaded")
+                        _pg.wait_for_timeout(2_000)
+                    except Exception:
+                        pass
+                    # Try /api/me from inside the browser (Cloudflare passes real browser JS)
+                    for _api_url in [
+                        "https://grok.com/api/me",
+                        "https://grok.com/rest/app-chat/user/me",
+                    ]:
+                        try:
+                            _js = _pg.evaluate(
+                                f"""async () => {{
+                                    try {{
+                                        const r = await fetch('{_api_url}',
+                                            {{credentials:'include',headers:{{'Accept':'application/json'}}}});
+                                        if (r.ok) return await r.json();
+                                    }} catch(e) {{}}
+                                    return null;
+                                }}"""
+                            )
+                            if isinstance(_js, dict):
+                                grok_username = (
+                                    _js.get("username") or _js.get("screen_name") or
+                                    _js.get("name") or _js.get("email")
+                                )
+                                if grok_username:
+                                    break
+                        except Exception:
+                            continue
+                    # If API didn't work, try extracting from the page DOM
+                    if not grok_username:
+                        try:
+                            # Look for the user's handle in sidebar / profile area
+                            _handle = _pg.evaluate(
+                                """() => {
+                                    const el = document.querySelector(
+                                        '[data-testid="UserAvatar"] + * span, '
+                                        + '.username, [class*="username"], '
+                                        + '[class*="screenName"], [aria-label*="@"]'
+                                    );
+                                    return el ? el.textContent.trim() : null;
+                                }"""
+                            )
+                            if _handle and len(_handle) > 0:
+                                grok_username = _handle
+                        except Exception:
+                            pass
+                    _br.close()
+            except Exception as _pw_err:
+                logger.warning("Grok Playwright verify failed: %s", _pw_err)
+
+            if grok_username:
+                # Prefix @ if it looks like a Twitter handle and doesn't already have it
+                if grok_username and not grok_username.startswith("@") and "@" not in grok_username and " " not in grok_username:
+                    grok_username = f"@{grok_username}"
+                return jsonify({"success": True, "username": grok_username})
+            # Cookies exist and we loaded the page — mark as connected
             return jsonify({"success": True, "username": "Connected",
                             "warning": "Could not fetch Grok username"})
 

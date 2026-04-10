@@ -288,6 +288,8 @@ export interface AgentStatusResponse {
   task?: string | null;
   steps: AgentStep[];
   result?: AgentResult | null;
+  current_action?: string | null;
+  files_written?: string[];
 }
 
 export type SetModelBody = {

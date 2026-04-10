@@ -1062,6 +1062,15 @@ components:
         result:
           $ref: "#/components/schemas/AgentResult"
           nullable: true
+        current_action:
+          type: string
+          nullable: true
+          description: Human-readable description of what the agent is currently doing
+        files_written:
+          type: array
+          items:
+            type: string
+          description: List of file paths written by the agent so far
       required:
         - running
         - steps

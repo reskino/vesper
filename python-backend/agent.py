@@ -1,21 +1,19 @@
 """
-Autonomous coding agent engine.
+Vesper Autonomous Coding Agent
 
-Works exactly like a senior engineer who:
-1. Thinks through the task
-2. Writes code, reads it back to verify
-3. Runs commands and reads their output carefully
-4. Starts servers in the background, verifies they respond with HTTP requests
-5. Takes screenshots to visually inspect running web apps
-6. Reads back files after writing to confirm correctness
-7. Fixes errors, re-tests, iterates until everything is genuinely working
-8. Reports TASK_COMPLETE only when the task is fully verified and working
+Works exactly like a senior engineer:
+1. Plans first, then codes
+2. Installs dependencies before running
+3. Reads files back after writing to verify
+4. Runs code, reads output carefully, fixes errors immediately
+5. Tests every endpoint / feature before declaring done
+6. Only says TASK_COMPLETE after personal verification
 
 Tool call format:
 <tool>{"name": "tool_name", "params": {...}}</tool>
 
 When complete:
-TASK_COMPLETE: <one-line summary of what was built and how to use it>
+TASK_COMPLETE: <one-line summary of what was built and verified>
 """
 import json
 import re
@@ -49,12 +47,10 @@ COMPLETE_PATTERN = re.compile(
 )
 
 # ── Alternative tool-call formats some models produce ────────────────────────
-# Matches:  <write_file> <parameter=path>foo.py</parameter> ...
-#           <execute> <parameter=command>python3 foo.py</parameter> ...
 _TOOL_NAMES_RE = (
-    "execute|write_file|read_file|background_exec|kill_process|"
+    "execute|background_exec|kill_process|write_file|read_file|"
     "create_dir|delete|list_dir|check_port|http_get|http_post|"
-    "screenshot_url|sleep"
+    "screenshot_url|sleep|install_packages|patch_file"
 )
 ALT_TOOL_RE = re.compile(
     rf"<({_TOOL_NAMES_RE})>(.*?)(?:</(?:{_TOOL_NAMES_RE})>|(?=<(?:{_TOOL_NAMES_RE})>)|$)",
@@ -67,14 +63,7 @@ ALT_PARAM_RE = re.compile(
 
 
 def _try_parse_alt_tool(text: str) -> list[dict]:
-    """
-    Parse alternative tool-call formats that some LLMs produce instead of the
-    required JSON-in-<tool> format.
-
-    Handles:
-      <write_file> <parameter=path>hello.py</parameter> <parameter=content>...</parameter>
-      <execute> <parameter=command>python3 hello.py</parameter>
-    """
+    """Parse alternative tool-call formats some LLMs emit."""
     results = []
     for m in ALT_TOOL_RE.finditer(text):
         tool_name = m.group(1).lower()
@@ -84,7 +73,6 @@ def _try_parse_alt_tool(text: str) -> list[dict]:
             key = (pm.group(1) or "value").strip()
             val = pm.group(2).strip()
             params[key] = val
-        # Also try "function call" style: <execute command="..." />
         if not params:
             for attr_m in re.finditer(r'(\w+)=["\']([^"\']*)["\']', body):
                 params[attr_m.group(1)] = attr_m.group(2)
@@ -94,124 +82,132 @@ def _try_parse_alt_tool(text: str) -> list[dict]:
 
 
 def _trim_conversation(conv: str, max_chars: int = 40_000) -> str:
-    """
-    If the conversation has grown too large, remove the oldest tool result
-    blocks to stay within the context window.
-    """
+    """Remove oldest tool result blocks to stay within context window."""
     if len(conv) <= max_chars:
         return conv
-    # Keep the system prompt (first 3000 chars) and trim the middle
     head = conv[:3000]
     tail = conv[-(max_chars - 3500):]
     return head + "\n\n[...earlier history trimmed to fit context window...]\n\n" + tail
 
+
 SCREENSHOT_DIR = Path(tempfile.gettempdir()) / "agent_screenshots"
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 
-# Registry of background processes started by the agent
 _background_processes: dict[str, subprocess.Popen] = {}
 
-SYSTEM_PROMPT = """You are an expert autonomous coding agent. You build complete, fully-verified, production-ready software by thinking step-by-step and using tools — exactly like a senior engineer would.
+SYSTEM_PROMPT = """You are Vesper, an autonomous coding agent running inside a Replit workspace. You build complete, fully-tested software step by step — exactly like a meticulous senior engineer.
 
-══════════════════════════════════════════
-CRITICAL — TOOL CALL FORMAT (mandatory)
-══════════════════════════════════════════
-You MUST call tools using this EXACT JSON format. No other format is accepted:
+══════════════════════════════════════
+MANDATORY TOOL FORMAT
+══════════════════════════════════════
+Call tools using ONLY this exact JSON format:
 
-<tool>{{"name": "write_file", "params": {{"path": "hello.py", "content": "print('hello')"}}}}</tool>
+<tool>{{"name": "write_file", "params": {{"path": "app.py", "content": "print('hello')"}}}}</tool>
 
-WRONG formats (will be ignored — do NOT use these):
-  ✗  <write_file> <parameter=path>hello.py</parameter> ...
-  ✗  ```write_file path=hello.py ...```
-  ✗  [write_file](path=hello.py)
+❌ Wrong formats (will be ignored):
+  <write_file path="app.py">...</write_file>
+  ```write_file ...```
 
-You have these tools available. Call them using this exact format:
-<tool>{{"name": "tool_name", "params": {{...}}}}</tool>
-
-═══════════════════════════════════════════
+══════════════════════════════════════
 AVAILABLE TOOLS
-═══════════════════════════════════════════
+══════════════════════════════════════
 
-1. execute — Run any shell command (blocking, waits for output)
-   <tool>{{"name": "execute", "params": {{"command": "python3 script.py", "cwd": "optional/path", "timeout": 30}}}}</tool>
+1. install_packages — Install Python/Node packages (ALWAYS do this before importing)
+   <tool>{{"name": "install_packages", "params": {{"packages": ["flask", "requests"], "manager": "pip"}}}}</tool>
+   manager: "pip" (default) | "npm" | "pnpm"
 
-2. background_exec — Start a long-running process (server, watcher) without blocking
-   <tool>{{"name": "background_exec", "params": {{"command": "python3 server.py", "name": "my-server", "cwd": "optional/path"}}}}</tool>
+2. execute — Run a shell command (blocking, waits for output)
+   <tool>{{"name": "execute", "params": {{"command": "python3 app.py", "timeout": 30}}}}</tool>
 
-3. kill_process — Stop a background process
+3. background_exec — Start a server / watcher without blocking
+   <tool>{{"name": "background_exec", "params": {{"command": "python3 server.py", "name": "my-server"}}}}</tool>
+
+4. kill_process — Stop a background process
    <tool>{{"name": "kill_process", "params": {{"name": "my-server"}}}}</tool>
 
-4. write_file — Create or overwrite a file with full content
-   <tool>{{"name": "write_file", "params": {{"path": "relative/path/file.py", "content": "full content here"}}}}</tool>
+5. write_file — Create or overwrite a file with full content
+   <tool>{{"name": "write_file", "params": {{"path": "src/app.py", "content": "full file content here"}}}}</tool>
 
-5. read_file — Read a file's contents (always do this after writing to verify)
-   <tool>{{"name": "read_file", "params": {{"path": "relative/path/file.py"}}}}</tool>
+6. patch_file — Append content to a file (useful for adding tests, etc.)
+   <tool>{{"name": "patch_file", "params": {{"path": "app.py", "content": "\\n# added section\\n..."}}}}</tool>
 
-6. create_dir — Create a directory and all parents
-   <tool>{{"name": "create_dir", "params": {{"path": "relative/path"}}}}</tool>
+7. read_file — Read a file's contents (always do this after writing to verify)
+   <tool>{{"name": "read_file", "params": {{"path": "app.py"}}}}</tool>
 
-7. delete — Delete a file or directory
-   <tool>{{"name": "delete", "params": {{"path": "relative/path"}}}}</tool>
+8. create_dir — Create a directory tree
+   <tool>{{"name": "create_dir", "params": {{"path": "src/utils"}}}}</tool>
 
-8. list_dir — List directory contents
-   <tool>{{"name": "list_dir", "params": {{"path": "relative/path", "depth": 2}}}}</tool>
+9. delete — Delete a file or directory
+   <tool>{{"name": "delete", "params": {{"path": "old_file.py"}}}}</tool>
 
-9. check_port — Check if a port is open (server is running)
-   <tool>{{"name": "check_port", "params": {{"port": 8080, "host": "localhost", "retries": 5, "wait_seconds": 1}}}}</tool>
+10. list_dir — List directory contents
+    <tool>{{"name": "list_dir", "params": {{"path": ".", "depth": 2}}}}</tool>
 
-10. http_get — Make an HTTP GET request and see the response
-    <tool>{{"name": "http_get", "params": {{"url": "http://localhost:8080/api/hello", "timeout": 10}}}}</tool>
+11. check_port — Verify a server started on a port
+    <tool>{{"name": "check_port", "params": {{"port": 5000, "retries": 5, "wait_seconds": 1}}}}</tool>
 
-11. http_post — Make an HTTP POST request with a JSON body
-    <tool>{{"name": "http_post", "params": {{"url": "http://localhost:8080/api/items", "body": {{"name": "test"}}, "timeout": 10}}}}</tool>
+12. http_get — Test an API endpoint (GET)
+    <tool>{{"name": "http_get", "params": {{"url": "http://localhost:5000/api/hello"}}}}</tool>
 
-12. screenshot_url — Take a screenshot of a web page and see its visible content
-    <tool>{{"name": "screenshot_url", "params": {{"url": "http://localhost:8080", "wait_ms": 1000}}}}</tool>
+13. http_post — Test an API endpoint (POST)
+    <tool>{{"name": "http_post", "params": {{"url": "http://localhost:5000/api/items", "body": {{"name": "test"}}}}}}</tool>
 
-13. sleep — Wait N seconds (use after starting a server to let it initialise)
+14. screenshot_url — Take a screenshot of a web page and see its content
+    <tool>{{"name": "screenshot_url", "params": {{"url": "http://localhost:5000", "wait_ms": 1500}}}}</tool>
+
+15. sleep — Wait N seconds (let a server start up)
     <tool>{{"name": "sleep", "params": {{"seconds": 2}}}}</tool>
 
-═══════════════════════════════════════════
-HOW YOU THINK AND WORK
-═══════════════════════════════════════════
+══════════════════════════════════════
+HOW YOU WORK (follow this workflow)
+══════════════════════════════════════
 
-You work exactly like a meticulous senior engineer who never ships untested code:
+STEP 1 — PLAN: Think through what needs to be built, which files, which packages.
 
-WRITING CODE:
-- Write the full file content — never use placeholders, never truncate with "..."
-- After writing a file, read it back to verify it was saved correctly
-- If the task needs multiple files, write them all before running
+STEP 2 — SETUP: Create directories, install ALL required packages with install_packages.
 
-RUNNING & VERIFYING:
-- After running code, read the output carefully — look for errors, warnings, tracebacks
-- If the output shows an error, fix it immediately and re-run
-- Do NOT assume it works — verify it works
-- If you write a web server, use background_exec then check_port to confirm it started
-- Then use http_get to call each endpoint and verify the responses
-- Use screenshot_url to visually inspect web UIs
-- If anything looks wrong in the screenshot or HTTP response, fix the code and re-test
+STEP 3 — CODE: Write every file with complete content. Never use "..." or placeholders.
+  → After each write_file, immediately read_file to verify it saved correctly.
 
-ITERATION MINDSET:
-- Never give up on first error — errors are expected, fix them
-- Read error messages carefully — they tell you exactly what's wrong
-- After fixing, re-run and re-verify
-- Keep iterating until every verification passes
+STEP 4 — RUN: Execute or background_exec the code.
+  → Read ALL output. Look for errors, tracebacks, import errors, port conflicts.
 
-TASK_COMPLETE:
-- Only say TASK_COMPLETE when you have personally verified the task works
-- Include in the summary: what was built, where the files are, and what you verified
+STEP 5 — VERIFY:
+  → If a server: use sleep then check_port then http_get each endpoint.
+  → If a script: check exit code 0 and expected output.
+  → If a web app: screenshot_url to see it rendering.
 
-═══════════════════════════════════════════
+STEP 6 — FIX & ITERATE:
+  → If ANYTHING fails: fix the code, re-run, re-verify. Never skip this.
+  → Import errors → install the missing package with install_packages.
+  → Syntax errors → fix the file, re-read to verify, re-run.
+  → Port in use → kill_process the old server, background_exec again.
+
+STEP 7 — TASK_COMPLETE: Only say this after ALL verifications pass.
+  Format: TASK_COMPLETE: <what was built, where files are, what was verified>
+
+══════════════════════════════════════
+RULES
+══════════════════════════════════════
+✓ Install packages BEFORE running code that imports them.
+✓ Write COMPLETE file content — no ellipsis, no "add rest here".
+✓ Read files back after writing — always verify.
+✓ Fix every error before moving on.
+✓ Test every endpoint and feature.
+✓ Use ports 5000-5009 for servers (they're available in the workspace).
 
 WORKING DIRECTORY: {cwd}
 WORKSPACE ROOT: {workspace_root}
 MAX STEPS: {max_steps}
 
-Begin your response by thinking through the approach, then use tools one at a time.
+Start by planning your approach, then call your first tool.
 """
 
 
-_agent_status: dict = {"running": False, "task": None, "steps": [], "result": None}
+_agent_status: dict = {
+    "running": False, "task": None, "steps": [],
+    "result": None, "current_action": None, "files_written": [],
+}
 _stop_requested: bool = False
 
 
@@ -235,7 +231,43 @@ def _pick_ai(ai_id: str) -> Optional[str]:
     return None
 
 
+def _set_action(action: str) -> None:
+    """Update the current_action field that the UI polls."""
+    _agent_status["current_action"] = action
+
+
 # ─── Tool implementations ────────────────────────────────────────────────────
+
+def _tool_install_packages(params: dict, cwd: str) -> str:
+    packages = params.get("packages", [])
+    manager = params.get("manager", "pip")
+
+    if isinstance(packages, str):
+        packages = [p.strip() for p in packages.replace(",", " ").split() if p.strip()]
+    if not packages:
+        return "ERROR: No packages specified. Provide a list: {\"packages\": [\"flask\", \"requests\"]}"
+
+    pkg_str = " ".join(f'"{p}"' if " " in p else p for p in packages)
+
+    if manager in ("pip", "pip3"):
+        cmd = f"pip install {pkg_str} --quiet --no-warn-script-location"
+    elif manager == "npm":
+        cmd = f"npm install {pkg_str}"
+    elif manager in ("pnpm",):
+        cmd = f"pnpm add {pkg_str}"
+    else:
+        cmd = f"pip install {pkg_str} --quiet --no-warn-script-location"
+
+    res = exec_command(cmd, cwd=cwd, timeout=180)
+    out = (res["stdout"] or "").strip()
+    err = (res["stderr"] or "").strip()
+    combined = "\n".join(filter(None, [out, err]))[:600]
+
+    if res["exitCode"] == 0:
+        return f"✓ Installed: {', '.join(packages)}\n{combined}".strip()
+    else:
+        return f"✗ Install failed (exit {res['exitCode']}):\n{combined}\nTry fixing the package names and retry."
+
 
 def _tool_execute(params: dict, cwd: str) -> str:
     command = params.get("command", "")
@@ -261,10 +293,10 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
         work_dir = os.path.join(WORKSPACE_ROOT, work_dir)
     work_dir = work_dir or cwd
 
-    # Kill existing process with same name
     if name in _background_processes:
         try:
             _background_processes[name].terminate()
+            time.sleep(0.3)
         except Exception:
             pass
 
@@ -279,20 +311,20 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
     )
     _background_processes[name] = proc
 
-    # Give it a moment to crash if it's going to
-    time.sleep(0.8)
+    time.sleep(1.2)
     if proc.poll() is not None:
         out = proc.stdout.read() if proc.stdout else ""
         err = proc.stderr.read() if proc.stderr else ""
         return (
-            f"Process exited immediately (code {proc.returncode}) — it probably crashed.\n"
-            f"STDOUT: {out[:500]}\nSTDERR: {err[:500]}\n"
+            f"Process '{name}' exited immediately (code {proc.returncode}) — it crashed.\n"
+            f"STDOUT: {out[:400]}\nSTDERR: {err[:400]}\n"
             f"Fix the error and try again."
         )
 
     return (
-        f"Started '{name}' in background (PID {proc.pid})\n"
-        f"Use sleep + check_port to wait for it to be ready, then http_get to test it."
+        f"✓ Started '{name}' in background (PID {proc.pid}).\n"
+        f"Next: use sleep({{'seconds': 2}}) then check_port to confirm it's ready, "
+        f"then http_get to test an endpoint."
     )
 
 
@@ -311,20 +343,50 @@ def _tool_kill_process(params: dict, cwd: str) -> str:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         except Exception:
             proc.terminate()
-        return f"Terminated '{name}'"
-    return f"No background process named '{name}' found. Running: {list(_background_processes.keys())}"
+        return f"✓ Terminated '{name}'"
+    return f"No background process named '{name}'. Running: {list(_background_processes.keys())}"
 
 
 def _tool_write_file(params: dict, cwd: str) -> str:
     path = params.get("path", "")
     content = params.get("content", "")
+    if not path:
+        return "ERROR: path is required"
     if not os.path.isabs(path):
         path = os.path.join(WORKSPACE_ROOT, path)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(content, encoding="utf-8")
     size = len(content.encode())
     lines = content.count("\n") + 1
-    return f"Written: {params.get('path')} ({lines} lines, {size} bytes)\nVerify with read_file to confirm content is correct."
+    rel = params.get("path", path)
+    # Track written files in status
+    files = _agent_status.get("files_written", [])
+    if rel not in files:
+        files.append(rel)
+        _agent_status["files_written"] = files
+    return (
+        f"✓ Written: {rel} ({lines} lines, {size} bytes)\n"
+        f"→ Verify with read_file to confirm content is correct."
+    )
+
+
+def _tool_patch_file(params: dict, cwd: str) -> str:
+    """Append content to a file."""
+    path = params.get("path", "")
+    content = params.get("content", "")
+    if not path:
+        return "ERROR: path is required"
+    if not os.path.isabs(path):
+        full = os.path.join(WORKSPACE_ROOT, path)
+    else:
+        full = path
+    p = Path(full)
+    if not p.exists():
+        return f"ERROR: File not found: {path}. Use write_file to create it first."
+    existing = p.read_text(encoding="utf-8")
+    p.write_text(existing + content, encoding="utf-8")
+    lines = (existing + content).count("\n") + 1
+    return f"✓ Patched (appended to): {path} — now {lines} lines total."
 
 
 def _tool_read_file(params: dict, cwd: str) -> str:
@@ -338,9 +400,10 @@ def _tool_read_file(params: dict, cwd: str) -> str:
         return f"ERROR: File not found: {path}"
     content = p.read_text(encoding="utf-8", errors="replace")
     if len(content) > 8000:
-        content = content[:8000] + "\n\n[Truncated at 8000 chars — file is longer]"
+        content = content[:8000] + "\n\n[Truncated at 8000 chars]"
     lang = get_language(path)
-    return f"```{lang}\n{content}\n```"
+    lines = content.count("\n") + 1
+    return f"```{lang}\n# File: {params.get('path', path)} ({lines} lines)\n{content}\n```"
 
 
 def _tool_create_dir(params: dict, cwd: str) -> str:
@@ -348,7 +411,7 @@ def _tool_create_dir(params: dict, cwd: str) -> str:
     if not os.path.isabs(path):
         path = os.path.join(WORKSPACE_ROOT, path)
     Path(path).mkdir(parents=True, exist_ok=True)
-    return f"Directory created: {params.get('path')}"
+    return f"✓ Directory created: {params.get('path')}"
 
 
 def _tool_delete(params: dict, cwd: str) -> str:
@@ -365,7 +428,7 @@ def _tool_delete(params: dict, cwd: str) -> str:
         p.unlink()
     else:
         return f"Not found: {path}"
-    return f"Deleted: {path}"
+    return f"✓ Deleted: {path}"
 
 
 def _tool_list_dir(params: dict, cwd: str) -> str:
@@ -378,7 +441,7 @@ def _tool_list_dir(params: dict, cwd: str) -> str:
     if not os.path.exists(full):
         return f"Directory not found: {path}"
 
-    def _fmt(directory: str, rel: str, cur_depth: int) -> list[str]:
+    def _fmt(directory: str, cur_depth: int) -> list[str]:
         lines = []
         try:
             entries = sorted(os.scandir(directory), key=lambda e: (e.is_file(), e.name))
@@ -391,13 +454,13 @@ def _tool_list_dir(params: dict, cwd: str) -> str:
             if entry.is_dir():
                 lines.append(f"{indent}{entry.name}/")
                 if cur_depth < depth:
-                    lines.extend(_fmt(entry.path, os.path.join(rel, entry.name), cur_depth + 1))
+                    lines.extend(_fmt(entry.path, cur_depth + 1))
             else:
                 size = entry.stat().st_size
                 lines.append(f"{indent}{entry.name}  ({size}B)")
         return lines
 
-    result = _fmt(full, path, 0)
+    result = _fmt(full, 0)
     return f"{path}/\n" + "\n".join(result) if result else f"{path}/ (empty)"
 
 
@@ -411,11 +474,14 @@ def _tool_check_port(params: dict, cwd: str) -> str:
         try:
             sock = socket.create_connection((host, port), timeout=2)
             sock.close()
-            return f"✓ Port {port} is OPEN — server is running and accepting connections"
+            return f"✓ Port {port} is OPEN — server is running and accepting connections."
         except (ConnectionRefusedError, OSError):
             if attempt < retries - 1:
                 time.sleep(wait_seconds)
-    return f"✗ Port {port} is CLOSED after {retries} attempt(s) — server is not running or still starting up"
+    return (
+        f"✗ Port {port} is CLOSED after {retries} attempt(s) — server not running or still starting.\n"
+        f"Check background_exec output or try adding more sleep time."
+    )
 
 
 def _tool_http_get(params: dict, cwd: str) -> str:
@@ -427,18 +493,18 @@ def _tool_http_get(params: dict, cwd: str) -> str:
         body = resp.text
         if len(body) > 3000:
             body = body[:3000] + "\n[Truncated]"
+        status_emoji = "✓" if resp.status_code < 400 else "✗"
         return (
-            f"HTTP GET {url}\n"
+            f"{status_emoji} HTTP GET {url}\n"
             f"Status: {resp.status_code}\n"
-            f"Headers: {dict(resp.headers)}\n"
             f"Body:\n{body}"
         )
     except _requests.exceptions.ConnectionError:
-        return f"ERROR: Connection refused to {url} — is the server running?"
+        return f"✗ Connection refused to {url} — is the server running? Use check_port first."
     except _requests.exceptions.Timeout:
-        return f"ERROR: Request timed out after {timeout}s"
+        return f"✗ Request timed out after {timeout}s — server may be overloaded or starting."
     except Exception as e:
-        return f"ERROR: {e}"
+        return f"✗ ERROR: {e}"
 
 
 def _tool_http_post(params: dict, cwd: str) -> str:
@@ -451,23 +517,24 @@ def _tool_http_post(params: dict, cwd: str) -> str:
         resp_body = resp.text
         if len(resp_body) > 3000:
             resp_body = resp_body[:3000] + "\n[Truncated]"
+        status_emoji = "✓" if resp.status_code < 400 else "✗"
         return (
-            f"HTTP POST {url}\n"
+            f"{status_emoji} HTTP POST {url}\n"
             f"Request body: {json.dumps(body)}\n"
             f"Status: {resp.status_code}\n"
             f"Response:\n{resp_body}"
         )
     except _requests.exceptions.ConnectionError:
-        return f"ERROR: Connection refused to {url} — is the server running?"
+        return f"✗ Connection refused to {url} — server not running?"
     except _requests.exceptions.Timeout:
-        return f"ERROR: Request timed out after {timeout}s"
+        return f"✗ Request timed out after {timeout}s"
     except Exception as e:
-        return f"ERROR: {e}"
+        return f"✗ ERROR: {e}"
 
 
 def _tool_screenshot_url(params: dict, cwd: str) -> str:
     url = params.get("url", "")
-    wait_ms = int(params.get("wait_ms", 1000))
+    wait_ms = int(params.get("wait_ms", 1500))
 
     try:
         from playwright.sync_api import sync_playwright
@@ -478,94 +545,105 @@ def _tool_screenshot_url(params: dict, cwd: str) -> str:
             browser = p.chromium.launch(
                 headless=True,
                 executable_path=exe,
-                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                args=["--no-sandbox", "--disable-setuid-sandbox",
+                      "--disable-dev-shm-usage", "--disable-gpu"],
             )
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             try:
                 response = page.goto(url, wait_until="networkidle", timeout=20000)
                 status = response.status if response else 0
-
                 if wait_ms > 0:
                     page.wait_for_timeout(wait_ms)
-
                 title = page.title()
                 visible_text = page.evaluate(
-                    "() => (document.body ? document.body.innerText : '').slice(0, 4000)"
+                    "() => (document.body ? document.body.innerText : '').slice(0, 3000)"
                 )
-
-                # Capture any console errors
-                errors_on_page = page.evaluate(
-                    """() => {
-                        const errs = [];
-                        const orig = console.error.bind(console);
-                        return errs;
-                    }"""
-                )
-
-                # Take screenshot
                 screenshot_bytes = page.screenshot(full_page=False)
                 fname = f"screenshot_{int(time.time()*1000)}.png"
                 fpath = SCREENSHOT_DIR / fname
                 fpath.write_bytes(screenshot_bytes)
 
+                status_emoji = "✓" if status < 400 else "✗"
                 result = (
-                    f"SCREENSHOT: {url}\n"
-                    f"HTTP Status: {status}\n"
-                    f"Page Title: {title}\n"
-                    f"Screenshot saved: {fname}\n"
+                    f"{status_emoji} Screenshot: {url}\n"
+                    f"HTTP Status: {status} | Page Title: {title}\n"
                     f"Screenshot API path: /api/agent/screenshot/{fname}\n\n"
                     f"VISIBLE CONTENT:\n{visible_text}"
                 )
-
                 if status >= 400:
-                    result += f"\n\n⚠ HTTP {status} error — the page returned an error status"
-
+                    result += f"\n\n⚠ HTTP {status} error returned — check server logs."
                 return result
-
             except Exception as e:
-                return f"ERROR loading {url}: {e}"
+                return f"✗ ERROR loading {url}: {e}"
             finally:
                 browser.close()
-
     except Exception as e:
-        return f"ERROR with browser automation: {e}"
+        return f"✗ ERROR with browser: {e}"
 
 
 def _tool_sleep(params: dict, cwd: str) -> str:
     seconds = float(params.get("seconds", 2))
     seconds = min(seconds, 30)
     time.sleep(seconds)
-    return f"Waited {seconds:.1f}s"
+    return f"✓ Waited {seconds:.1f}s"
 
 
 # ─── Tool dispatcher ─────────────────────────────────────────────────────────
 
 TOOL_MAP = {
-    "execute": _tool_execute,
-    "background_exec": _tool_background_exec,
-    "kill_process": _tool_kill_process,
-    "write_file": _tool_write_file,
-    "read_file": _tool_read_file,
-    "create_dir": _tool_create_dir,
-    "delete": _tool_delete,
-    "list_dir": _tool_list_dir,
-    "check_port": _tool_check_port,
-    "http_get": _tool_http_get,
-    "http_post": _tool_http_post,
-    "screenshot_url": _tool_screenshot_url,
-    "sleep": _tool_sleep,
+    "install_packages": _tool_install_packages,
+    "execute":          _tool_execute,
+    "background_exec":  _tool_background_exec,
+    "kill_process":     _tool_kill_process,
+    "write_file":       _tool_write_file,
+    "patch_file":       _tool_patch_file,
+    "read_file":        _tool_read_file,
+    "create_dir":       _tool_create_dir,
+    "delete":           _tool_delete,
+    "list_dir":         _tool_list_dir,
+    "check_port":       _tool_check_port,
+    "http_get":         _tool_http_get,
+    "http_post":        _tool_http_post,
+    "screenshot_url":   _tool_screenshot_url,
+    "sleep":            _tool_sleep,
 }
 
 
 def _execute_tool(tool_name: str, params: dict, cwd: str) -> str:
     fn = TOOL_MAP.get(tool_name)
     if fn is None:
-        return f"ERROR: Unknown tool '{tool_name}'. Available tools: {list(TOOL_MAP.keys())}"
+        available = ", ".join(TOOL_MAP.keys())
+        return (
+            f"ERROR: Unknown tool '{tool_name}'.\n"
+            f"Available: {available}\n"
+            f"Use the exact tool name from the AVAILABLE TOOLS list."
+        )
     try:
+        _set_action(f"{tool_name}: {_describe_params(tool_name, params)}")
         return fn(params, cwd)
     except Exception as e:
         logger.error(f"Tool '{tool_name}' error: {e}", exc_info=True)
         return f"ERROR in {tool_name}: {e}"
+
+
+def _describe_params(tool_name: str, params: dict) -> str:
+    """Human-readable summary of what a tool call is doing."""
+    if tool_name in ("write_file", "read_file", "patch_file", "delete"):
+        return str(params.get("path", ""))
+    if tool_name in ("execute", "background_exec"):
+        return str(params.get("command", ""))[:60]
+    if tool_name in ("http_get", "http_post", "screenshot_url"):
+        return str(params.get("url", ""))
+    if tool_name == "install_packages":
+        pkgs = params.get("packages", [])
+        if isinstance(pkgs, list):
+            return ", ".join(pkgs)
+        return str(pkgs)
+    if tool_name == "check_port":
+        return f"port {params.get('port', '')}"
+    if tool_name == "sleep":
+        return f"{params.get('seconds', '')}s"
+    return str(params)[:60]
 
 
 # ─── Agent loop ───────────────────────────────────────────────────────────────
@@ -584,7 +662,14 @@ def run_agent(
         cwd = os.path.join(WORKSPACE_ROOT, cwd)
 
     _stop_requested = False
-    _agent_status = {"running": True, "task": task, "steps": [], "result": None}
+    _agent_status = {
+        "running": True,
+        "task": task,
+        "steps": [],
+        "result": None,
+        "current_action": "Starting up…",
+        "files_written": [],
+    }
 
     if model_id:
         set_active_model(ai_id, model_id)
@@ -597,9 +682,14 @@ def run_agent(
             "steps": [],
             "result": {
                 "success": False,
-                "error": "No AI session found. Please create a session first in the Sessions page.",
+                "error": (
+                    "No AI session found. Go to the Sessions page and connect an AI provider first. "
+                    "Pollinations AI works for free — no key needed."
+                ),
                 "summary": None,
             },
+            "current_action": None,
+            "files_written": [],
         }
         return _agent_status
 
@@ -610,17 +700,21 @@ def run_agent(
         max_steps=max_steps,
     )
     conversation = (
-        f"{system}\n\n{'═'*50}\nTASK: {task}\n{'═'*50}\n\n"
+        f"{system}\n\n{'═'*50}\n"
+        f"TASK: {task}\n"
+        f"{'═'*50}\n\n"
         f"Start by thinking through your approach, then call your first tool:"
     )
 
     start_time = time.time()
     last_response: str = ""
+    consecutive_no_tool = 0
+
+    _set_action("Thinking…")
 
     for step_num in range(max_steps):
         step_start = time.time()
 
-        # Check if the user requested a stop
         if _stop_requested:
             _agent_status = {
                 "running": False,
@@ -632,12 +726,14 @@ def run_agent(
                     "error": "Agent stopped by user.",
                     "totalElapsedMs": int((time.time() - start_time) * 1000),
                 },
+                "current_action": None,
+                "files_written": _agent_status.get("files_written", []),
             }
             return _agent_status
 
-        # Trim conversation to avoid overflowing the model's context window
         conversation = _trim_conversation(conversation)
 
+        _set_action(f"Thinking (step {step_num + 1}/{max_steps})…")
         success, ai_response, error = send_prompt(actual_ai, conversation)
 
         if not success or not ai_response:
@@ -647,22 +743,22 @@ def run_agent(
                 "content": f"AI call failed: {error}",
                 "elapsedMs": int((time.time() - step_start) * 1000),
             })
+            _agent_status["steps"] = list(steps)
             break
 
         # ── Repetition guard ──────────────────────────────────────────────────
-        # If the model outputs the exact same text twice in a row it has
-        # looped.  Stop immediately instead of wasting all remaining steps.
         if ai_response.strip() == last_response.strip() and last_response:
             steps.append({
                 "step": step_num + 1,
                 "type": "error",
                 "content": (
-                    "Agent detected a repeated response — the model is stuck in a loop. "
-                    "This usually means the model isn't following the required tool-call format. "
-                    "Try a different AI model (ChatGPT or Claude work most reliably with Agent Mode)."
+                    "Agent is stuck in a loop — the model produced the same response twice.\n"
+                    "This usually means the model isn't following the required <tool>...</tool> format.\n"
+                    "Recommendation: Switch to a stronger model (Claude, GPT-4o, or Gemini 2.5 Flash)."
                 ),
                 "elapsedMs": int((time.time() - step_start) * 1000),
             })
+            _agent_status["steps"] = list(steps)
             break
         last_response = ai_response
 
@@ -677,8 +773,8 @@ def run_agent(
         # ── Check for task completion ─────────────────────────────────────────
         complete_match = COMPLETE_PATTERN.search(ai_response)
         if complete_match:
-            # Take the first non-empty line of the match as the summary
-            summary = complete_match.group(1).strip().splitlines()[0].strip()
+            summary_lines = complete_match.group(1).strip().splitlines()
+            summary = next((l.strip() for l in summary_lines if l.strip()), "Task complete.")
             _agent_status = {
                 "running": False,
                 "task": task,
@@ -689,36 +785,70 @@ def run_agent(
                     "error": None,
                     "totalElapsedMs": int((time.time() - start_time) * 1000),
                 },
+                "current_action": None,
+                "files_written": _agent_status.get("files_written", []),
             }
             return _agent_status
 
-        # ── Parse tool calls (primary JSON format) ───────────────────────────
+        # ── Parse tool calls ─────────────────────────────────────────────────
         primary_tool_jsons = TOOL_PATTERN.findall(ai_response)
-
-        # ── Parse tool calls (alternative XML/parameter format fallback) ──────
         alt_tool_dicts: list[dict] = []
         if not primary_tool_jsons:
             alt_tool_dicts = _try_parse_alt_tool(ai_response)
 
         if not primary_tool_jsons and not alt_tool_dicts:
-            # The model didn't call any tool AND didn't say TASK_COMPLETE.
-            # Nudge it with a very explicit reminder of the required format.
+            consecutive_no_tool += 1
             steps_remaining = max_steps - step_num - 1
+
+            if consecutive_no_tool >= 3:
+                # Give up — model can't follow format
+                steps.append({
+                    "step": step_num + 1,
+                    "type": "error",
+                    "content": (
+                        "Model failed to use tools 3 times in a row.\n"
+                        "This model doesn't follow the required format reliably.\n"
+                        "Switch to Claude, GPT-4o, or Gemini 2.5 Flash for better results."
+                    ),
+                    "elapsedMs": 0,
+                })
+                _agent_status["steps"] = list(steps)
+                break
+
+            # Nudge the model
             conversation += (
                 f"\n\nAssistant: {ai_response}"
-                f"\n\nSystem: ⚠ No tool call detected and task is not complete."
-                f" You MUST use tools to make progress. Required format (copy this exactly):\n\n"
+                f"\n\nSystem: ⚠ No tool call found and task is not complete."
+                f" You MUST call a tool to make progress. Required format:\n\n"
                 f'<tool>{{"name": "write_file", "params": {{"path": "hello.py", "content": "print(\'hi\')"}}}}</tool>\n\n'
-                f"Or when done:\nTASK_COMPLETE: brief summary of what was built\n\n"
-                f"Steps remaining: {steps_remaining}. Use a tool now."
+                f'Or to install packages:\n'
+                f'<tool>{{"name": "install_packages", "params": {{"packages": ["flask"]}}}}</tool>\n\n'
+                f"When done and verified:\nTASK_COMPLETE: brief one-line summary\n\n"
+                f"Steps remaining: {steps_remaining}. Call a tool NOW."
                 f"\n\nAssistant:"
             )
             continue
 
-        # ── Execute all tool calls ────────────────────────────────────────────
-        tool_results_text_parts: list[str] = []
+        consecutive_no_tool = 0
 
-        # Process primary (JSON) tool calls
+        # ── Execute all tool calls in this response ───────────────────────────
+        tool_results_parts: list[str] = []
+
+        def _run_tool_call(tool_name: str, tool_params: dict) -> None:
+            tool_start = time.time()
+            tool_result = _execute_tool(tool_name, tool_params, cwd)
+            elapsed = int((time.time() - tool_start) * 1000)
+            steps.append({
+                "step": step_num + 1,
+                "type": "tool",
+                "tool": tool_name,
+                "params": tool_params,
+                "result": tool_result,
+                "elapsedMs": elapsed,
+            })
+            _agent_status["steps"] = list(steps)
+            tool_results_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
+
         for tool_json in primary_tool_jsons:
             try:
                 tool_data = json.loads(tool_json.strip())
@@ -730,51 +860,29 @@ def run_agent(
                     "content": err_msg,
                     "elapsedMs": 0,
                 })
-                tool_results_text_parts.append(f"[ERROR] {err_msg}")
+                _agent_status["steps"] = list(steps)
+                tool_results_parts.append(f"[ERROR] {err_msg}")
                 continue
+            _run_tool_call(tool_data.get("name", ""), tool_data.get("params", {}))
 
-            tool_name = tool_data.get("name", "")
-            tool_params = tool_data.get("params", {})
-            tool_result = _execute_tool(tool_name, tool_params, cwd)
-
-            steps.append({
-                "step": step_num + 1,
-                "type": "tool",
-                "tool": tool_name,
-                "params": tool_params,
-                "result": tool_result,
-                "elapsedMs": 0,
-            })
-            _agent_status["steps"] = list(steps)
-            tool_results_text_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
-
-        # Process alternative-format tool calls
         for tool_data in alt_tool_dicts:
-            tool_name = tool_data.get("name", "")
-            tool_params = tool_data.get("params", {})
-            tool_result = _execute_tool(tool_name, tool_params, cwd)
+            _run_tool_call(tool_data.get("name", ""), tool_data.get("params", {}))
 
-            steps.append({
-                "step": step_num + 1,
-                "type": "tool",
-                "tool": tool_name,
-                "params": tool_params,
-                "result": tool_result,
-                "elapsedMs": 0,
-            })
-            _agent_status["steps"] = list(steps)
-            tool_results_text_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
-
-        tool_results_block = "\n\n---\n\n".join(tool_results_text_parts)
+        tool_results_block = "\n\n---\n\n".join(tool_results_parts)
         steps_remaining = max_steps - step_num - 1
+
         conversation += (
             f"\n\nAssistant: {ai_response}"
             f"\n\nTool Results:\n{tool_results_block}"
-            f"\n\nSystem: Continue. Steps remaining: {steps_remaining}."
-            f" Use more tools to make progress, read back files to verify,"
-            f" test your code, or say TASK_COMPLETE when fully done and verified."
+            f"\n\nSystem: Continue working. Steps remaining: {steps_remaining}."
+            f"\n• If there were errors above, fix them immediately and re-run."
+            f"\n• If a file was written, read it back to verify."
+            f"\n• If a server was started, check_port then http_get to test endpoints."
+            f"\n• Say TASK_COMPLETE only after ALL features are verified working."
             f"\n\nAssistant:"
         )
+
+        _set_action(f"Step {step_num + 2}/{max_steps} — Analyzing results…")
 
     # Ran out of steps
     _agent_status = {
@@ -784,9 +892,11 @@ def run_agent(
         "result": {
             "success": False,
             "summary": None,
-            "error": f"Reached maximum steps ({max_steps}) without completing the task.",
+            "error": f"Reached maximum steps ({max_steps}) without completing. Try increasing Max Steps or use a smarter model.",
             "totalElapsedMs": int((time.time() - start_time) * 1000),
         },
+        "current_action": None,
+        "files_written": _agent_status.get("files_written", []),
     }
     return _agent_status
 

@@ -246,7 +246,7 @@ export function Home() {
               <div className="py-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
                 <Loader2 className="h-3 w-3 animate-spin" />Loading
               </div>
-            ) : aisData?.ais.map(ai => {
+            ) : aisData?.ais?.map(ai => {
               const isSel = selectedAi === ai.id;
               const isExp = expandedModelPicker === ai.id;
               const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
@@ -380,7 +380,7 @@ export function Home() {
                         {msg.aiId && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                              {aisData?.ais.find(a => a.id === msg.aiId)?.name ?? "AI"}
+                              {aisData?.ais?.find(a => a.id === msg.aiId)?.name ?? "AI"}
                             </span>
                           </div>
                         )}
@@ -538,7 +538,7 @@ export function Home() {
             <DialogTitle>Select AI & Model</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            {aisData?.ais.map(ai => {
+            {aisData?.ais?.map(ai => {
               const isSel = selectedAi === ai.id;
               const isExp = expandedModelPicker === ai.id;
               const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];

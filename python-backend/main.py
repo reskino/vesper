@@ -2,18 +2,19 @@ import os
 import sys
 import uuid
 import json as _json
+import base64
 import logging
+import shutil
 import subprocess
 import threading
 import time
+import tempfile
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 from config import AI_CONFIGS, FALLBACK_ORDER, get_active_model, set_active_model
-from api_client import (
-    session_exists, get_session_info, delete_session,
-    send_prompt, check_ai_available,
-    get_api_key, set_api_key, delete_api_key, get_key_info,
+from playwright_utils import (
+    session_exists, get_session_info, delete_session, send_prompt, check_ai_available,
 )
 from history_manager import (
     add_message, get_messages, get_all_summaries, clear_messages, get_stats
@@ -103,7 +104,7 @@ def ask_ai():
 
         if current_ai != ai_id:
             fallback_used = True
-            logger.info(f"Falling back to {current_ai} (tried: {tried_ais})")
+            logger.info("Falling back to %s (tried: %s)", current_ai, tried_ais)
 
         success, response_text, error = send_prompt(current_ai, prompt)
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -121,10 +122,9 @@ def ask_ai():
             })
 
         tried_ais.append(current_ai)
-        logger.warning(f"AI {current_ai} failed: {error}")
+        logger.warning("AI %s failed: %s", current_ai, error)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
-    error_msg = f"All AIs failed. Tried: {tried_ais}"
     return jsonify({
         "success": False,
         "aiId": ai_id,
@@ -132,7 +132,7 @@ def ask_ai():
         "conversationId": conversation_id,
         "elapsedMs": elapsed_ms,
         "fallbackUsed": fallback_used,
-        "error": error_msg,
+        "error": f"All AIs failed. Tried: {tried_ais}",
     }), 503
 
 
@@ -150,17 +150,16 @@ def ask_ai_with_context():
         return jsonify({"error": "aiId and prompt are required"}), 400
 
     ACTION_PREFIXES = {
-        "fix": "Please analyze the following code and fix any bugs, errors, or issues. Explain what you changed and why.\n\n",
-        "explain": "Please explain the following code in detail. Describe what it does, how it works, and any important patterns or concepts used.\n\n",
-        "test": "Please write comprehensive unit tests for the following code. Use appropriate testing frameworks and cover edge cases.\n\n",
-        "refactor": "Please refactor the following code to improve readability, performance, and maintainability. Follow best practices and explain your changes.\n\n",
-        "suggest": "Please review the following code and suggest improvements, optimizations, and best practices.\n\n",
-        "debug": "Please help debug the following code. Identify potential issues, explain the root cause, and provide a fix.\n\n",
-        "document": "Please add comprehensive documentation, docstrings, and inline comments to the following code.\n\n",
+        "fix":      "Please analyze the following code and fix any bugs. Explain what you changed.\n\n",
+        "explain":  "Please explain the following code in detail.\n\n",
+        "test":     "Please write comprehensive unit tests for the following code.\n\n",
+        "refactor": "Please refactor the following code to improve readability and maintainability.\n\n",
+        "suggest":  "Please review the following code and suggest improvements.\n\n",
+        "debug":    "Please help debug the following code and provide a fix.\n\n",
+        "document": "Please add comprehensive documentation and docstrings to the following code.\n\n",
     }
 
     prefix = ACTION_PREFIXES.get(action, "") if action else ""
-
     file_context = ""
     if files:
         file_context = "\n\n--- Attached Files ---\n"
@@ -169,7 +168,6 @@ def ask_ai_with_context():
             file_context += f"\n**File: `{f['path']}`**\n```{lang}\n{f['content']}\n```\n"
 
     full_prompt = prefix + user_prompt + file_context
-
     add_message(ai_id, "user", full_prompt, conversation_id)
 
     start_time = time.time()
@@ -230,7 +228,6 @@ def execute_code():
         return jsonify({"error": "code is required"}), 400
 
     start_time = time.time()
-
     allowed_languages = {
         "python": ["python3", "-c"],
         "javascript": ["node", "-e"],
@@ -240,15 +237,8 @@ def execute_code():
         return jsonify({"error": f"Unsupported language: {language}"}), 400
 
     cmd = allowed_languages[language] + [code]
-
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd="/tmp",
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd="/tmp")
         elapsed_ms = int((time.time() - start_time) * 1000)
         return jsonify({
             "success": result.returncode == 0,
@@ -258,109 +248,175 @@ def execute_code():
             "elapsedMs": elapsed_ms,
         })
     except subprocess.TimeoutExpired:
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        return jsonify({
-            "success": False,
-            "stdout": "",
-            "stderr": f"Execution timed out after {timeout}s",
-            "exitCode": 1,
-            "elapsedMs": elapsed_ms,
-        })
+        return jsonify({"success": False, "stdout": "", "stderr": f"Timed out after {timeout}s", "exitCode": 1, "elapsedMs": timeout * 1000})
     except Exception as e:
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        return jsonify({
-            "success": False,
-            "stdout": "",
-            "stderr": str(e),
-            "exitCode": 1,
-            "elapsedMs": elapsed_ms,
-        })
+        return jsonify({"success": False, "stdout": "", "stderr": str(e), "exitCode": 1, "elapsedMs": 0})
 
 
-# ─── API Key Management (replaces browser Sessions) ──────────────────────────
+# ─── Sessions ────────────────────────────────────────────────────────────────
 
 @app.route("/api/sessions")
 def list_sessions():
     sessions = []
     for ai_id, config in AI_CONFIGS.items():
-        info = get_key_info(ai_id)
-        sessions.append({
-            "aiId": ai_id,
-            "aiName": config["name"],
-            **info,
-        })
+        info = get_session_info(ai_id)
+        sessions.append({"aiId": ai_id, "aiName": config["name"], **info})
     return jsonify({"sessions": sessions})
 
 
-@app.route("/api/sessions/set-key", methods=["POST"])
-def set_key_route():
-    data = request.get_json()
-    ai_id = data.get("aiId")
-    api_key = (data.get("apiKey") or "").strip()
+# ─── Browser session worker management ───────────────────────────────────────
+_browser_workers: dict = {}
+_workers_lock = threading.Lock()
 
-    if not ai_id:
-        return jsonify({"success": False, "message": "aiId is required"}), 400
-    if ai_id not in AI_CONFIGS:
-        return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
-    if not api_key:
-        return jsonify({"success": False, "message": "apiKey is required"}), 400
+XVFB_RUN = shutil.which("xvfb-run")
+WORKER_SCRIPT = os.path.join(os.path.dirname(__file__), "session_browser_worker.py")
 
-    ok = set_api_key(ai_id, api_key)
-    if ok:
-        config = AI_CONFIGS[ai_id]
-        logger.info("API key set for %s", ai_id)
-        return jsonify({
-            "success": True,
-            "message": f"API key saved for {config['name']}",
-            "aiId": ai_id,
-        })
-    return jsonify({"success": False, "message": "Failed to save key"}), 500
+
+def _launch_browser_worker(ai_id: str) -> tuple:
+    work_dir = os.path.join(tempfile.gettempdir(), f"vesper_browser_{ai_id}")
+    os.makedirs(work_dir, exist_ok=True)
+    cmd_path = os.path.join(work_dir, "command.txt")
+    if os.path.exists(cmd_path):
+        os.remove(cmd_path)
+
+    log_path = os.path.join(work_dir, "worker.log")
+    log_file = open(log_path, "w")
+    cmd = [sys.executable, WORKER_SCRIPT, ai_id, work_dir]
+    proc = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
+    with _workers_lock:
+        _browser_workers[ai_id] = {"proc": proc, "work_dir": work_dir}
+    return proc, work_dir
+
+
+def _send_worker_command(ai_id: str, payload: dict) -> bool:
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return False
+    cmd_path = os.path.join(info["work_dir"], "command.txt")
+    with open(cmd_path, "w") as f:
+        f.write(_json.dumps(payload))
+    return True
 
 
 @app.route("/api/sessions/create", methods=["POST"])
 def create_session():
-    """
-    Legacy endpoint kept for API-client-react compatibility.
-    Expects {aiId, apiKey} — just calls set_key_route logic.
-    """
     data = request.get_json()
     ai_id = data.get("aiId")
-    api_key = (data.get("apiKey") or "").strip()
-
     if not ai_id:
         return jsonify({"success": False, "message": "aiId is required"}), 400
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
-    if not api_key:
-        return jsonify({"success": False, "message": "apiKey is required — enter your API key"}), 400
 
-    ok = set_api_key(ai_id, api_key)
-    if ok:
-        config = AI_CONFIGS[ai_id]
-        return jsonify({
-            "success": True,
-            "message": f"API key saved for {config['name']}",
-            "aiId": ai_id,
-        })
-    return jsonify({"success": False, "message": "Failed to save key"}), 500
+    with _workers_lock:
+        old = _browser_workers.pop(ai_id, None)
+    if old:
+        try:
+            old["proc"].terminate()
+        except Exception:
+            pass
+
+    try:
+        _launch_browser_worker(ai_id)
+    except Exception as e:
+        logger.error("Failed to launch browser worker: %s", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    return jsonify({
+        "success": True,
+        "message": f"Browser launched for {AI_CONFIGS[ai_id]['name']}. Log in and click Save.",
+        "aiId": ai_id,
+    })
+
+
+@app.route("/api/sessions/browser-status/<ai_id>", methods=["GET"])
+def browser_status(ai_id):
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return jsonify({"active": False, "status": "idle"})
+
+    proc = info["proc"]
+    if proc.poll() is not None:
+        with _workers_lock:
+            _browser_workers.pop(ai_id, None)
+
+    status_file = os.path.join(info["work_dir"], "status.json")
+    if os.path.exists(status_file):
+        try:
+            with open(status_file) as f:
+                status = _json.load(f)
+            return jsonify({"active": proc.poll() is None, **status})
+        except Exception:
+            pass
+    return jsonify({"active": proc.poll() is None, "status": "starting"})
+
+
+@app.route("/api/sessions/browser-screenshot/<ai_id>", methods=["GET"])
+def browser_screenshot(ai_id):
+    with _workers_lock:
+        info = _browser_workers.get(ai_id)
+    if not info:
+        return jsonify({"error": "No active browser session"}), 404
+
+    screenshot_file = os.path.join(info["work_dir"], "latest.png")
+    if not os.path.exists(screenshot_file):
+        return jsonify({"error": "Screenshot not yet available"}), 202
+
+    try:
+        with open(screenshot_file, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode("utf-8")
+        return jsonify({"screenshot": f"data:image/png;base64,{b64}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/browser-action/<ai_id>", methods=["POST"])
+def browser_action(ai_id):
+    payload = request.get_json() or {}
+    ok = _send_worker_command(ai_id, payload)
+    if not ok:
+        return jsonify({"success": False, "message": "No active browser session"}), 404
+    return jsonify({"success": True})
 
 
 @app.route("/api/sessions/<ai_id>/delete", methods=["DELETE"])
 def delete_session_route(ai_id):
-    success, message = delete_api_key(ai_id)
+    success, message = delete_session(ai_id)
     return jsonify({"success": success, "message": message, "aiId": ai_id})
 
 
-@app.route("/api/sessions/verify/<ai_id>", methods=["POST"])
-def verify_key_route(ai_id):
-    """Send a trivial test prompt to verify the key works."""
+@app.route("/api/sessions/import", methods=["POST"])
+def import_session():
+    from config import SESSIONS_DIR
+    data = request.get_json()
+    ai_id = data.get("aiId")
+    state_json = data.get("stateJson")
+
+    if not ai_id or not state_json:
+        return jsonify({"success": False, "message": "aiId and stateJson are required"}), 400
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
 
-    success, _text, error = send_prompt(ai_id, "Reply with exactly one word: OK")
-    if success:
-        return jsonify({"success": True, "message": "API key is working"})
-    return jsonify({"success": False, "message": error or "Key verification failed"}), 400
+    try:
+        state = _json.loads(state_json) if isinstance(state_json, str) else state_json
+        if not isinstance(state, dict):
+            raise ValueError("Must be a JSON object")
+    except Exception as exc:
+        return jsonify({"success": False, "message": f"Invalid JSON: {exc}"}), 400
+
+    if "cookies" not in state and "origins" not in state:
+        return jsonify({"success": False, "message": "JSON must contain 'cookies' or 'origins' keys"}), 400
+
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
+    session_path = os.path.join(SESSIONS_DIR, f"{ai_id}_state.json")
+    try:
+        with open(session_path, "w") as f:
+            _json.dump(state, f, indent=2)
+        return jsonify({"success": True, "message": f"Session imported for {AI_CONFIGS[ai_id]['name']}", "aiId": ai_id})
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 # ─── History ─────────────────────────────────────────────────────────────────
@@ -394,11 +450,9 @@ def clear_history_route(ai_id):
 @app.route("/api/files/tree")
 def file_tree():
     path = request.args.get("path", ".")
-    depth = int(request.args.get("depth", 3))
-    depth = min(depth, 6)
+    depth = min(int(request.args.get("depth", 3)), 6)
     try:
-        result = get_file_tree(path, depth)
-        return jsonify(result)
+        return jsonify(get_file_tree(path, depth))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -409,8 +463,7 @@ def file_read():
     if not path:
         return jsonify({"error": "path is required"}), 400
     try:
-        result = read_file(path)
-        return jsonify(result)
+        return jsonify(read_file(path))
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:
@@ -421,12 +474,10 @@ def file_read():
 def file_write():
     data = request.get_json()
     path = data.get("path")
-    content = data.get("content", "")
     if not path:
         return jsonify({"error": "path is required"}), 400
     try:
-        result = write_file(path, content)
-        return jsonify(result)
+        return jsonify(write_file(path, data.get("content", "")))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -435,13 +486,10 @@ def file_write():
 def file_create():
     data = request.get_json()
     path = data.get("path")
-    file_type = data.get("type", "file")
-    content = data.get("content")
     if not path:
         return jsonify({"error": "path is required"}), 400
     try:
-        result = create_file(path, file_type, content)
-        return jsonify(result)
+        return jsonify(create_file(path, data.get("type", "file"), data.get("content")))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -452,8 +500,7 @@ def file_delete():
     if not path:
         return jsonify({"error": "path is required"}), 400
     try:
-        result = delete_path(path)
-        return jsonify(result)
+        return jsonify(delete_path(path))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -461,13 +508,11 @@ def file_delete():
 @app.route("/api/files/rename", methods=["POST"])
 def file_rename():
     data = request.get_json()
-    old_path = data.get("oldPath")
-    new_path = data.get("newPath")
+    old_path, new_path = data.get("oldPath"), data.get("newPath")
     if not old_path or not new_path:
         return jsonify({"error": "oldPath and newPath are required"}), 400
     try:
-        result = rename_path(old_path, new_path)
-        return jsonify(result)
+        return jsonify(rename_path(old_path, new_path))
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -480,11 +525,8 @@ def terminal_exec():
     command = data.get("command", "").strip()
     if not command:
         return jsonify({"error": "command is required"}), 400
-    cwd = data.get("cwd")
-    timeout = min(int(data.get("timeout", 60)), 300)
     try:
-        result = exec_command(command, cwd=cwd, timeout=timeout)
-        return jsonify(result)
+        return jsonify(exec_command(command, cwd=data.get("cwd"), timeout=min(int(data.get("timeout", 60)), 300)))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -492,8 +534,7 @@ def terminal_exec():
 @app.route("/api/terminal/cwd", methods=["GET"])
 def terminal_cwd():
     try:
-        info = get_env_info()
-        return jsonify(info)
+        return jsonify(get_env_info())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -511,27 +552,23 @@ def agent_run():
     working_dir = data.get("workingDir")
     max_steps = min(int(data.get("maxSteps", 20)), 30)
 
-    current = get_agent_status()
-    if current.get("running"):
+    if get_agent_status().get("running"):
         return jsonify({"error": "An agent task is already running"}), 409
 
     def _run():
         try:
             run_agent(ai_id, task, working_dir=working_dir, max_steps=max_steps)
         except Exception as e:
-            logger.error(f"Agent thread error: {e}")
+            logger.error("Agent thread error: %s", e)
 
-    thread = threading.Thread(target=_run, daemon=True)
-    thread.start()
-
+    threading.Thread(target=_run, daemon=True).start()
     return jsonify({"running": True, "task": task, "steps": [], "result": None})
 
 
 @app.route("/api/agent/status", methods=["GET"])
 def agent_status():
     try:
-        status = get_agent_status()
-        return jsonify(status)
+        return jsonify(get_agent_status())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -548,5 +585,5 @@ def agent_screenshot(filename: str):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PYTHON_BACKEND_PORT", 5050))
-    logger.info(f"Starting Universal AI Coding Proxy backend on port {port}")
+    logger.info("Starting Universal AI Coding Proxy backend on port %d", port)
     app.run(host="0.0.0.0", port=port, debug=False)

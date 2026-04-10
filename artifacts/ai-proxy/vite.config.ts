@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import monacoEditorPlugin from "vite-plugin-monaco-editor";
 import path from "path";
 
 const rawPort = process.env.PORT;
@@ -30,6 +31,16 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // Bundles Monaco Editor workers locally so IntelliSense works without CDN
+    (monacoEditorPlugin as any).default({
+      languageWorkers: [
+        "editorWorkerService",
+        "typescript",
+        "json",
+        "css",
+        "html",
+      ],
+    }),
   ],
   resolve: {
     alias: {

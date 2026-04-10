@@ -291,8 +291,9 @@ export function EditorPanel() {
   const [cursorPos, setCursorPos]     = useState({ line: 1, col: 1 });
   const [isSaving, setIsSaving]       = useState(false);
 
-  // Monaco editor instance ref (so we can call it imperatively)
+  // Monaco editor + Monaco API refs (so we can call them imperatively)
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof MonacoNS | null>(null);
 
   // Auto-save debounce timer
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -384,19 +385,19 @@ export function EditorPanel() {
     autoSaveTimer.current = setTimeout(() => handleSave(activeTab), 1500);
   }, [activeTab, handleSave]);
 
-  // ── Monaco mount — wire up cursor, keyboard shortcuts ──────────────────────
-  const handleEditorMount: OnMount = useCallback((editor) => {
+  // ── Monaco mount — wire up cursor position and Ctrl+S ──────────────────────
+  const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
 
     // Track cursor position for the status bar
-    editor.onDidChangeCursorPosition(e => {
+    editor.onDidChangeCursorPosition((e: MonacoNS.editor.ICursorPositionChangedEvent) => {
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
-    // Ctrl/Cmd+S → save
+    // Ctrl/Cmd+S → save (uses the monaco API directly, no window.monaco hacks)
     editor.addCommand(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).monaco?.KeyMod?.CtrlCmd | (window as any).monaco?.KeyCode?.KeyS ?? 0,
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       () => handleSave(),
     );
   }, [handleSave]);

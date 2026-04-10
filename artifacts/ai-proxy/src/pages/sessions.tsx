@@ -24,23 +24,54 @@ interface BrowserViewerProps {
 
 function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
   const { toast } = useToast();
-  // tick increments every second — appended to the img src to force a reload
-  const [tick, setTick] = useState(0);
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgObjectUrl, setImgObjectUrl] = useState<string | null>(null);
   const [statusText, setStatusText] = useState("Starting browser…");
   const [statusColor, setStatusColor] = useState<"yellow" | "green" | "red" | "blue">("yellow");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const savedRef = useRef(false);
+  const objUrlRef = useRef<string | null>(null);
 
-  // Drive the tick counter — this makes <img src="...?t=N"> refetch every second
+  // Fetch the PNG explicitly via fetch() — avoids browser HEAD / proxy caching issues
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
+    let cancelled = false;
 
-  // Poll status separately (doesn't need to be as fast as screenshots)
+    const fetchShot = async () => {
+      if (cancelled || savedRef.current) return;
+      try {
+        const res = await fetch(
+          `/api/sessions/browser-screenshot/${aiId}?_=${Date.now()}`,
+          { cache: "no-store" }
+        );
+        if (cancelled) return;
+        if (res.ok && res.status !== 204) {
+          const blob = await res.blob();
+          if (cancelled || blob.size < 100) return; // ignore empty/tiny responses
+          if (blob.type.startsWith("image/")) {
+            const url = URL.createObjectURL(blob);
+            if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
+            objUrlRef.current = url;
+            setImgObjectUrl(url);
+          }
+        }
+      } catch { /* retry next tick */ }
+    };
+
+    fetchShot(); // first fetch immediately
+    const id = setInterval(fetchShot, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      if (objUrlRef.current) {
+        URL.revokeObjectURL(objUrlRef.current);
+        objUrlRef.current = null;
+      }
+    };
+  }, [aiId]);
+
+  // Poll status
   useEffect(() => {
     if (savedRef.current) return;
     const id = setInterval(async () => {
@@ -69,9 +100,7 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
           setStatusText("Starting browser…");
           setStatusColor("yellow");
         }
-      } catch {
-        // ignore transient
-      }
+      } catch { /* ignore */ }
     }, 1500);
     return () => clearInterval(id);
   }, [aiId]);
@@ -125,9 +154,6 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
     blue:   "bg-blue-500/20 text-blue-400",
   }[statusColor];
 
-  // The img src uses the tick as a cache-buster — browser fetches a fresh PNG every second
-  const imgSrc = `/api/sessions/browser-screenshot/${aiId}?t=${tick}`;
-
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div
@@ -159,8 +185,8 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
           tabIndex={0}
           onKeyDown={handleKeyDown}
         >
-          {/* Loading spinner — shown until first image loads */}
-          {!imgLoaded && !error && (
+          {/* Loading spinner — shown until screenshot arrives */}
+          {!imgObjectUrl && !error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
               <Loader2 size={40} className="text-blue-400 animate-spin mb-3" />
               <p className="text-gray-300 font-medium">Starting browser…</p>
@@ -176,24 +202,20 @@ function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
             </div>
           )}
 
-          {/* The actual browser screenshot — reloads every tick */}
-          <img
-            ref={imgRef}
-            src={imgSrc}
-            alt="Browser"
-            onClick={handleImgClick}
-            onLoad={() => setImgLoaded(true)}
-            onError={() => { /* keep spinner until image loads */ }}
-            className="w-full h-auto object-contain"
-            style={{
-              cursor: "pointer",
-              maxHeight: "calc(90vh - 120px)",
-              display: imgLoaded ? "block" : "none",
-            }}
-            draggable={false}
-          />
+          {/* Live screenshot — blob URL fetched explicitly every second via fetch() */}
+          {imgObjectUrl && (
+            <img
+              ref={imgRef}
+              src={imgObjectUrl}
+              alt="Browser"
+              onClick={handleImgClick}
+              className="w-full h-auto object-contain"
+              style={{ cursor: "pointer", maxHeight: "calc(90vh - 120px)" }}
+              draggable={false}
+            />
+          )}
 
-          {imgLoaded && (
+          {imgObjectUrl && (
             <div className="absolute bottom-2 left-2 flex gap-2 pointer-events-none">
               <span className="bg-black/60 text-gray-400 text-[10px] px-2 py-1 rounded flex items-center gap-1">
                 <Mouse size={10} /> Click to interact

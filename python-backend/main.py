@@ -498,7 +498,7 @@ def import_session():
 
 @app.route("/api/sessions/import-key", methods=["POST"])
 def import_api_key():
-    """Store an API key for ChatGPT (OpenAI) or Claude (Anthropic)."""
+    """Store an API key for any AI provider that supports API key auth."""
     from config import SESSIONS_DIR
     data = request.get_json()
     ai_id  = data.get("aiId")
@@ -508,14 +508,16 @@ def import_api_key():
         return jsonify({"success": False, "message": "aiId and apiKey are required"}), 400
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
-    if ai_id not in ("chatgpt", "claude", "groq"):
-        return jsonify({"success": False, "message": "API key mode is only supported for ChatGPT, Claude, and Groq"}), 400
+
+    cfg = AI_CONFIGS[ai_id]
+    if cfg.get("auth_mode") not in ("api_key", "api_key_or_cookies"):
+        return jsonify({"success": False, "message": f"{cfg['name']} does not support API key authentication."}), 400
 
     key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
     try:
         with open(key_path, "w") as f:
             f.write(api_key)
-        return jsonify({"success": True, "message": f"API key saved for {AI_CONFIGS[ai_id]['name']}.", "aiId": ai_id})
+        return jsonify({"success": True, "message": f"API key saved for {cfg['name']}.", "aiId": ai_id})
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 500
 
@@ -543,23 +545,22 @@ def verify_session(ai_id):
     if ai_id == "pollinations":
         return jsonify({"success": True, "username": "No login required", "authMode": "none"})
 
-    # Check API key for ChatGPT / Claude / Groq
-    if ai_id in ("chatgpt", "claude", "groq"):
+    # Check API key for any provider that supports api_key auth mode
+    cfg = AI_CONFIGS[ai_id]
+    if cfg.get("auth_mode") in ("api_key", "api_key_or_cookies"):
         api_key = get_api_key(ai_id)
         if api_key:
-            # Verify API key is functional
+            import urllib.request, urllib.error as _ue
             try:
+                # Provider-specific lightweight verification
                 if ai_id == "chatgpt":
-                    import urllib.request, urllib.error as _ue
                     req = urllib.request.Request(
                         "https://api.openai.com/v1/models",
                         headers={"Authorization": f"Bearer {api_key}"},
                     )
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
-                    return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
                 elif ai_id == "claude":
-                    import urllib.request, urllib.error as _ue
                     body = _json.dumps({"model": "claude-3-5-haiku-20241022", "max_tokens": 1,
                                         "messages": [{"role": "user", "content": "hi"}]}).encode()
                     req = urllib.request.Request(
@@ -571,9 +572,7 @@ def verify_session(ai_id):
                     )
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
-                    return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
                 elif ai_id == "groq":
-                    import urllib.request, urllib.error as _ue
                     req = urllib.request.Request(
                         "https://api.groq.com/openai/v1/models",
                         headers={
@@ -583,9 +582,40 @@ def verify_session(ai_id):
                     )
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
-                    return jsonify({"success": True, "username": "API Key (Groq)", "authMode": "api_key"})
+                elif ai_id == "gemini":
+                    req = urllib.request.Request(
+                        f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                elif ai_id == "openrouter":
+                    req = urllib.request.Request(
+                        "https://openrouter.ai/api/v1/models",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                elif ai_id == "mistral":
+                    req = urllib.request.Request(
+                        "https://api.mistral.ai/v1/models",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                else:
+                    # For providers without a lightweight ping endpoint,
+                    # just confirm the key exists and is non-empty
+                    pass
+                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
+            except _ue.HTTPError as exc:
+                if exc.code in (401, 403):
+                    return jsonify({"success": False, "error": "API key invalid or expired"})
+                # Non-auth errors (e.g. 429) still mean the key exists
+                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
             except Exception as exc:
-                return jsonify({"success": False, "error": f"API key invalid: {exc}"})
+                # Network issues etc — key is stored, treat as valid
+                logger.warning("Verify API key for %s failed with non-auth error: %s", ai_id, exc)
+                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
 
     if not session_exists(ai_id):
         return jsonify({"success": False, "error": "No session file found"})

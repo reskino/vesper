@@ -15,7 +15,7 @@ import time
 import signal
 import logging
 
-# Ensure Chrome can find its shared libraries in the Replit/NixOS environment.
+# Ensure Chrome can find its shared libraries in the NixOS environment.
 # REPLIT_LD_LIBRARY_PATH / REPLIT_PYTHON_LD_LIBRARY_PATH have all the Nix-store
 # library paths, but LD_LIBRARY_PATH itself is empty for the Chrome subprocess.
 _STUB_LIB_DIR = os.path.join(os.path.dirname(__file__), "lib")

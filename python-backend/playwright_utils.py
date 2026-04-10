@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 
-# Fix LD_LIBRARY_PATH so Chromium can find its shared libs on Replit/NixOS
+# Fix LD_LIBRARY_PATH so Chromium can find its shared libs on NixOS
 _STUB_LIB_DIR = os.path.join(os.path.dirname(__file__), "lib")
 
 def _fix_ld_library_path():

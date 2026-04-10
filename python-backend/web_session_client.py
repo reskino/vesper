@@ -200,8 +200,13 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
             proof_token = _solve_chatgpt_pow(pow_spec)
 
         # ── Step 3: send conversation ──────────────────────────────────────────
+        # Reasoning models (o-series) need reasoning_effort; resolve legacy IDs
+        _O_SERIES = {"o1", "o1-mini", "o1-pro", "o3-mini", "o3", "o3-pro", "o4-mini", "o4"}
+        _MODEL_ALIASES = {"__auto__": "gpt-4o"}
+
         def _do_conversation(mdl: str):
-            payload = {
+            mdl = _MODEL_ALIASES.get(mdl, mdl)
+            payload: dict = {
                 "action": "next",
                 "messages": [{
                     "id": str(uuid.uuid4()),
@@ -215,6 +220,8 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
                 "history_and_training_disabled": False,
                 "conversation_mode": {"kind": "primary_assistant"},
             }
+            if mdl in _O_SERIES:
+                payload["reasoning_effort"] = "medium"
             extra = {"openai-sentinel-chat-requirements-token": sentinel_token}
             if proof_token:
                 extra["openai-sentinel-proof-token"] = proof_token
@@ -227,29 +234,32 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
             )
 
         resp = _do_conversation(model)
-        logger.debug("ChatGPT conversation status=%s", resp.status_code)
+        logger.debug("ChatGPT conversation status=%s body_snippet=%s", resp.status_code, resp.text[:200])
 
         if resp.status_code == 401:
             return False, "", "ChatGPT: not authenticated — please re-import your cookies."
         if resp.status_code == 403:
-            body = resp.text.lower()
-            if any(k in body for k in ("subscri", "plus", "upgrade", "not available", "plan")):
-                free_model = get_free_model("chatgpt")
-                if free_model and free_model != model:
-                    logger.info("ChatGPT: %s requires paid plan, retrying with %s", model, free_model)
-                    resp2 = _do_conversation(free_model)
-                    if resp2.status_code == 200:
-                        text = _parse_chatgpt_sse(resp2.text)
-                        if text:
-                            note = (
-                                f"\n\n_(Answered with **GPT-4o mini** — your account doesn't have "
-                                f"access to **{model}**. Upgrade to ChatGPT Plus for premium models.)_"
-                            )
-                            return True, text + note, ""
-            return False, "", (
-                "ChatGPT access denied (403). Your account may need a subscription "
-                "for this model — try switching to GPT-4o mini (free)."
-            )
+            body_raw = resp.text[:400]
+            body = body_raw.lower()
+            free_model = get_free_model("chatgpt")
+            # Always try fallback — model may be paywalled or name invalid
+            if free_model and free_model != model:
+                logger.info("ChatGPT: 403 on %s, retrying with free model %s", model, free_model)
+                resp2 = _do_conversation(free_model)
+                if resp2.status_code == 200:
+                    text = _parse_chatgpt_sse(resp2.text)
+                    if text:
+                        note = (
+                            f"\n\n_(Note: **{model}** returned 403 — answered with **{free_model}** instead. "
+                            f"Your account may need ChatGPT Plus for that model.)_"
+                        )
+                        return True, text + note, ""
+            hint = ""
+            if any(k in body for k in ("subscri", "plus", "upgrade", "plan", "not available")):
+                hint = " Your account needs ChatGPT Plus or Pro for this model."
+            elif "cloudflare" in body or "just a moment" in body:
+                hint = " Cloudflare is blocking the request — re-export cookies while logged into chatgpt.com."
+            return False, "", f"ChatGPT 403 access denied.{hint} Server said: {body_raw[:200]}"
         if resp.status_code == 429:
             return False, "", "ChatGPT rate limit hit. Wait a minute and try again."
         if resp.status_code >= 400:

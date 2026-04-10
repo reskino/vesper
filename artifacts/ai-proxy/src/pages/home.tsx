@@ -144,6 +144,8 @@ function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }
   );
 }
 
+const AUTO_AI_ID = "__auto__";
+
 // ── AI + Model selector dropdown ─────────────────────────────────────────────
 function ModelSelectorDropdown({
   ais,
@@ -153,7 +155,7 @@ function ModelSelectorDropdown({
   onSelectModel,
 }: {
   ais: any[];
-  selectedAi: string | null;
+  selectedAi: string;
   usernames: Record<string, string>;
   onSelectAi: (id: string) => void;
   onSelectModel: (aiId: string, modelId: string) => void;
@@ -171,8 +173,10 @@ function ModelSelectorDropdown({
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const currentAi = ais.find(a => a.id === selectedAi);
+  const isAuto = selectedAi === AUTO_AI_ID;
+  const currentAi = isAuto ? null : ais.find(a => a.id === selectedAi);
   const activeModel = currentAi?.models?.find((m: any) => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
+  const anyConnected = ais.some(a => a.hasSession);
 
   return (
     <div className="relative" ref={ref}>
@@ -180,12 +184,22 @@ function ModelSelectorDropdown({
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-muted transition-colors text-sm font-semibold text-foreground"
       >
-        {currentAi && <StatusDot ai={currentAi} />}
-        <span>{currentAi?.name ?? "Select AI"}</span>
-        {activeModel && (
-          <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
-            · {activeModel.name}
-          </span>
+        {isAuto ? (
+          <>
+            <span className={`h-2 w-2 rounded-full shrink-0 ${anyConnected ? "bg-emerald-500" : "bg-primary animate-pulse"}`} />
+            <span>Auto</span>
+            <span className="text-xs font-normal text-muted-foreground hidden sm:inline">· Best available</span>
+          </>
+        ) : (
+          <>
+            {currentAi && <StatusDot ai={currentAi} />}
+            <span>{currentAi?.name ?? "Select AI"}</span>
+            {activeModel && (
+              <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
+                · {activeModel.name}
+              </span>
+            )}
+          </>
         )}
         <Caret className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
@@ -193,8 +207,30 @@ function ModelSelectorDropdown({
       {open && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 z-50 rounded-2xl border border-border bg-popover shadow-xl overflow-hidden">
           <div className="p-1.5 space-y-0.5">
+
+            {/* Auto option */}
+            <div
+              className={`flex items-center gap-2.5 rounded-xl transition-colors cursor-pointer ${
+                isAuto ? "bg-primary/10" : "hover:bg-muted/60"
+              }`}
+              onClick={() => { onSelectAi(AUTO_AI_ID); setOpen(false); setExpandedAi(null); }}
+            >
+              <div className="flex items-center gap-2.5 flex-1 px-3 py-2.5">
+                <Zap className={`h-3.5 w-3.5 shrink-0 ${isAuto ? "text-primary" : "text-muted-foreground"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${isAuto ? "text-primary" : "text-foreground"}`}>Auto</p>
+                  <p className="text-[10px] text-muted-foreground">Uses best available AI with fallback</p>
+                </div>
+                {isAuto && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="mx-2 border-t border-border my-1" />
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Direct — no fallback</p>
+
             {ais.map(ai => {
-              const isSel = selectedAi === ai.id;
+              const isSel = !isAuto && selectedAi === ai.id;
               const isExp = expandedAi === ai.id;
               const mdl = ai.models?.find((m: any) => m.id === ai.currentModel) ?? ai.models?.[0];
 
@@ -216,7 +252,9 @@ function ModelSelectorDropdown({
                           <p className="text-[10px] text-emerald-500 truncate">{usernames[ai.id]}</p>
                         ) : mdl ? (
                           <p className="text-[10px] text-muted-foreground font-mono truncate">{mdl.name}</p>
-                        ) : null}
+                        ) : (
+                          <p className="text-[10px] text-amber-500/80 truncate">Not connected</p>
+                        )}
                       </div>
                       {isSel && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
                     </button>
@@ -284,7 +322,7 @@ export function Home() {
   const askAiWithContext = useAskAiWithContext();
   const setModelMutation = useSetModel();
 
-  const [selectedAi, setSelectedAi] = useState<string | null>(null);
+  const [selectedAi, setSelectedAi] = useState<string>(AUTO_AI_ID);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string; aiId?: string; error?: boolean }>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -325,19 +363,16 @@ export function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (aisData?.ais && !selectedAi) {
-      const active = aisData.ais.find((a: any) => a.hasSession);
-      setSelectedAi((active ?? aisData.ais[0])?.id ?? null);
-    }
-  }, [aisData, selectedAi]);
+  // No longer auto-selecting — default is Auto mode
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, executionResult]);
 
   const isPending = askAi.isPending || askAiWithContext.isPending;
-  const currentAi = aisData?.ais?.find((a: any) => a.id === selectedAi);
+  const isAutoMode = selectedAi === AUTO_AI_ID;
+  const currentAi = isAutoMode ? null : aisData?.ais?.find((a: any) => a.id === selectedAi);
+  const connectedAis = aisData?.ais?.filter((a: any) => a.hasSession) ?? [];
   const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };
 
   useEffect(() => {
@@ -351,10 +386,21 @@ export function Home() {
   }, [showAttachMenu]);
 
   const send = async (text: string) => {
-    if (!text.trim() || !selectedAi || isPending) return;
+    if (!text.trim() || isPending) return;
     setMessages(prev => [...prev, { role: "user", content: text }]);
     try {
-      const payload = { aiId: selectedAi, prompt: text, conversationId: conversationId ?? undefined };
+      const isAutoMode = selectedAi === AUTO_AI_ID;
+      // In Auto mode, start from first connected AI (or pollinations), allow fallback.
+      // In Direct mode, use exactly the selected AI, no fallback.
+      const effectiveAiId = isAutoMode
+        ? (aisData?.ais?.find((a: any) => a.hasSession)?.id ?? "pollinations")
+        : selectedAi;
+      const payload = {
+        aiId: effectiveAiId,
+        prompt: text,
+        conversationId: conversationId ?? undefined,
+        fallback: isAutoMode,
+      };
       const fileContent = uploadedFile?.content ?? attachedFileData?.content;
       const filePath = uploadedFile?.name ?? attachedFile ?? "file";
       const result = fileContent
@@ -459,7 +505,19 @@ export function Home() {
             <TypewriterText />
 
             {/* Session status card */}
-            {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+            {isAutoMode && connectedAis.length > 0 && (
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-4 py-2.5 rounded-xl">
+                <Zap className="h-3.5 w-3.5 shrink-0" />
+                Auto mode · {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""} ready ({connectedAis.map((a: any) => a.name).join(", ")})
+              </div>
+            )}
+            {isAutoMode && connectedAis.length === 0 && (
+              <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs px-4 py-2.5 rounded-xl">
+                <Zap className="h-3.5 w-3.5 shrink-0" />
+                Auto mode · Using Pollinations (free, no key needed)
+              </div>
+            )}
+            {!isAutoMode && currentAi && currentAi.hasSession && usernames[currentAi.id] && (
               <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-4 py-2.5 rounded-xl">
                 <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
@@ -467,10 +525,10 @@ export function Home() {
                 {currentAi.name} · signed in as <strong className="font-semibold ml-1">{usernames[currentAi.id]}</strong>
               </div>
             )}
-            {currentAi && !currentAi.hasSession && (
+            {!isAutoMode && currentAi && !currentAi.hasSession && (
               <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                No active session — go to Sessions to connect
+                {currentAi.name} not connected — add your API key in Sessions
               </div>
             )}
 
@@ -561,7 +619,7 @@ export function Home() {
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={selectedAi ? "Message the AI…" : "Select a model first…"}
+              placeholder={isAutoMode ? "Message any AI…" : `Message ${currentAi?.name ?? "AI"} directly…`}
               className="min-h-[52px] max-h-52 resize-none bg-transparent border-none shadow-none focus-visible:ring-0 text-sm py-4 px-4 pr-14 rounded-2xl"
               disabled={isPending}
               rows={1}
@@ -570,7 +628,7 @@ export function Home() {
             {/* Send button — inside input, bottom-right */}
             <button
               onClick={handleSend}
-              disabled={!prompt.trim() || isPending || !selectedAi}
+              disabled={!prompt.trim() || isPending}
               className="absolute right-3 bottom-3 h-8 w-8 flex items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-30 hover:bg-primary/90 transition-all shadow-sm"
             >
               {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -615,13 +673,25 @@ export function Home() {
 
               {/* Session status hint */}
               <div className="flex-1 px-1">
-                {currentAi && !currentAi.hasSession && (
-                  <p className="text-[10px] text-amber-500 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3 shrink-0" />
-                    No session — connect in Sessions first
+                {isAutoMode && connectedAis.length > 0 && (
+                  <p className="text-[10px] text-emerald-500/80 flex items-center gap-1">
+                    <Zap className="h-3 w-3 shrink-0" />
+                    Auto · {connectedAis.map((a: any) => a.name).join(", ")}
                   </p>
                 )}
-                {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+                {isAutoMode && connectedAis.length === 0 && (
+                  <p className="text-[10px] text-primary/70 flex items-center gap-1">
+                    <Zap className="h-3 w-3 shrink-0" />
+                    Auto · Pollinations (free)
+                  </p>
+                )}
+                {!isAutoMode && currentAi && !currentAi.hasSession && (
+                  <p className="text-[10px] text-amber-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {currentAi.name} not connected — will return error
+                  </p>
+                )}
+                {!isAutoMode && currentAi && currentAi.hasSession && usernames[currentAi.id] && (
                   <p className="text-[10px] text-emerald-500/80 flex items-center gap-1">
                     <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />

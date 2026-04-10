@@ -136,10 +136,16 @@ def ask_ai():
     elapsed_ms = int((time.time() - start_time) * 1000)
     has_any_session = any(session_exists(a) for a in ais_to_try)
     if not has_any_session:
-        err_msg = (
-            "No active sessions found. Go to the Sessions page and import your "
-            "browser cookies for ChatGPT, Grok, or Claude to start chatting."
-        )
+        if not use_fallback:
+            cfg = AI_CONFIGS.get(ai_id, {})
+            ai_name = cfg.get("name", ai_id)
+            auth_mode = cfg.get("auth_mode", "")
+            if auth_mode in ("api_key", "api_key_or_cookies"):
+                err_msg = f"{ai_name} is not connected. Go to Sessions and add your API key for {ai_name}."
+            else:
+                err_msg = f"{ai_name} is not connected. Go to Sessions and import your browser cookies."
+        else:
+            err_msg = "No active sessions found. Go to the Sessions page and connect at least one AI provider."
     else:
         details = "; ".join(
             f"{ai}: {msg}" for ai, msg in ai_errors.items() if msg != "no session"
@@ -233,10 +239,16 @@ def ask_ai_with_context():
     elapsed_ms = int((time.time() - start_time) * 1000)
     has_any_session = any(session_exists(a) for a in ais_to_try)
     if not has_any_session:
-        err_msg = (
-            "No active sessions found. Go to the Sessions page and import your "
-            "browser cookies for ChatGPT, Grok, or Claude to start chatting."
-        )
+        if not use_fallback:
+            cfg = AI_CONFIGS.get(ai_id, {})
+            ai_name = cfg.get("name", ai_id)
+            auth_mode = cfg.get("auth_mode", "")
+            if auth_mode in ("api_key", "api_key_or_cookies"):
+                err_msg = f"{ai_name} is not connected. Go to Sessions and add your API key for {ai_name}."
+            else:
+                err_msg = f"{ai_name} is not connected. Go to Sessions and import your browser cookies."
+        else:
+            err_msg = "No active sessions found. Go to the Sessions page and connect at least one AI provider."
     else:
         details = "; ".join(
             f"{ai}: {msg}" for ai, msg in ai_errors.items() if msg != "no session"

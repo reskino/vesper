@@ -64,6 +64,29 @@
       "content": "Four",
       "timestamp": "2026-04-10T08:16:52.035321+00:00",
       "conversationId": "19eb599e-efa0-457a-be43-f06d0ca1c02d"
+    },
+    {
+      "id": "3df6faf0-a191-413e-a06b-d09277c4a0dd",
+      "role": "user",
+      "content": "say OK only",
+      "timestamp": "2026-04-10T10:09:38.035883+00:00",
+      "conversationId": "9c9292bf-1e8d-4cb2-86c4-a3b68fe7ab85"
+    },
+    {
+      "id": "78ae68a1-dde0-47fe-981f-e75c3228c2c8",
+      "role": "assistant",
+      "content": "OK",
+      "timestamp": "2026-04-10T10:09:40.418059+00:00",
+      "conversationId": "9c9292bf-1e8d-4cb2-86c4-a3b68fe7ab85"
+    }
+  ],
+  "groq": [
+    {
+      "id": "cb0c327a-18c9-4627-b707-24743216c412",
+      "role": "user",
+      "content": "hello",
+      "timestamp": "2026-04-10T10:09:37.893928+00:00",
+      "conversationId": "3b255961-e46f-420f-b493-ea58147ca627"
     }
   ]
 }

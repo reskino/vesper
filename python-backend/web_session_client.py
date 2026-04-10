@@ -76,15 +76,8 @@ def _chrome_headers(origin: str, referer: str, extra: dict | None = None,
 
 # ─── ChatGPT ──────────────────────────────────────────────────────────────────
 
-# Reasoning models need reasoning_effort in the payload.
-# gpt-5.4 / Pro → high/xhigh; o-series legacy → medium.
+# o-series reasoning models need reasoning_effort in the payload.
 _CHATGPT_REASONING_EFFORT: dict[str, str] = {
-    "gpt-5.4":      "high",
-    "gpt-5.4-pro":  "xhigh",
-    "gpt-5.2":      "medium",
-    "gpt-5.2-pro":  "xhigh",
-    "gpt-5.1":      "medium",
-    "gpt-5":        "medium",
     "o4-mini":      "medium",
     "o4-mini-high": "high",
     "o4":           "high",
@@ -187,7 +180,7 @@ def _chatgpt_playwright_fetch(session_path: str, model: str, prompt: str) -> Tup
     """
     from playwright.sync_api import sync_playwright  # noqa: PLC0415
 
-    model = {"__auto__": "gpt-5.3"}.get(model, model)
+    model = {"__auto__": "gpt-4o"}.get(model, model)
     effort = _CHATGPT_REASONING_EFFORT.get(model)
 
     result: dict = {"status": 0, "body": ""}
@@ -423,7 +416,7 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
         if pow_spec.get("required"):
             proof_token = _solve_chatgpt_pow(pow_spec)
 
-        real_model = {"__auto__": "gpt-5.3"}.get(model, model)
+        real_model = {"__auto__": "gpt-4o"}.get(model, model)
         payload: dict = {
             "action": "next",
             "messages": [{
@@ -539,13 +532,8 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
                     "prompt": prompt,
                     "model": mdl,
                     "timezone": "UTC",
-                    "timezone_offset_minutes": 0,
-                    "rendering_mode": "messages",
-                    "include_profile_context": False,
-                    "include_conversation_preferences": False,
                     "attachments": [],
                     "files": [],
-                    "parent_message_uuid": None,
                 },
                 headers={"Accept": "text/event-stream"},
                 timeout=180,

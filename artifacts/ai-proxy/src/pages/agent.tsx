@@ -163,10 +163,10 @@ const AGENT_CAPABLE_AI_IDS = new Set([
 
 const BEST_AGENT_MODELS: Record<string, string[]> = {
   pollinations: ["openai", "openai-large", "claude-sonnet-3-7"],
-  gemini:       ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-pro"],
-  groq:         ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
-  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free"],
-  chatgpt:      ["gpt-5.3", "gpt-5.4"],
+  gemini:       ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-pro"],
+  groq:         ["llama-3.3-70b-versatile", "qwen-qwq-32b", "deepseek-r1-distill-llama-70b"],
+  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free"],
+  chatgpt:      ["gpt-4o", "gpt-4.1", "o3"],
   claude:       ["claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"],
   mistral:      ["codestral-latest", "mistral-large-latest"],
   cerebras:     ["llama-3.3-70b", "qwen-3-32b"],

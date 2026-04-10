@@ -24,7 +24,7 @@ import HelpPage from "@/pages/help";
 import { VesperLogo } from "@/components/vesper-logo";
 import {
   MessageSquare, Code2, FolderOpen, TerminalSquare,
-  MessageSquarePlus, X, Sparkles,
+  MessageSquarePlus, X, Sparkles, Bot,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +130,7 @@ function MobileChatSheet() {
 const MOBILE_TABS: { id: MobileTab; label: string; icon: ElementType }[] = [
   { id: "chat",     label: "Chat",     icon: MessageSquare  },
   { id: "editor",   label: "Editor",   icon: Code2          },
+  { id: "agent",    label: "Agent",    icon: Bot            },
   { id: "files",    label: "Explorer", icon: FolderOpen     },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
 ];

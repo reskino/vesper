@@ -125,6 +125,17 @@ def ask_ai():
         logger.warning("AI %s failed: %s", current_ai, error)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
+    has_any_session = any(session_exists(a) for a in ais_to_try)
+    if not has_any_session:
+        err_msg = (
+            "No active sessions found. Go to the Sessions page and import your "
+            "browser cookies for ChatGPT, Grok, or Claude to start chatting."
+        )
+    else:
+        err_msg = (
+            f"All AIs failed ({', '.join(tried_ais)}). "
+            "Your session cookies may have expired — re-import them on the Sessions page."
+        )
     return jsonify({
         "success": False,
         "aiId": ai_id,
@@ -132,8 +143,8 @@ def ask_ai():
         "conversationId": conversation_id,
         "elapsedMs": elapsed_ms,
         "fallbackUsed": fallback_used,
-        "error": f"All AIs failed. Tried: {tried_ais}",
-    }), 503
+        "error": err_msg,
+    })
 
 
 @app.route("/api/proxy/ask-with-context", methods=["POST"])
@@ -206,6 +217,17 @@ def ask_ai_with_context():
         tried_ais.append(current_ai)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
+    has_any_session = any(session_exists(a) for a in ais_to_try)
+    if not has_any_session:
+        err_msg = (
+            "No active sessions found. Go to the Sessions page and import your "
+            "browser cookies for ChatGPT, Grok, or Claude to start chatting."
+        )
+    else:
+        err_msg = (
+            f"All AIs failed ({', '.join(tried_ais)}). "
+            "Your session cookies may have expired — re-import them on the Sessions page."
+        )
     return jsonify({
         "success": False,
         "aiId": ai_id,
@@ -213,8 +235,8 @@ def ask_ai_with_context():
         "conversationId": conversation_id,
         "elapsedMs": elapsed_ms,
         "fallbackUsed": fallback_used,
-        "error": f"All AIs failed. Tried: {tried_ais}",
-    }), 503
+        "error": err_msg,
+    })
 
 
 @app.route("/api/proxy/execute", methods=["POST"])

@@ -154,7 +154,15 @@ function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }
 export function Home() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: aisData, isLoading: isLoadingAis } = useListAis({ query: { queryKey: getListAisQueryKey() } });
+  const { data: aisData, isLoading: isLoadingAis } = useListAis({
+    query: {
+      queryKey: getListAisQueryKey(),
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      staleTime: 15_000,      // treat data as stale after 15 s
+      refetchInterval: 30_000, // poll every 30 s so dots stay accurate
+    },
+  });
 
   const askAi = useAskAi();
   const askAiWithContext = useAskAiWithContext();

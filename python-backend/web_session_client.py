@@ -471,6 +471,35 @@ _GROK_PAYLOAD_TEMPLATE = {
 }
 
 _GROK_API_URL = "https://grok.com/rest/app-chat/conversations/new"
+
+
+def _build_grok_payload(model: str, prompt: str) -> dict:
+    """
+    Map a Vesper model ID to the correct Grok REST payload.
+
+    SuperGrok models use Grok 4.20 but differ in reasoning / backend routing:
+      grok-4         → Fast   (modelName="grok-4",       isReasoning=False)
+      grok-4-expert  → Expert (modelName="grok-4",       isReasoning=True )
+      grok-4-heavy   → Heavy  (modelName="grok-4-heavy", isReasoning=False)
+
+    Free-tier models are passed through unchanged (grok-3, grok-3-mini, …).
+    """
+    base = dict(_GROK_PAYLOAD_TEMPLATE, message=prompt)
+    if model == "grok-4-expert":
+        base["modelName"] = "grok-4"
+        base["isReasoning"] = True
+    elif model == "grok-4-heavy":
+        base["modelName"] = "grok-4-heavy"
+        base["isReasoning"] = False
+    elif model == "grok-4":
+        base["modelName"] = "grok-4"
+        base["isReasoning"] = False
+    else:
+        base["modelName"] = model
+        base["isReasoning"] = False
+    return base
+
+
 _GROK_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -504,7 +533,7 @@ def _grok_playwright_fetch(session_path: str, model: str, prompt: str) -> Tuple[
     """
     from playwright.sync_api import sync_playwright  # noqa: PLC0415
 
-    actual_payload = dict(_GROK_PAYLOAD_TEMPLATE, modelName=model, message=prompt)
+    actual_payload = _build_grok_payload(model, prompt)
     actual_payload_bytes = json.dumps(actual_payload).encode()
 
     result: dict = {"status": 0, "body": ""}
@@ -676,7 +705,7 @@ def _grok_curl_fetch(session_path: str, model: str, prompt: str) -> Tuple[int, s
         "sec-fetch-site": "same-origin",
         "x-requested-with": "XMLHttpRequest",
     }
-    payload = dict(_GROK_PAYLOAD_TEMPLATE, modelName=model, message=prompt)
+    payload = _build_grok_payload(model, prompt)
     resp = sess.post(_GROK_API_URL, json=payload, headers=headers, timeout=120)
     logger.info("Grok curl_cffi fetch → status=%s", resp.status_code)
     return resp.status_code, resp.text

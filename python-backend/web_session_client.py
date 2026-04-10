@@ -362,26 +362,19 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
         if status == 403:
             body_snippet = body[:400]
             body_low = body_snippet.lower()
-            free_model = get_free_model("chatgpt")
-            if free_model and free_model != model:
-                logger.info("ChatGPT: 403 on %s, retrying with %s via Playwright", model, free_model)
-                s2, b2 = _chatgpt_playwright_fetch(session_path, free_model, prompt)
-                if s2 == 200:
-                    text = _parse_chatgpt_sse(b2)
-                    if text:
-                        note = (
-                            f"\n\n_(Note: **{model}** returned 403 — answered with **{free_model}** instead. "
-                            f"Your account may need ChatGPT Plus for that model.)_"
-                        )
-                        return True, text + note, ""
-            hint = ""
+            if "unusual activity" in body_low or "cloudflare" in body_low:
+                return False, "", (
+                    "ChatGPT cookies don't work from cloud servers — OpenAI blocks data-center IPs on "
+                    "the browser API. **Use an OpenAI API key instead**: go to platform.openai.com/api-keys, "
+                    "create a key (starts with sk-), then import it in Sessions → ChatGPT → API Key tab."
+                )
             if any(k in body_low for k in ("subscri", "plus", "upgrade", "plan", "not available")):
-                hint = " Your account needs ChatGPT Plus or Pro for this model."
-            elif "unusual activity" in body_low:
-                hint = " OpenAI flagged unusual activity — try again in a moment."
-            elif "cloudflare" in body_low or "just a moment" in body_low:
-                hint = " Cloudflare is blocking — re-export cookies from chatgpt.com."
-            return False, "", f"ChatGPT 403.{hint} Server: {body_snippet[:200]}"
+                return False, "", (
+                    f"ChatGPT: your account doesn't have access to **{model}**. "
+                    "Use an API key (platform.openai.com/api-keys) for full model access, "
+                    "or switch to a lower-tier model."
+                )
+            return False, "", f"ChatGPT 403 access denied. Server: {body_snippet[:200]}"
 
         if status == 429:
             return False, "", "ChatGPT rate limit hit. Wait a minute and try again."

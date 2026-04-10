@@ -5,11 +5,10 @@
  *   ActivityBar | optional sidebar | ResizablePanels(editor + chat) | terminal
  *
  * Mobile (< 768 px):
- *   Full-screen single-panel routed by mobileTab + bottom nav bar.
- *   When mobileTab === "editor" a floating chat FAB appears; tapping it
- *   slides up a bottom-sheet overlay with ChatPanel.
+ *   TopBar → full-screen single panel driven by mobileTab → MobileNav (bottom)
+ *   Editor tab shows a floating "Ask AI" FAB that slides up a bottom-sheet chat.
  */
-import { useEffect } from "react";
+import { useEffect, useCallback, type ElementType } from "react";
 import { useIDE, type MobileTab } from "@/contexts/ide-context";
 import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
@@ -22,9 +21,10 @@ import { Sessions } from "@/pages/sessions";
 import { History } from "@/pages/history";
 import AgentPage from "@/pages/agent";
 import HelpPage from "@/pages/help";
+import { VesperLogo } from "@/components/vesper-logo";
 import {
-  MessageSquare, Code2, FolderOpen, History as HistoryIcon,
-  MessageSquarePlus, X,
+  MessageSquare, Code2, FolderOpen, TerminalSquare,
+  MessageSquarePlus, X, Sparkles,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,13 +39,27 @@ function MobileChatSheet() {
     return () => { document.body.style.overflow = ""; };
   }, [showMobileChatSheet]);
 
+  // Swipe-down to close (simple touch handler)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const startY = e.touches[0].clientY;
+    const onMove = (ev: TouchEvent) => {
+      if (ev.touches[0].clientY - startY > 80) {
+        setShowMobileChatSheet(false);
+        document.removeEventListener("touchmove", onMove);
+      }
+    };
+    document.addEventListener("touchmove", onMove, { passive: true });
+    const onEnd = () => document.removeEventListener("touchmove", onMove);
+    document.addEventListener("touchend", onEnd, { once: true });
+  }, [setShowMobileChatSheet]);
+
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-          showMobileChatSheet ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
+        className={`md:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm
+          transition-opacity duration-300
+          ${showMobileChatSheet ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setShowMobileChatSheet(false)}
         aria-hidden="true"
       />
@@ -53,30 +67,55 @@ function MobileChatSheet() {
       {/* Sheet */}
       <div
         role="dialog"
-        aria-label="Chat"
+        aria-label="Ask AI"
         aria-modal="true"
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl overflow-hidden
-          bg-[#0a0a0c] border-t border-[#1a1a24] shadow-[0_-8px_40px_rgba(0,0,0,0.6)]
-          transition-transform duration-300 ease-out
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col
+          rounded-t-[28px] overflow-hidden
+          bg-[#0a0a0c] border-t border-[#1e1e2e]
+          shadow-[0_-24px_80px_rgba(0,0,0,0.85)]
+          transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
           ${showMobileChatSheet ? "translate-y-0" : "translate-y-full"}`}
-        style={{ height: "78dvh", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        style={{
+          height: "82dvh",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+        }}
       >
-        {/* Drag handle + header */}
-        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#1a1a24]">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-1 rounded-full bg-[#2a2a40] absolute left-1/2 -translate-x-1/2 top-2" />
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-sm text-foreground">Chat</span>
+        {/* Drag handle */}
+        <div
+          className="shrink-0 flex flex-col items-center cursor-grab active:cursor-grabbing pt-3 pb-2"
+          onTouchStart={handleTouchStart}
+        >
+          <div className="w-10 h-1 rounded-full bg-[#2a2a3c]" />
+        </div>
+
+        {/* Sheet header */}
+        <div className="shrink-0 flex items-center justify-between px-4 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10
+              border border-primary/20 flex items-center justify-center
+              shadow-[0_0_12px_rgba(99,102,241,0.2)]">
+              <VesperLogo size={14} />
+            </div>
+            <div>
+              <p className="font-bold text-[13px] text-foreground leading-none">Ask AI</p>
+              <p className="text-[10px] text-[#52526e] mt-0.5">Multi-model · Context-aware</p>
+            </div>
           </div>
           <button
             onClick={() => setShowMobileChatSheet(false)}
-            className="h-8 w-8 flex items-center justify-center rounded-full bg-[#1a1a24] text-[#52526e] hover:text-foreground transition-colors"
+            className="h-9 w-9 flex items-center justify-center rounded-full
+              bg-[#141420] border border-[#1e1e2e] text-[#52526e]
+              active:scale-95 transition-all"
             aria-label="Close chat"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
+        {/* Thin separator */}
+        <div className="h-px bg-[#141420] shrink-0 mx-4 mb-1" />
+
+        {/* Chat content */}
         <div className="flex-1 min-h-0">
           <ChatPanel newChatKey={newChatKey} compact />
         </div>
@@ -88,11 +127,11 @@ function MobileChatSheet() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile bottom navigation
 // ─────────────────────────────────────────────────────────────────────────────
-const MOBILE_TABS: { id: MobileTab; label: string; icon: React.ElementType }[] = [
-  { id: "chat",    label: "Chat",    icon: MessageSquare },
-  { id: "editor",  label: "Editor",  icon: Code2 },
-  { id: "files",   label: "Files",   icon: FolderOpen },
-  { id: "history", label: "History", icon: HistoryIcon },
+const MOBILE_TABS: { id: MobileTab; label: string; icon: ElementType }[] = [
+  { id: "chat",     label: "Chat",     icon: MessageSquare  },
+  { id: "editor",   label: "Editor",   icon: Code2          },
+  { id: "files",    label: "Explorer", icon: FolderOpen     },
+  { id: "terminal", label: "Terminal", icon: TerminalSquare },
 ];
 
 function MobileNav() {
@@ -100,48 +139,54 @@ function MobileNav() {
 
   const handleTab = (id: MobileTab) => {
     setMobileTab(id);
-    // Close chat sheet if we navigate away from editor
     if (id !== "editor") setShowMobileChatSheet(false);
   };
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0a0a0c]/96 backdrop-blur-xl
-        border-t border-[#1a1a24] grid grid-cols-4 shadow-[0_-4px_32px_rgba(0,0,0,0.5)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-30
+        bg-[#080809]/98 backdrop-blur-2xl border-t border-[#131318]
+        shadow-[0_-8px_40px_rgba(0,0,0,0.7)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Main navigation"
     >
-      {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
-        const active = mobileTab === id;
-        return (
-          <button
-            key={id}
-            onClick={() => handleTab(id)}
-            className={`flex flex-col items-center justify-center gap-1 min-h-[52px] py-2 transition-all
-              ${active ? "text-primary" : "text-[#52526e] hover:text-[#a0a0c0]"}`}
-            aria-label={label}
-            aria-current={active ? "page" : undefined}
-          >
-            <div className={`relative flex items-center justify-center w-10 h-6 rounded-full transition-colors
-              ${active ? "bg-primary/15" : ""}`}>
-              <Icon className={`h-5 w-5 transition-all ${active ? "scale-110" : ""}`} />
+      <div className="grid grid-cols-4 px-1">
+        {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
+          const active = mobileTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => handleTab(id)}
+              className="relative flex flex-col items-center justify-center gap-1 py-2 min-h-[56px]
+                active:opacity-70 transition-opacity"
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+            >
+              {/* Top pill indicator */}
               {active && (
-                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2
+                  w-10 h-[2px] rounded-b-full bg-primary" />
               )}
-            </div>
-            <span className={`text-[10px] font-bold tracking-wide transition-colors
-              ${active ? "text-primary" : "text-[#52526e]"}`}>
-              {label}
-            </span>
-          </button>
-        );
-      })}
+              {/* Icon in pill */}
+              <div className={`h-8 w-11 rounded-2xl flex items-center justify-center transition-all
+                ${active ? "bg-primary/15" : ""}`}>
+                <Icon className={`transition-all duration-150
+                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-[#3a3a5c]"}`} />
+              </div>
+              <span className={`text-[10px] font-bold tracking-wide transition-colors
+                ${active ? "text-primary" : "text-[#2a2a44]"}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Floating chat button (visible when mobileTab === "editor")
+// Floating "Ask AI" button — visible when Editor tab is active
 // ─────────────────────────────────────────────────────────────────────────────
 function FloatingChatFAB() {
   const { mobileTab, setShowMobileChatSheet, showMobileChatSheet } = useIDE();
@@ -150,14 +195,17 @@ function FloatingChatFAB() {
   return (
     <button
       onClick={() => setShowMobileChatSheet(true)}
-      className={`md:hidden fixed bottom-[72px] right-4 z-30 h-12 w-12 rounded-full bg-primary text-primary-foreground
-        shadow-[0_4px_20px_rgba(99,102,241,0.5)] flex items-center justify-center
-        transition-all duration-200 active:scale-95
-        ${showMobileChatSheet ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-      aria-label="Open chat"
-      style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
+      className={`md:hidden fixed right-4 z-30 flex items-center gap-2 h-12 px-5
+        rounded-2xl bg-primary text-primary-foreground
+        font-bold text-[13px] tracking-wide
+        shadow-[0_4px_24px_rgba(99,102,241,0.45),0_0_0_1px_rgba(99,102,241,0.3)]
+        transition-all duration-200 active:scale-[0.96]
+        ${showMobileChatSheet ? "opacity-0 pointer-events-none scale-90" : "opacity-100 scale-100"}`}
+      style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+      aria-label="Ask AI about this code"
     >
-      <MessageSquarePlus className="h-5 w-5" />
+      <Sparkles className="h-4 w-4" />
+      Ask AI
     </button>
   );
 }
@@ -222,10 +270,19 @@ function MobileWorkspace() {
 
   return (
     <div className="flex-1 min-h-0 overflow-hidden">
-      {mobileTab === "chat"    && <ChatPanel newChatKey={newChatKey} />}
-      {mobileTab === "editor"  && <EditorPanel />}
-      {mobileTab === "files"   && <FileExplorer activePath={null} />}
-      {mobileTab === "history" && <div className="h-full overflow-y-auto bg-[#0a0a0c]"><History /></div>}
+      {/* Each panel is always mounted once the tab is active, to preserve state */}
+      <div className={`h-full ${mobileTab === "chat"     ? "" : "hidden"}`}>
+        <ChatPanel newChatKey={newChatKey} />
+      </div>
+      <div className={`h-full ${mobileTab === "editor"   ? "" : "hidden"}`}>
+        <EditorPanel />
+      </div>
+      <div className={`h-full ${mobileTab === "files"    ? "" : "hidden"}`}>
+        <FileExplorer activePath={null} />
+      </div>
+      <div className={`h-full ${mobileTab === "terminal" ? "" : "hidden"}`}>
+        <TerminalPanel />
+      </div>
     </div>
   );
 }
@@ -253,7 +310,7 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
     <div className="flex flex-col h-dvh w-full bg-[#0d0d12] overflow-hidden font-sans">
       <TopBar />
 
-      {/* ── Desktop layout ────────────────────────────────────────────────── */}
+      {/* ── Desktop layout ──────────────────────────────────────────────────── */}
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
         <ActivityBar />
         {sidebarPanel && (
@@ -266,20 +323,20 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
         </div>
       </div>
 
-      {/* ── Mobile layout ─────────────────────────────────────────────────── */}
+      {/* ── Mobile layout ───────────────────────────────────────────────────── */}
       <div className="flex md:hidden flex-1 min-h-0 overflow-hidden">
         <MobileWorkspace />
       </div>
 
-      {/* Mobile overlays (always rendered, visibility via CSS) */}
+      {/* ── Mobile overlays (z-order: FAB < sheet < nav) ─────────────────── */}
       <FloatingChatFAB />
       <MobileChatSheet />
       <MobileNav />
 
-      {/* Safe-area spacer for mobile nav */}
+      {/* Spacer so content isn't hidden behind the fixed bottom nav */}
       <div
         className="md:hidden shrink-0"
-        style={{ height: "calc(52px + env(safe-area-inset-bottom, 0px))" }}
+        style={{ height: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
       />
     </div>
   );

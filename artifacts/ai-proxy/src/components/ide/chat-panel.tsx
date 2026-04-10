@@ -18,7 +18,7 @@
  *   newChatKey  — bump to clear the chat
  *   compact     — true inside the mobile bottom-sheet (no outer border)
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type ElementType } from "react";
 import {
   useListAis, getListAisQueryKey,
   useAskAi, useAskAiWithContext,
@@ -137,7 +137,7 @@ function TypewriterText() {
 
 type QuickPrompt = {
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
   desc: string;
 };
 

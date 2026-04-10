@@ -328,11 +328,17 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     toast({ description: "Exporting workspace…" });
   };
 
+  // Compute search results (mobile only when query is non-empty)
+  const searchResults = searchQuery.trim() && treeData?.tree
+    ? findMatchingFiles(treeData.tree, searchQuery.trim())
+    : null;
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-[#0a0a0c]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#1a1a24] shrink-0">
+
+      {/* ── Desktop header ──────────────────────────────────────────────────── */}
+      <div className="hidden md:flex items-center justify-between px-3 py-2 border-b border-[#1a1a24] shrink-0">
         <span className="text-[10px] font-bold text-[#3a3a5c] uppercase tracking-widest select-none">Explorer</span>
         <div className="flex items-center gap-0.5">
           {[
@@ -342,16 +348,60 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             { icon: Upload,     title: "Import files (zip/GitHub)", onClick: () => setShowImportExport(true) },
             { icon: Download,   title: "Export workspace",   onClick: exportWorkspace },
           ].map(({ icon: Icon, title, onClick }) => (
-            <button
-              key={title}
+            <button key={title}
               className="h-5 w-5 flex items-center justify-center rounded text-[#52526e] hover:text-[#a0a0c0] hover:bg-[#141420] transition-colors"
-              title={title}
-              onClick={onClick}
+              title={title} onClick={onClick}
             >
               <Icon className="h-3 w-3" />
             </button>
           ))}
           <FolderImportButton />
+        </div>
+      </div>
+
+      {/* ── Mobile header ───────────────────────────────────────────────────── */}
+      <div className="md:hidden flex flex-col gap-2.5 px-3 pt-3 pb-2 border-b border-[#1a1a24] shrink-0">
+        {/* Large import button */}
+        <FolderImportLargeButton />
+
+        {/* Quick action row */}
+        <div className="flex gap-2">
+          {[
+            { icon: FilePlus,   label: "New File",   onClick: () => { setNewItem({ type: "file",   parentPath: "" }); setNewItemName(""); } },
+            { icon: FolderPlus, label: "New Folder", onClick: () => { setNewItem({ type: "folder", parentPath: "" }); setNewItemName(""); } },
+            { icon: Upload,     label: "Import Zip", onClick: () => setShowImportExport(true) },
+            { icon: RefreshCw,  label: "Refresh",    onClick: () => refetch() },
+          ].map(({ icon: Icon, label, onClick }) => (
+            <button key={label} onClick={onClick}
+              className="flex-1 flex flex-col items-center justify-center gap-1 h-14 rounded-2xl
+                bg-[#141420] border border-[#1a1a24] active:bg-[#1e1e2e] active:scale-[0.97]
+                transition-all text-[#7070a0]"
+            >
+              <Icon className="h-4 w-4" />
+              <span className="text-[10px] font-semibold leading-none">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search input */}
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#52526e] pointer-events-none" />
+          <input
+            className="w-full h-11 pl-10 pr-4 bg-[#141420] border border-[#1a1a24]
+              focus:border-primary/40 rounded-xl text-sm text-foreground
+              placeholder:text-[#3a3a5c] outline-none transition-colors"
+            placeholder="Search files…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#52526e] active:text-foreground"
+              onClick={() => setSearchQuery("")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -391,13 +441,35 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
         </div>
       )}
 
-      {/* Workspace file tree */}
+      {/* Workspace file tree (or search results on mobile) */}
       <ScrollArea className={importedProject ? "h-[40%]" : "flex-1"}>
         <div className="p-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-[#52526e]">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
+          ) : searchResults !== null ? (
+            /* Mobile search results — flat list */
+            searchResults.length === 0 ? (
+              <p className="text-center py-8 text-[#52526e] text-xs">No files match "{searchQuery}"</p>
+            ) : (
+              <div className="py-1">
+                {searchResults.map(file => (
+                  <button
+                    key={file.path}
+                    onClick={() => { openFileInEditor(file.path); setSearchQuery(""); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-3 text-left
+                      text-sm text-[#a0a0c0] active:bg-[#141420] transition-colors rounded-lg"
+                  >
+                    <FileIcon className="h-4 w-4 text-[#52526e] shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">{file.name}</p>
+                      <p className="text-[11px] text-[#52526e] truncate">{file.path}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
           ) : treeData?.tree ? (
             <TreeItem
               node={treeData.tree}

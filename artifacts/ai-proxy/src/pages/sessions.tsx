@@ -303,19 +303,19 @@ function ImportDialog({ ai, onClose, onSuccess }: ImportDialogProps) {
         </div>
 
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4 text-sm text-blue-300">
-          <p className="font-medium mb-1">Export session from your browser:</p>
+          <p className="font-medium mb-1">How to export your cookies:</p>
           <ol className="list-decimal ml-4 space-y-1 text-blue-200/80">
-            <li>Open {ai.name} in Chrome and log in</li>
-            <li>Open DevTools → Application → Cookies</li>
-            <li>Or use <strong>EditThisCookie</strong> extension to export as JSON</li>
-            <li>Paste the JSON below</li>
+            <li>Install the <strong>Cookie Editor</strong> extension (Chrome / Firefox)</li>
+            <li>Go to {ai.name} and log in normally</li>
+            <li>Click the Cookie Editor icon → <strong>Export → Export as JSON</strong></li>
+            <li>Paste the copied JSON below — the <code className="bg-black/30 px-1 rounded">[ ... ]</code> array format is accepted directly</li>
           </ol>
         </div>
 
         <textarea
           value={jsonText}
           onChange={e => setJsonText(e.target.value)}
-          placeholder={'{"cookies": [...], "origins": [...]}'}
+          placeholder={"Paste Cookie Editor JSON here — both [ {name, value, ...}, ... ] and Playwright storage_state formats are accepted"}
           className="w-full h-40 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm text-gray-200 font-mono resize-none focus:outline-none focus:border-blue-500 mb-4"
         />
 

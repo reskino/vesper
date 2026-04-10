@@ -406,21 +406,56 @@ def import_session():
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
 
     try:
-        state = _json.loads(state_json) if isinstance(state_json, str) else state_json
-        if not isinstance(state, dict):
-            raise ValueError("Must be a JSON object")
+        parsed = _json.loads(state_json) if isinstance(state_json, str) else state_json
     except Exception as exc:
         return jsonify({"success": False, "message": f"Invalid JSON: {exc}"}), 400
 
-    if "cookies" not in state and "origins" not in state:
-        return jsonify({"success": False, "message": "JSON must contain 'cookies' or 'origins' keys"}), 400
+    # ── Normalise to Playwright storage_state format ──────────────────────────
+    # Cookie Editor exports a flat array: [{name, value, domain, path, ...}, ...]
+    # Playwright expects:                 {"cookies": [...], "origins": [...]}
+    if isinstance(parsed, list):
+        # Convert Cookie Editor / Netscape-JSON array → Playwright format
+        def _norm_cookie(c: dict) -> dict:
+            """Map Cookie Editor fields to Playwright cookie fields."""
+            out: dict = {
+                "name":   c.get("name", ""),
+                "value":  c.get("value", ""),
+                "domain": c.get("domain", ""),
+                "path":   c.get("path", "/"),
+                "secure": bool(c.get("secure", False)),
+                "httpOnly": bool(c.get("httpOnly", False)),
+                "sameSite": c.get("sameSite", "Lax").capitalize(),
+            }
+            # Playwright uses "expires" (float epoch); Cookie Editor uses "expirationDate"
+            exp = c.get("expirationDate") or c.get("expires")
+            if exp is not None:
+                out["expires"] = float(exp)
+            else:
+                out["expires"] = -1
+            return out
+
+        state = {"cookies": [_norm_cookie(c) for c in parsed if isinstance(c, dict)], "origins": []}
+    elif isinstance(parsed, dict):
+        state = parsed
+        if "cookies" not in state and "origins" not in state:
+            return jsonify({
+                "success": False,
+                "message": "JSON must contain a 'cookies' array or be a Cookie Editor export (flat array).",
+            }), 400
+    else:
+        return jsonify({"success": False, "message": "JSON must be an object or a Cookie Editor cookie array."}), 400
 
     os.makedirs(SESSIONS_DIR, exist_ok=True)
     session_path = os.path.join(SESSIONS_DIR, f"{ai_id}_state.json")
     try:
         with open(session_path, "w") as f:
             _json.dump(state, f, indent=2)
-        return jsonify({"success": True, "message": f"Session imported for {AI_CONFIGS[ai_id]['name']}", "aiId": ai_id})
+        n = len(state.get("cookies", []))
+        return jsonify({
+            "success": True,
+            "message": f"Imported {n} cookie(s) for {AI_CONFIGS[ai_id]['name']}.",
+            "aiId": ai_id,
+        })
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 500
 

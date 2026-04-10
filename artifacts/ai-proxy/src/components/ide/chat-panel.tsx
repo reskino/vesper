@@ -149,8 +149,47 @@ const QUICK_PROMPTS = [
 // Message bubble
 // ─────────────────────────────────────────────────────────────────────────────
 
+const AI_NICE_NAMES: Record<string, string> = {
+  claude: "Claude", chatgpt: "ChatGPT", grok: "Grok", gemini: "Gemini",
+  groq: "Groq", deepseek: "DeepSeek", pollinations: "Pollinations AI",
+  openrouter: "OpenRouter", together: "Together AI", mistral: "Mistral",
+  cerebras: "Cerebras", cohere: "Cohere",
+};
+
+function RoutingBadge({ info }: {
+  info: { aiId: string; reason: string; signals: string[]; confidence: number };
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const name = AI_NICE_NAMES[info.aiId] ?? info.aiId;
+  const pct  = Math.round(info.confidence * 100);
+  return (
+    <button
+      onClick={() => setExpanded(e => !e)}
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[#3a3a5c] hover:text-[#52526e] transition-colors text-left"
+      aria-label="Show routing decision details"
+    >
+      <span className="flex items-center gap-1 bg-primary/10 text-primary/70 border border-primary/15 px-1.5 py-0.5 rounded-full font-semibold">
+        <Sparkles className="h-2.5 w-2.5" />
+        Vesper routed → {name}
+      </span>
+      {info.signals.slice(0, 2).map(s => (
+        <span key={s} className="bg-[#0a0a0c] border border-[#1a1a24] px-1.5 py-0.5 rounded-full text-[#52526e]">
+          {s}
+        </span>
+      ))}
+      <span className="text-[#2a2a40] font-mono">{pct}% confidence</span>
+      {expanded && (
+        <span className="w-full text-[#3a3a5c] mt-0.5 italic">{info.reason}</span>
+      )}
+    </button>
+  );
+}
+
 function MessageBubble({ msg, onExecute }: {
-  msg: { role: "user" | "assistant"; content: string; aiId?: string; error?: boolean };
+  msg: {
+    role: "user" | "assistant"; content: string; aiId?: string; error?: boolean;
+    routingInfo?: { aiId: string; reason: string; signals: string[]; confidence: number };
+  };
   onExecute?: (result: any) => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -173,7 +212,7 @@ function MessageBubble({ msg, onExecute }: {
 
   return (
     <div className="px-4 py-1.5 group">
-      {msg.aiId && (
+      {msg.aiId && !msg.routingInfo && (
         <p className="text-[10px] text-[#3a3a5c] font-mono mb-1 pl-1">{msg.aiId}</p>
       )}
       <div className={`text-[15px] md:text-sm leading-relaxed ${msg.error ? "text-red-400" : "text-foreground"}`}>
@@ -186,6 +225,7 @@ function MessageBubble({ msg, onExecute }: {
           <MarkdownRenderer content={msg.content} onExecute={onExecute} />
         )}
       </div>
+      {msg.routingInfo && <RoutingBadge info={msg.routingInfo} />}
       <div className="flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={copy}
@@ -337,8 +377,10 @@ export function ChatPanel({ newChatKey, compact = false }: {
   const askAiWithContext = useAskAiWithContext();
 
   const [prompt, setPrompt] = useState("");
+  type RoutingInfo = { aiId: string; reason: string; signals: string[]; confidence: number };
   const [messages, setMessages] = useState<Array<{
     role: "user" | "assistant"; content: string; aiId?: string; error?: boolean;
+    routingInfo?: RoutingInfo;
   }>>([]);
   const [conversationId, setConversationId]       = useState<string | null>(null);
   const [executionResult, setExecutionResult]     = useState<any>(null);
@@ -400,9 +442,10 @@ export function ChatPanel({ newChatKey, compact = false }: {
     if (!text.trim() || isPending) return;
     setMessages(prev => [...prev, { role: "user", content: text }]);
     try {
-      const effectiveAiId = isAuto
-        ? (aisData?.ais?.find((a: any) => a.hasSession)?.id ?? "pollinations")
-        : selectedAi;
+      // When in Auto mode, send "__auto__" and let the smart router on the backend
+      // pick the best connected AI. The response will include routingDecision.
+      const effectiveAiId = isAuto ? "__auto__" : selectedAi;
+
       const payload = {
         aiId: effectiveAiId,
         prompt: text,
@@ -430,14 +473,19 @@ export function ChatPanel({ newChatKey, compact = false }: {
 
       if (result.success) {
         setConversationId(result.conversationId);
-        setMessages(prev => [...prev, { role: "assistant", content: result.response, aiId: result.aiId }]);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: result.response,
+          aiId: result.aiId,
+          routingInfo: (result as any).routingDecision ?? undefined,
+        }]);
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed", error: true }]);
       }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
-  }, [isPending, isAuto, selectedAi, aisData, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
+  }, [isPending, isAuto, selectedAi, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };

@@ -25,6 +25,7 @@ from file_manager import (
 )
 from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
 from agent import run_agent, get_status as get_agent_status, get_screenshot_path, stop_agent
+from router import route as smart_route, explain as explain_route
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -80,6 +81,22 @@ def set_model():
     return jsonify({"success": True, "aiId": ai_id, "modelId": model_id})
 
 
+@app.route("/api/proxy/route", methods=["POST"])
+def route_prompt():
+    """Preview which AI the router would choose for a given prompt (no message sent)."""
+    data = request.get_json()
+    prompt = data.get("prompt", "").strip()
+    num_files = int(data.get("numFiles", 0))
+
+    if not prompt:
+        return jsonify({"error": "prompt is required"}), 400
+
+    connected_ids = [aid for aid in AI_CONFIGS if session_exists(aid)]
+    decision = smart_route(prompt, connected_ids, num_files=num_files)
+    decision["explanation"] = explain_route(decision)
+    return jsonify(decision)
+
+
 @app.route("/api/proxy/ask", methods=["POST"])
 def ask_ai():
     data = request.get_json()
@@ -90,6 +107,18 @@ def ask_ai():
 
     if not ai_id or not prompt:
         return jsonify({"error": "aiId and prompt are required"}), 400
+
+    # ── Smart routing when aiId is "__auto__" ─────────────────────────────────
+    routing_decision = None
+    if ai_id == "__auto__":
+        connected_ids = [aid for aid in AI_CONFIGS if session_exists(aid)]
+        routing_decision = smart_route(prompt, connected_ids)
+        logger.info(
+            "Smart router → %s (confidence %.2f) — %s",
+            routing_decision["aiId"], routing_decision["confidence"], routing_decision["reason"]
+        )
+        ai_id = routing_decision["aiId"]
+    # ─────────────────────────────────────────────────────────────────────────
 
     add_message(ai_id, "user", prompt, conversation_id)
 
@@ -126,6 +155,7 @@ def ask_ai():
                 "conversationId": conversation_id,
                 "elapsedMs": elapsed_ms,
                 "fallbackUsed": fallback_used,
+                "routingDecision": routing_decision,
                 "error": None,
             })
 
@@ -174,6 +204,18 @@ def ask_ai_with_context():
 
     if not ai_id or not user_prompt:
         return jsonify({"error": "aiId and prompt are required"}), 400
+
+    # ── Smart routing when aiId is "__auto__" ─────────────────────────────────
+    routing_decision_ctx = None
+    if ai_id == "__auto__":
+        connected_ids = [aid for aid in AI_CONFIGS if session_exists(aid)]
+        routing_decision_ctx = smart_route(user_prompt, connected_ids, num_files=len(files))
+        logger.info(
+            "Smart router (ctx) → %s — %s",
+            routing_decision_ctx["aiId"], routing_decision_ctx["reason"]
+        )
+        ai_id = routing_decision_ctx["aiId"]
+    # ─────────────────────────────────────────────────────────────────────────
 
     ACTION_PREFIXES = {
         "fix":      "Please analyze the following code and fix any bugs. Explain what you changed.\n\n",
@@ -229,6 +271,7 @@ def ask_ai_with_context():
                 "conversationId": conversation_id,
                 "elapsedMs": elapsed_ms,
                 "fallbackUsed": fallback_used,
+                "routingDecision": routing_decision_ctx,
                 "error": None,
             })
 

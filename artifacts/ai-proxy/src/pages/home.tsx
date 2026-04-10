@@ -14,6 +14,7 @@ import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
   ChevronUp, RefreshCw, AlertCircle, Check, Plus, Upload, FolderOpen,
+  ChevronDown as Caret, Zap, Cpu,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { useQueryClient } from "@tanstack/react-query";
@@ -109,44 +110,159 @@ function TypewriterText() {
 
   useEffect(() => {
     const phrase = TYPEWRITER_PHRASES[phraseIdx];
-
     if (paused) {
       const t = setTimeout(() => { setPaused(false); setTyping(false); }, 1800);
       return () => clearTimeout(t);
     }
-
     if (typing) {
       if (displayed.length < phrase.length) {
         const t = setTimeout(() => setDisplayed(phrase.slice(0, displayed.length + 1)), 45);
         return () => clearTimeout(t);
-      } else {
-        setPaused(true);
-      }
+      } else { setPaused(true); }
     } else {
       if (displayed.length > 0) {
         const t = setTimeout(() => setDisplayed(d => d.slice(0, -1)), 22);
         return () => clearTimeout(t);
-      } else {
-        setPhraseIdx(i => (i + 1) % TYPEWRITER_PHRASES.length);
-        setTyping(true);
-      }
+      } else { setPhraseIdx(i => (i + 1) % TYPEWRITER_PHRASES.length); setTyping(true); }
     }
   }, [displayed, typing, paused, phraseIdx]);
 
   return (
-    <p className="text-sm text-muted-foreground max-w-xs min-h-[1.5rem]">
+    <p className="text-muted-foreground max-w-xs min-h-[1.5rem] text-base">
       {displayed}
       <span className="inline-block w-0.5 h-[1em] bg-primary ml-0.5 align-middle animate-pulse" />
     </p>
   );
 }
 
-// ── AI status dot ─────────────────────────────────────────────────────────────
+// ── Status dot ────────────────────────────────────────────────────────────────
 function StatusDot({ ai }: { ai: { isAvailable: boolean; hasSession: boolean } }) {
   return (
     <span className={`h-2 w-2 rounded-full shrink-0 ${
       !ai.isAvailable ? "bg-red-500" : ai.hasSession ? "bg-emerald-500" : "bg-amber-500"
     }`} />
+  );
+}
+
+// ── AI + Model selector dropdown ─────────────────────────────────────────────
+function ModelSelectorDropdown({
+  ais,
+  selectedAi,
+  usernames,
+  onSelectAi,
+  onSelectModel,
+}: {
+  ais: any[];
+  selectedAi: string | null;
+  usernames: Record<string, string>;
+  onSelectAi: (id: string) => void;
+  onSelectModel: (aiId: string, modelId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [expandedAi, setExpandedAi] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const currentAi = ais.find(a => a.id === selectedAi);
+  const activeModel = currentAi?.models?.find((m: any) => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-muted transition-colors text-sm font-semibold text-foreground"
+      >
+        {currentAi && <StatusDot ai={currentAi} />}
+        <span>{currentAi?.name ?? "Select AI"}</span>
+        {activeModel && (
+          <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
+            · {activeModel.name}
+          </span>
+        )}
+        <Caret className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 z-50 rounded-2xl border border-border bg-popover shadow-xl overflow-hidden">
+          <div className="p-1.5 space-y-0.5">
+            {ais.map(ai => {
+              const isSel = selectedAi === ai.id;
+              const isExp = expandedAi === ai.id;
+              const mdl = ai.models?.find((m: any) => m.id === ai.currentModel) ?? ai.models?.[0];
+
+              return (
+                <div key={ai.id}>
+                  <div
+                    className={`flex items-center gap-2.5 rounded-xl transition-colors ${
+                      isSel ? "bg-primary/10" : "hover:bg-muted/60"
+                    }`}
+                  >
+                    <button
+                      className="flex items-center gap-2.5 flex-1 px-3 py-2.5 text-left"
+                      onClick={() => { onSelectAi(ai.id); setOpen(false); setExpandedAi(null); }}
+                    >
+                      <StatusDot ai={ai} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
+                        {ai.hasSession && usernames[ai.id] ? (
+                          <p className="text-[10px] text-emerald-500 truncate">{usernames[ai.id]}</p>
+                        ) : mdl ? (
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{mdl.name}</p>
+                        ) : null}
+                      </div>
+                      {isSel && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </button>
+
+                    {ai.models && ai.models.length > 1 && (
+                      <button
+                        className="pr-3 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={(e) => { e.stopPropagation(); setExpandedAi(isExp ? null : ai.id); }}
+                      >
+                        {isExp ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
+                  </div>
+
+                  {isExp && ai.models && (
+                    <div className="ml-3 mr-2 mb-1 rounded-xl border border-border overflow-hidden bg-card">
+                      {ai.models.map((m: any) => (
+                        <button
+                          key={m.id}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                            ai.currentModel === m.id
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectModel(ai.id, m.id);
+                            setOpen(false);
+                            setExpandedAi(null);
+                          }}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
+                          <span className="flex-1 text-left">{m.name}</span>
+                          <ModelTierBadge tier={(m as any).tier} />
+                          {ai.currentModel === m.id && <Check className="h-3 w-3 ml-1 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -159,8 +275,8 @@ export function Home() {
       queryKey: getListAisQueryKey(),
       refetchOnWindowFocus: true,
       refetchOnMount: true,
-      staleTime: 15_000,      // treat data as stale after 15 s
-      refetchInterval: 30_000, // poll every 30 s so dots stay accurate
+      staleTime: 15_000,
+      refetchInterval: 30_000,
     },
   });
 
@@ -169,7 +285,6 @@ export function Home() {
   const setModelMutation = useSetModel();
 
   const [selectedAi, setSelectedAi] = useState<string | null>(null);
-  const [expandedModelPicker, setExpandedModelPicker] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string; aiId?: string; error?: boolean }>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -179,10 +294,8 @@ export function Home() {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null);
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [showMobileAiPicker, setShowMobileAiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Session username lookup ──────────────────────────────────────────────
   const [usernames, setUsernames] = useState<Record<string, string>>({});
 
   const verifySession = useCallback(async (aiId: string) => {
@@ -192,7 +305,7 @@ export function Home() {
       if (data.success && data.username) {
         setUsernames(prev => ({ ...prev, [aiId]: data.username }));
       }
-    } catch { /* ignore */ }
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -200,7 +313,7 @@ export function Home() {
     ais.filter((ai: any) => ai.hasSession).forEach((ai: any) => verifySession(ai.id));
   }, [aisData, verifySession]);
 
-  const { data: treeData, isLoading: treeLoading } = useGetFileTree(
+  const { data: treeData } = useGetFileTree(
     { path: "", depth: 10 },
     { query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen } }
   );
@@ -214,7 +327,7 @@ export function Home() {
 
   useEffect(() => {
     if (aisData?.ais && !selectedAi) {
-      const active = aisData.ais.find(a => a.hasSession);
+      const active = aisData.ais.find((a: any) => a.hasSession);
       setSelectedAi((active ?? aisData.ais[0])?.id ?? null);
     }
   }, [aisData, selectedAi]);
@@ -224,9 +337,7 @@ export function Home() {
   }, [messages, executionResult]);
 
   const isPending = askAi.isPending || askAiWithContext.isPending;
-  const currentAi = aisData?.ais?.find(a => a.id === selectedAi);
-  const activeModel = currentAi?.models?.find(m => m.id === currentAi.currentModel) ?? currentAi?.models?.[0];
-
+  const currentAi = aisData?.ais?.find((a: any) => a.id === selectedAi);
   const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };
 
   useEffect(() => {
@@ -243,11 +354,7 @@ export function Home() {
     if (!text.trim() || !selectedAi || isPending) return;
     setMessages(prev => [...prev, { role: "user", content: text }]);
     try {
-      const payload = {
-        aiId: selectedAi,
-        prompt: text,
-        conversationId: conversationId ?? undefined,
-      };
+      const payload = { aiId: selectedAi, prompt: text, conversationId: conversationId ?? undefined };
       const fileContent = uploadedFile?.content ?? attachedFileData?.content;
       const filePath = uploadedFile?.name ?? attachedFile ?? "file";
       const result = fileContent
@@ -264,269 +371,227 @@ export function Home() {
     }
   };
 
-  const handleSend = () => { send(prompt); setPrompt(""); };
-
+  const handleSend = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegenerate = () => {
     const last = [...messages].reverse().find(m => m.role === "user");
     if (last) send(last.content);
   };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
-
   const newChat = () => { setMessages([]); setConversationId(null); setExecutionResult(null); };
 
+  const handleSelectModel = (aiId: string, modelId: string) => {
+    setModelMutation.mutate(
+      { data: { aiId, modelId } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
+          const ai = aisData?.ais?.find((a: any) => a.id === aiId);
+          const m = ai?.models?.find((m: any) => m.id === modelId);
+          toast({ title: "Model updated", description: `Switched to ${m?.name ?? modelId}` });
+        },
+        onError: () => {
+          toast({ title: "Failed to switch model", variant: "destructive" });
+        },
+      }
+    );
+  };
+
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
 
-      {/* ── Desktop AI sidebar ──────────────────────────────────────────── */}
-      <div className="hidden sm:flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
-        <div className="px-3 py-3 border-b border-border/50 flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Models</span>
-          <button onClick={newChat} className="h-6 w-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="New chat">
-            <PlusCircle className="h-4 w-4" />
-          </button>
-        </div>
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      <header className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm">
+        {/* Left: new chat */}
+        <button
+          onClick={newChat}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          title="New chat"
+        >
+          <PlusCircle className="h-5 w-5" />
+          <span className="text-sm hidden sm:inline">New chat</span>
+        </button>
 
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            {isLoadingAis ? (
-              <div className="py-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />Loading
-              </div>
-            ) : aisData?.ais?.map(ai => {
-              const isSel = selectedAi === ai.id;
-              const isExp = expandedModelPicker === ai.id;
-              const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
-              return (
-                <div key={ai.id} className="space-y-0.5">
-                  <div className={`flex items-center gap-1 rounded-xl transition-all ${isSel ? "bg-primary/10" : "hover:bg-muted/50"}`}>
-                    <button
-                      className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2 text-left"
-                      onClick={() => setSelectedAi(ai.id)}
-                    >
-                      <StatusDot ai={ai} />
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium truncate leading-tight ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
-                        {ai.hasSession && usernames[ai.id] && (
-                          <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{usernames[ai.id]}</p>
-                        )}
-                      </div>
-                    </button>
-                    {ai.models && ai.models.length > 0 && (
-                      <button
-                        className={`shrink-0 flex items-center gap-1 mr-2 px-2 py-1 rounded-lg text-[10px] font-mono font-medium transition-all border
-                          ${isExp
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-muted/60 text-muted-foreground border-border hover:bg-muted hover:text-foreground"}`}
-                        title="Switch model"
-                        onClick={(e) => { e.stopPropagation(); setExpandedModelPicker(isExp ? null : ai.id); }}
-                      >
-                        <span className="max-w-[60px] truncate">{mdl?.name ?? "Model"}</span>
-                        {isExp ? <ChevronUp className="h-2.5 w-2.5 shrink-0" /> : <ChevronDown className="h-2.5 w-2.5 shrink-0" />}
-                      </button>
-                    )}
-                  </div>
-
-                  {isExp && ai.models && (
-                    <div className="mx-2 rounded-xl border border-border overflow-hidden bg-card shadow-sm">
-                      {ai.models.map((m: any) => (
-                        <button
-                          key={m.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
-                            ${ai.currentModel === m.id
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModelMutation.mutate(
-                              { data: { aiId: ai.id, modelId: m.id } },
-                              {
-                                onSuccess: () => {
-                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
-                                  setExpandedModelPicker(null);
-                                  toast({ title: "Model updated", description: `Switched to ${m.name}` });
-                                },
-                                onError: () => {
-                                  toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
-                                }
-                              }
-                            );
-                          }}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
-                          {m.name}
-                          <ModelTierBadge tier={(m as any).tier} />
-                          {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* ── Main chat area ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-        {/* Mobile header */}
-        <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-2.5">
-            <VesperLogo size={32} />
-            <div>
-              <p className="font-bold text-sm tracking-tight">Vesper</p>
-              {currentAi && <p className="text-[10px] text-muted-foreground">{currentAi.name}{activeModel ? ` · ${activeModel.name}` : ""}</p>}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setShowMobileAiPicker(true)}
-              className="flex items-center gap-1.5 bg-muted rounded-xl px-3 py-1.5 text-xs font-medium text-foreground"
-            >
-              {currentAi && <StatusDot ai={currentAi} />}
-              {currentAi?.name ?? "Select AI"}
-              <ChevronDown className="h-3 w-3" />
-            </button>
-            <button onClick={newChat} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground hover:bg-muted transition-colors">
-              <PlusCircle className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto" ref={scrollRef}>
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4 py-12">
-              <VesperLogo size={64} />
-              <h2 className="text-xl font-bold mt-5 mb-1 tracking-tight">Vesper</h2>
-              <p className="text-xs text-muted-foreground mb-4 font-medium">by Skinopro Tech Solutions</p>
-              <TypewriterText />
-              {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
-                <div className="mt-5 flex items-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 text-xs px-4 py-2.5 rounded-xl">
-                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                  </svg>
-                  {currentAi.name} · signed in as <strong className="font-semibold ml-1">{usernames[currentAi.id]}</strong>
-                </div>
-              )}
-              {currentAi && !currentAi.hasSession && (
-                <div className="mt-5 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                  No active session — go to Sessions to log in
-                </div>
-              )}
+        {/* Center: model selector */}
+        <div className="flex items-center justify-center">
+          {isLoadingAis ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading…
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-4">
-              {messages.map((msg, i) => (
-                <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  {msg.role === "assistant" && (
-                    <div className="mt-0.5 shrink-0">
-                      <VesperLogo size={32} />
-                    </div>
-                  )}
-                  <div className={`max-w-[85%] sm:max-w-[80%] ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3"
-                      : msg.error
-                        ? "bg-red-950/30 border border-red-500/30 text-red-400 rounded-2xl rounded-tl-sm px-4 py-3"
-                        : "text-foreground"
-                  }`}>
-                    {msg.role === "user" ? (
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {msg.aiId && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                              {aisData?.ais?.find(a => a.id === msg.aiId)?.name ?? "AI"}
-                            </span>
-                          </div>
-                        )}
-                        <MarkdownRenderer content={msg.content} onCodeExecuted={setExecutionResult} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {isPending && (
-                <div className="flex gap-3 justify-start">
-                  <div className="shrink-0">
-                    <VesperLogo size={32} />
-                  </div>
-                  <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3.5 flex items-center gap-1.5">
-                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce" />
-                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="h-2 w-2 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
-                  </div>
-                </div>
-              )}
-            </div>
+            <ModelSelectorDropdown
+              ais={aisData?.ais ?? []}
+              selectedAi={selectedAi}
+              usernames={usernames}
+              onSelectAi={setSelectedAi}
+              onSelectModel={handleSelectModel}
+            />
           )}
         </div>
 
-        {/* Code execution output */}
-        {executionResult && (
-          <div className="shrink-0 border-t border-border">
-            <TerminalOutput result={executionResult} onClose={() => setExecutionResult(null)} />
-          </div>
-        )}
+        {/* Right: regen */}
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              onClick={handleRegenerate}
+              disabled={isPending}
+              className="h-9 w-9 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+              title="Regenerate last response"
+            >
+              <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
+            </button>
+          )}
+        </div>
+      </header>
 
-        {/* Input bar */}
-        <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm px-3 sm:px-4 pt-3 pb-3">
-          <div className="max-w-3xl mx-auto space-y-2">
-            {/* Attachment badge */}
-            {(attachedFile || uploadedFile) && (
-              <div className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-3 py-1.5 rounded-xl w-max max-w-full">
-                <Paperclip className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[200px]">{uploadedFile?.name ?? attachedFile}</span>
-                <button onClick={clearAttachment} className="ml-1 hover:text-foreground transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
+      {/* ── Messages ─────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+        {messages.length === 0 ? (
+          /* Empty state */
+          <div className="h-full flex flex-col items-center justify-center text-center px-4 py-12 gap-4">
+            <VesperLogo size={60} />
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Vesper</h2>
+              <p className="text-xs text-muted-foreground mt-1">by Skinopro Tech Solutions</p>
+            </div>
+            <TypewriterText />
+
+            {/* Session status card */}
+            {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-4 py-2.5 rounded-xl">
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                {currentAi.name} · signed in as <strong className="font-semibold ml-1">{usernames[currentAi.id]}</strong>
+              </div>
+            )}
+            {currentAi && !currentAi.hasSession && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs px-4 py-2.5 rounded-xl">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                No active session — go to Sessions to connect
               </div>
             )}
 
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept=".txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.yaml,.yml,.html,.css,.sh,.rs,.go,.java,.cpp,.c,.cs,.rb,.php,.swift,.kt,.sql,.toml,.env,.gitignore"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const content = ev.target?.result as string;
-                  setUploadedFile({ name: file.name, content });
-                  setAttachedFile(null);
-                  setShowAttachMenu(false);
-                };
-                reader.readAsText(file);
-                e.target.value = "";
-              }}
+            {/* Quick suggestion chips */}
+            <div className="flex flex-wrap justify-center gap-2 mt-2 max-w-md">
+              {["Explain this code", "Write a Python script", "Fix this bug", "Create a React component"].map(s => (
+                <button
+                  key={s}
+                  onClick={() => { setPrompt(s); textareaRef.current?.focus(); }}
+                  className="px-3 py-1.5 rounded-full border border-border text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto px-4 pt-6 pb-4 space-y-6">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {msg.role === "assistant" && (
+                  <div className="mt-1 shrink-0">
+                    <VesperLogo size={28} />
+                  </div>
+                )}
+                <div className={`max-w-[88%] sm:max-w-[82%] ${
+                  msg.role === "user"
+                    ? "bg-muted text-foreground rounded-2xl rounded-br-md px-4 py-3"
+                    : msg.error
+                      ? "bg-red-950/30 border border-red-500/30 text-red-400 rounded-2xl rounded-tl-md px-4 py-3"
+                      : "text-foreground"
+                }`}>
+                  {msg.role === "user" ? (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {msg.aiId && (
+                        <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          {aisData?.ais?.find((a: any) => a.id === msg.aiId)?.name ?? "AI"}
+                        </span>
+                      )}
+                      <MarkdownRenderer content={msg.content} onCodeExecuted={setExecutionResult} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isPending && (
+              <div className="flex gap-3 justify-start">
+                <div className="shrink-0 mt-1"><VesperLogo size={28} /></div>
+                <div className="flex items-center gap-1.5 py-3">
+                  <span className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Code execution output ─────────────────────────────────────────── */}
+      {executionResult && (
+        <div className="shrink-0 border-t border-border">
+          <TerminalOutput result={executionResult} onClose={() => setExecutionResult(null)} />
+        </div>
+      )}
+
+      {/* ── Input area ───────────────────────────────────────────────────── */}
+      <div className="shrink-0 px-3 sm:px-4 pt-3 pb-4 bg-background/80 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto">
+          {/* Attachment badge */}
+          {(attachedFile || uploadedFile) && (
+            <div className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-3 py-1.5 rounded-xl w-max max-w-full mb-2">
+              <Paperclip className="h-3 w-3 shrink-0" />
+              <span className="truncate max-w-[200px]">{uploadedFile?.name ?? attachedFile}</span>
+              <button onClick={clearAttachment} className="ml-1 hover:text-foreground transition-colors">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Main input box */}
+          <div className="relative rounded-2xl border border-border bg-muted/30 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all shadow-sm">
+            <Textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={selectedAi ? "Message the AI…" : "Select a model first…"}
+              className="min-h-[52px] max-h-52 resize-none bg-transparent border-none shadow-none focus-visible:ring-0 text-sm py-4 px-4 pr-14 rounded-2xl"
+              disabled={isPending}
+              rows={1}
             />
 
-            <div className="flex items-end gap-2">
-              {/* + Attach menu */}
-              <div className="relative shrink-0" data-attach-menu>
+            {/* Send button — inside input, bottom-right */}
+            <button
+              onClick={handleSend}
+              disabled={!prompt.trim() || isPending || !selectedAi}
+              className="absolute right-3 bottom-3 h-8 w-8 flex items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-30 hover:bg-primary/90 transition-all shadow-sm"
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </button>
+
+            {/* Bottom toolbar inside box */}
+            <div className="flex items-center gap-1 px-3 pb-2.5 pt-0">
+              {/* Attach menu */}
+              <div className="relative" data-attach-menu>
                 <button
                   onClick={() => setShowAttachMenu(prev => !prev)}
-                  className={`h-10 w-10 flex items-center justify-center rounded-xl transition-colors ${showAttachMenu ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                  className={`h-7 w-7 flex items-center justify-center rounded-lg transition-colors ${showAttachMenu ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
                   title="Add attachment"
                 >
-                  <Plus className="h-5 w-5" />
+                  <Plus className="h-4 w-4" />
                 </button>
                 {showAttachMenu && (
-                  <div className="absolute bottom-12 left-0 z-50 min-w-[220px] rounded-2xl border border-border bg-popover shadow-lg p-1.5 space-y-0.5">
+                  <div className="absolute bottom-9 left-0 z-50 min-w-[210px] rounded-2xl border border-border bg-popover shadow-lg p-1.5 space-y-0.5">
                     <button
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-foreground hover:bg-muted transition-colors text-left"
-                      onClick={() => { fileInputRef.current?.click(); }}
+                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
                     >
                       <Upload className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div>
@@ -548,141 +613,51 @@ export function Home() {
                 )}
               </div>
 
-              {/* Textarea */}
-              <div className="flex-1 relative">
-                <Textarea
-                  ref={textareaRef}
-                  value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={selectedAi ? "Message the AI... (Enter to send)" : "Select a model first..."}
-                  className="min-h-[44px] max-h-48 resize-none bg-muted/40 border-border/50 focus-visible:ring-1 focus-visible:ring-primary rounded-xl text-sm py-3 pr-3"
-                  disabled={isPending}
-                  rows={1}
-                />
-              </div>
-
-              {/* Regen + Send */}
-              <div className="flex items-center gap-1 shrink-0">
-                {messages.length > 0 && (
-                  <button
-                    onClick={handleRegenerate}
-                    disabled={isPending}
-                    className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
-                    title="Regenerate"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
-                  </button>
+              {/* Session status hint */}
+              <div className="flex-1 px-1">
+                {currentAi && !currentAi.hasSession && (
+                  <p className="text-[10px] text-amber-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    No session — connect in Sessions first
+                  </p>
                 )}
-                <button
-                  onClick={handleSend}
-                  disabled={!prompt.trim() || isPending || !selectedAi}
-                  className="h-10 w-10 flex items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-all shadow-sm"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
+                {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
+                  <p className="text-[10px] text-emerald-500/80 flex items-center gap-1">
+                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                    </svg>
+                    {currentAi.name} · {usernames[currentAi.id]}
+                  </p>
+                )}
               </div>
-            </div>
 
-            {currentAi && !currentAi.hasSession && (
-              <p className="text-[11px] text-amber-500 flex items-center gap-1.5">
-                <AlertCircle className="h-3 w-3" />
-                No session — messages may fail. Add a session first.
-              </p>
-            )}
-            {currentAi && currentAi.hasSession && usernames[currentAi.id] && (
-              <p className="text-[11px] text-green-500/70 flex items-center gap-1.5">
-                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                </svg>
-                {currentAi.name} · {usernames[currentAi.id]}
-              </p>
-            )}
+              <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">Enter to send · Shift+Enter for newline</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Mobile AI picker sheet ──────────────────────────────────────── */}
-      <Dialog open={showMobileAiPicker} onOpenChange={setShowMobileAiPicker}>
-        <DialogContent className="sm:hidden max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Select AI & Model</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            {aisData?.ais?.map(ai => {
-              const isSel = selectedAi === ai.id;
-              const isExp = expandedModelPicker === ai.id;
-              const mdl = ai.models?.find(m => m.id === ai.currentModel) ?? ai.models?.[0];
-              return (
-                <div key={ai.id} className="space-y-1">
-                  <div className={`flex items-center gap-2 rounded-xl border transition-all ${
-                    isSel ? "bg-primary/10 border-primary/20" : "border-transparent hover:bg-muted"
-                  }`}>
-                    <button
-                      className="flex items-center gap-3 flex-1 min-w-0 px-3 py-3 text-left"
-                      onClick={() => { setSelectedAi(ai.id); setShowMobileAiPicker(false); setExpandedModelPicker(null); }}
-                    >
-                      <StatusDot ai={ai} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${isSel ? "text-primary" : ""}`}>{ai.name}</p>
-                        {ai.hasSession && usernames[ai.id] ? (
-                          <p className="text-xs text-green-400 truncate">{usernames[ai.id]}</p>
-                        ) : mdl ? (
-                          <p className="text-xs text-muted-foreground font-mono">{mdl.name}</p>
-                        ) : null}
-                      </div>
-                      {isSel && <Check className="h-4 w-4 text-primary shrink-0" />}
-                    </button>
-                    {ai.models && ai.models.length > 1 && (
-                      <button
-                        className="shrink-0 pr-3 py-3 text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={(e) => { e.stopPropagation(); setExpandedModelPicker(isExp ? null : ai.id); }}
-                      >
-                        {isExp ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    )}
-                  </div>
-                  {isExp && ai.models && (
-                    <div className="ml-4 rounded-xl border border-border overflow-hidden bg-card">
-                      {ai.models.map((m: any) => (
-                        <button
-                          key={m.id}
-                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${
-                            ai.currentModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModelMutation.mutate(
-                              { data: { aiId: ai.id, modelId: m.id } },
-                              {
-                                onSuccess: () => {
-                                  queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
-                                  setExpandedModelPicker(null);
-                                  toast({ title: "Model updated", description: `Switched to ${m.name}` });
-                                },
-                                onError: () => {
-                                  toast({ title: "Failed to switch model", description: "Could not update model on the server.", variant: "destructive" });
-                                }
-                              }
-                            );
-                          }}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${ai.currentModel === m.id ? "bg-primary" : "bg-border"}`} />
-                          {m.name}
-                          <ModelTierBadge tier={(m as any).tier} />
-                          {ai.currentModel === m.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* ── Hidden file input ────────────────────────────────────────────── */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.yaml,.yml,.html,.css,.sh,.rs,.go,.java,.cpp,.c,.cs,.rb,.php,.swift,.kt,.sql,.toml,.env,.gitignore"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            setUploadedFile({ name: file.name, content: ev.target?.result as string });
+            setAttachedFile(null);
+            setShowAttachMenu(false);
+          };
+          reader.readAsText(file);
+          e.target.value = "";
+        }}
+      />
 
-      {/* ── File picker dialog ──────────────────────────────────────────── */}
+      {/* ── File picker dialog ───────────────────────────────────────────── */}
       <Dialog open={isFilePickerOpen} onOpenChange={setIsFilePickerOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -690,12 +665,17 @@ export function Home() {
           </DialogHeader>
           <ScrollArea className="h-72 border border-border rounded-xl bg-muted/20">
             <div className="p-2">
-              {treeLoading ? (
-                <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-              ) : treeData?.tree ? (
-                <MiniFileTreeItem node={treeData.tree} onSelect={p => { setAttachedFile(p); setUploadedFile(null); setIsFilePickerOpen(false); }} />
+              {treeData?.tree ? (
+                <MiniFileTreeItem
+                  node={treeData.tree}
+                  onSelect={(p) => {
+                    setAttachedFile(p);
+                    setUploadedFile(null);
+                    setIsFilePickerOpen(false);
+                  }}
+                />
               ) : (
-                <p className="text-xs text-muted-foreground text-center p-6">No files found</p>
+                <div className="py-8 text-center text-sm text-muted-foreground">Loading file tree…</div>
               )}
             </div>
           </ScrollArea>

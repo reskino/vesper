@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Code2, TerminalSquare, Bot, Database, History, Moon, Sun, BookOpen } from "lucide-react";
+import {
+  MessageSquare, Code2, TerminalSquare, Bot, Database,
+  History, Moon, Sun, BookOpen, ChevronLeft, ChevronRight,
+  PanelLeft,
+} from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 
 const NAV = [
@@ -16,6 +20,7 @@ const NAV = [
 export function Sidebar() {
   const [location] = useLocation();
   const [dark, setDark] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
@@ -30,45 +35,73 @@ export function Sidebar() {
   return (
     <>
       {/* ── Desktop sidebar ──────────────────────────── */}
-      <aside className="hidden sm:flex w-60 shrink-0 flex-col border-r border-border bg-sidebar h-screen">
-        <div className="px-4 pt-5 pb-4 border-b border-border/50">
-          <div className="flex items-center gap-2.5">
-            <VesperLogo size={34} />
-            <div>
-              <p className="font-bold text-sm text-sidebar-foreground tracking-tight">Vesper</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">by Skinopro Tech Solutions</p>
-            </div>
-          </div>
+      <aside
+        className={`hidden sm:flex shrink-0 flex-col border-r border-border bg-sidebar h-screen transition-all duration-200 ease-in-out
+          ${collapsed ? "w-[60px]" : "w-56"}`}
+      >
+        {/* Logo row */}
+        <div className={`flex items-center border-b border-border/50 h-14 px-3 ${collapsed ? "justify-center" : "gap-2.5 px-4"}`}>
+          {collapsed ? (
+            <VesperLogo size={30} />
+          ) : (
+            <>
+              <VesperLogo size={30} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-sidebar-foreground tracking-tight truncate">Vesper</p>
+                <p className="text-[10px] text-muted-foreground leading-tight truncate">by Skinopro Tech Solutions</p>
+              </div>
+            </>
+          )}
         </div>
 
-        <nav className="flex-1 p-2.5 space-y-0.5 overflow-y-auto">
+        {/* Nav items */}
+        <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = location === href;
             return (
               <Link key={href} href={href}>
                 <div
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all group
+                  title={collapsed ? label : undefined}
+                  className={`flex items-center gap-3 px-2.5 py-2.5 rounded-xl cursor-pointer transition-all group relative
+                    ${collapsed ? "justify-center" : ""}
                     ${active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                   data-testid={`nav-${label.toLowerCase()}`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="text-sm font-medium">{label}</span>
+                  {!collapsed && <span className="text-sm font-medium">{label}</span>}
+
+                  {/* Tooltip when collapsed */}
+                  {collapsed && (
+                    <div className="absolute left-full ml-2 z-50 px-2 py-1 rounded-lg bg-popover border border-border text-sm font-medium text-popover-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-md">
+                      {label}
+                    </div>
+                  )}
                 </div>
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-2.5 border-t border-border/50">
+        {/* Bottom controls */}
+        <div className="p-2 border-t border-border/50 space-y-0.5">
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all"
+            title={collapsed ? (dark ? "Light mode" : "Dark mode") : undefined}
+            className={`flex items-center gap-3 px-2.5 py-2.5 rounded-xl w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all ${collapsed ? "justify-center" : ""}`}
             data-testid="btn-theme-toggle"
           >
             {dark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
-            <span className="text-sm font-medium">{dark ? "Light mode" : "Dark mode"}</span>
+            {!collapsed && <span className="text-sm font-medium">{dark ? "Light mode" : "Dark mode"}</span>}
+          </button>
+
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={`flex items-center gap-3 px-2.5 py-2.5 rounded-xl w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all ${collapsed ? "justify-center" : ""}`}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <><ChevronLeft className="h-4 w-4 shrink-0" /><span className="text-sm font-medium">Collapse</span></>}
           </button>
         </div>
       </aside>

@@ -205,8 +205,8 @@ function ModelSelectorDropdown({
       </button>
 
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 z-50 rounded-2xl border border-border bg-popover shadow-xl overflow-hidden">
-          <div className="p-1.5 space-y-0.5">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 z-50 rounded-2xl border border-border bg-popover shadow-xl overflow-hidden max-h-[min(480px,65vh)] flex flex-col">
+          <div className="overflow-y-auto flex-1 p-1.5 space-y-0.5">
 
             {/* Auto option */}
             <div

@@ -1,0 +1,58 @@
+You are a senior UI/UX designer and React developer who has designed the sidebar for Cursor, VS Code, and modern AI IDEs.
+
+Current left sidebar in Vesper ("Sessions" panel):
+- Header "Sessions" with "1 always-free · 11 with API key or cookies" and "3/12 ready"
+- Long list under "Free AI options" with many providers (Pollinations AI, Grok, Google Gemini, OpenRouter, Cerebras, Mistral, ChatGPT & Claude, etc.)
+- Each provider has long descriptive text that makes the panel feel cluttered and overwhelming
+- Bottom section for "Pollinations AI" with status
+- Overall: Poor spacing, weak visual hierarchy, too much dense text, hard to scan quickly
+
+Problems to solve:
+- Users can't quickly find and select the best AI provider
+- History/Sessions feel buried or not prominent
+- On desktop the sidebar takes too much space but still feels messy
+- On mobile the entire sidebar collapses badly or becomes unreadable
+
+Redesign the entire left sidebar (Sessions / AI Providers / History) for both **Desktop** and **Mobile**.
+
+### Desktop Improvements:
+- Clean, modern card-based or accordion-style layout
+- Top: Prominent "Sessions" header with usage stats (e.g., quota progress bar or clean chips: "3/12 ready")
+- Separate clear sections with subtle dividers:
+  1. **Sessions / History** – List of past chats/sessions with title, last updated, model used. Make it collapsible. Add search/filter.
+  2. **AI Providers** – Group into categories (e.g., "Always Free", "Free with API Key", "Official APIs"). Use clean cards or list items with:
+     - Icon + short name
+     - Status badge (Active, Free, Requires Key)
+     - One-line description (truncate long text)
+     - Click to expand for full details or quick "Connect" button
+- Highlight currently active provider
+- Add a search bar at the top of providers
+- Make the whole sidebar collapsible (thin icon bar when collapsed)
+- Consistent dark theme with good contrast and spacing (use zinc/slate colors)
+
+### Mobile Improvements (< 768px):
+- Do NOT show the full dense sidebar by default
+- Add a bottom navigation tab called "Providers" or "Sessions"
+- When selected: Full-screen clean modal or dedicated view
+- Top header with back button + "AI Providers & Sessions"
+- Tab switcher inside: "Sessions" | "Providers"
+- For Providers: Vertical list of clean cards (icon + name + status). Tap to see details in a bottom sheet
+- For Sessions/History: Scrollable list with better cards (preview of last message, date, model)
+- Large touch targets, generous padding, easy scanning
+- Keep "Pollinations AI" status visible and prominent
+
+### General Requirements:
+- Modern 2026 dark aesthetic: subtle glows, clean typography, good use of whitespace
+- Make scanning fast — users should find and switch providers in < 3 seconds
+- Add hover/focus states and smooth transitions
+- Include keyboard support (e.g., search with /)
+- Ensure it integrates well with the rest of Vesper (same button styles, colors, fonts)
+
+Deliver:
+- Complete React + TypeScript component structure with Tailwind CSS
+- Responsive design using mobile-first breakpoints
+- Separate logic/components for desktop sidebar vs mobile full-screen view
+- Suggestions for state management (active provider, expanded sections, session list)
+- Code examples for collapsible sections, provider cards, and session items
+
+Make it feel premium, scannable, and professional — like a high-end AI development tool.

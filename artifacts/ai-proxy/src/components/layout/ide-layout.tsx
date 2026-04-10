@@ -151,7 +151,7 @@ function MobileNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Main navigation"
     >
-      <div className="grid grid-cols-4 px-1">
+      <div className="grid grid-cols-5 px-1">
         {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
           const active = mobileTab === id;
           return (
@@ -316,6 +316,9 @@ function MobileWorkspace() {
       <div className={`h-full ${mobileTab === "editor"   ? "" : "hidden"}`}>
         <EditorPanel />
       </div>
+      <div className={`h-full ${mobileTab === "agent"    ? "" : "hidden"}`}>
+        <div className="h-full overflow-y-auto bg-[#0a0a0c]"><AgentPage mobile /></div>
+      </div>
       <div className={`h-full ${mobileTab === "files"    ? "" : "hidden"}`}>
         <FileExplorer activePath={null} />
       </div>
@@ -353,7 +356,8 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       <div className="hidden md:flex flex-1 min-h-0 overflow-hidden">
         <ActivityBar />
         {sidebarPanel && (
-          <aside className="shrink-0 w-64 flex flex-col border-r border-[#1a1a24] overflow-hidden bg-[#0a0a0c]">
+          <aside className={`shrink-0 flex flex-col border-r border-[#1a1a24] overflow-hidden bg-[#0a0a0c]
+            ${sidebarPanel === "agent" ? "w-72" : "w-64"}`}>
             <SidebarContent activeFilePath={null} />
           </aside>
         )}

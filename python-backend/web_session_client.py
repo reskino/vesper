@@ -46,23 +46,24 @@ def _load_cookies(session_path: str, domain_hint: str = "") -> dict:
     return result
 
 
-def _impersonate_session(cookies: dict):
-    """Return a curl_cffi Session with Chrome 124 TLS fingerprint + cookies."""
+def _impersonate_session(cookies: dict, impersonate: str = "chrome136"):
+    """Return a curl_cffi Session with a modern Chrome TLS fingerprint + cookies."""
     from curl_cffi import requests as cf
-    sess = cf.Session(impersonate="chrome124")
+    sess = cf.Session(impersonate=impersonate)
     sess.cookies.update(cookies)
     return sess
 
 
-def _chrome_headers(origin: str, referer: str, extra: dict | None = None) -> dict:
-    """Standard headers that make requests look like Chrome 124."""
+def _chrome_headers(origin: str, referer: str, extra: dict | None = None,
+                    chrome_version: str = "136") -> dict:
+    """Standard headers that make requests look like a modern Chrome browser."""
     h = {
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
         "Origin": origin,
         "Referer": referer,
-        "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "sec-ch-ua": f'"Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}", "Not-A.Brand";v="24"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
         "sec-fetch-dest": "empty",
@@ -450,32 +451,101 @@ def _parse_grok_response(text: str) -> str:
     return result.strip()
 
 
+def _grok_build_session(cookies: dict, impersonate: str = "chrome136"):
+    """
+    Build a curl_cffi session for grok.com, then make a pre-flight GET to
+    refresh Cloudflare's __cf_bm / cf_clearance cookies before any POST.
+    Returns the session with all cookies (originals + fresh CF cookies).
+    """
+    from curl_cffi import requests as cf  # noqa: PLC0415
+    ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/136.0.0.0 Safari/537.36"
+    )
+    sess = cf.Session(impersonate=impersonate)
+    sess.cookies.update(cookies)
+    try:
+        preflight = sess.get(
+            "https://grok.com/",
+            headers={
+                "User-Agent": ua,
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;"
+                    "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="24"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Windows"',
+                "sec-fetch-dest": "document",
+                "sec-fetch-mode": "navigate",
+                "sec-fetch-site": "none",
+                "upgrade-insecure-requests": "1",
+            },
+            timeout=20,
+            allow_redirects=True,
+        )
+        logger.info("Grok pre-flight GET → %s", preflight.status_code)
+        # Merge any new Cloudflare cookies (__cf_bm, cf_clearance) into session
+        for k, v in preflight.cookies.items():
+            sess.cookies.set(k, v)
+    except Exception as pre_err:
+        logger.warning("Grok pre-flight failed (continuing anyway): %s", pre_err)
+    return sess
+
+
 def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
     """
-    Send a prompt to Grok via grok.com (the domain moved from grok.x.ai in 2025).
-    Falls back to x.com API if grok.com fails.
+    Send a prompt to Grok via grok.com REST API.
+
+    Key fixes vs the old version:
+    - Uses Chrome 136 TLS fingerprint (Cloudflare rejects stale fingerprints)
+    - Pre-flight GET to refresh __cf_bm / cf_clearance before the POST
+    - Updated User-Agent and Sec-CH-UA headers matching Chrome 136
+    - Retries with free model when 403 is due to plan limits
+    - Detailed debug logging of 403/non-200 response bodies
     """
     try:
         from curl_cffi import requests as cf  # noqa: PLC0415
     except ImportError:
-        return False, "", "curl_cffi not installed"
+        return False, "", "curl_cffi not installed — run: pip install curl_cffi"
 
     try:
         cookies = _load_cookies(session_path, "")
         if not cookies:
-            return False, "", "Session file is empty. Please re-import your Grok cookies."
+            return False, "", (
+                "Session file is empty — please re-import your Grok cookies "
+                "from grok.com while logged in."
+            )
 
-        sess = _impersonate_session(cookies)
+        sess = _grok_build_session(cookies)
 
-        # ── Try grok.com first (primary domain as of 2025) ─────────────────────
-        grok_headers = _chrome_headers(
-            "https://grok.com",
-            "https://grok.com/",
-            {"Content-Type": "application/json"},
+        ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/136.0.0.0 Safari/537.36"
         )
+        grok_headers = {
+            "Content-Type": "application/json",
+            "User-Agent": ua,
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Origin": "https://grok.com",
+            "Referer": "https://grok.com/",
+            "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="24"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "x-requested-with": "XMLHttpRequest",
+        }
 
         # Payload structure confirmed by mem0ai/grok3-api reverse-engineering
-        payload_grok_com = {
+        payload = {
             "temporary": False,
             "modelName": model,
             "message": prompt,
@@ -496,48 +566,79 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
             "isReasoning": False,
         }
 
-        # Only use the verified working API endpoint (the others return HTML)
         grok_api_url = "https://grok.com/rest/app-chat/conversations/new"
 
-        try:
-            resp = sess.post(grok_api_url, json=payload_grok_com, headers=grok_headers, timeout=120)
-            logger.info("Grok %s → %s", grok_api_url, resp.status_code)
-            if resp.status_code == 401:
-                return False, "", "Grok session expired — please re-import cookies from grok.com while logged in."
-            if resp.status_code == 403:
-                body = resp.text.lower()
-                if any(k in body for k in ("subscri", "premium", "upgrade", "plan")):
-                    free_model = get_free_model("grok")
-                    if free_model and free_model != model:
-                        resp2 = sess.post(
-                            grok_api_url,
-                            json={**payload_grok_com, "modelName": free_model},
-                            headers=grok_headers,
-                            timeout=120,
-                        )
-                        if resp2.status_code == 200:
-                            text = _parse_grok_response(resp2.text)
-                            if text:
-                                note = (
-                                    f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't "
-                                    f"have access to **{model}**.)_"
-                                )
-                                return True, text + note, ""
-                return False, "", f"Grok returned 403 — check your cookies or account plan."
-            if resp.status_code >= 400:
-                return False, "", f"Grok returned HTTP {resp.status_code} — please re-import cookies."
+        def _do_post(mdl: str):
+            p = dict(payload, modelName=mdl)
+            return sess.post(grok_api_url, json=p, headers=grok_headers, timeout=120)
+
+        resp = _do_post(model)
+        logger.info("Grok POST → %s (model=%s)", resp.status_code, model)
+
+        if resp.status_code == 200:
             logger.debug("Grok raw response (first 500): %s", resp.text[:500])
             text = _parse_grok_response(resp.text)
             if text:
                 return True, text, ""
             return False, "", f"Grok returned an unrecognized response format. Raw: {resp.text[:200]}"
-        except Exception as e:
-            logger.error("Grok request failed: %s", e, exc_info=True)
-            return False, "", f"Grok connection error: {e}"
+
+        if resp.status_code == 401:
+            return False, "", (
+                "Grok session expired — please re-import your cookies from "
+                "grok.com while logged in."
+            )
+
+        if resp.status_code == 403:
+            body_preview = resp.text[:400]
+            logger.warning("Grok 403 body: %s", body_preview)
+            body_lc = body_preview.lower()
+
+            # Plan-gate: retry with free/mini model
+            if any(k in body_lc for k in ("subscri", "premium", "upgrade", "plan", "entitl")):
+                free_model = get_free_model("grok")
+                if free_model and free_model != model:
+                    logger.info("Grok 403 plan-gate — retrying with %s", free_model)
+                    resp2 = _do_post(free_model)
+                    if resp2.status_code == 200:
+                        text = _parse_grok_response(resp2.text)
+                        if text:
+                            note = (
+                                f"\n\n_(Answered with **{free_model}** — your account "
+                                f"doesn't have access to **{model}**.)_"
+                            )
+                            return True, text + note, ""
+
+            # Cloudflare or bot-detection block
+            if any(k in body_lc for k in ("cloudflare", "cf-ray", "bot", "challenge", "ddos")):
+                return False, "", (
+                    "Grok is blocked by Cloudflare bot protection. "
+                    "Please re-export your cookies from a fresh grok.com session "
+                    "(including any cf_clearance cookies) and re-import them."
+                )
+
+            # No credentials / auth-related 403
+            if any(k in body_lc for k in ("unauthenticated", "no-credentials", "credentials")):
+                return False, "", (
+                    "Grok rejected the session credentials (403). "
+                    "Your cookies may be expired — please re-import from grok.com."
+                )
+
+            return False, "", (
+                f"Grok returned 403. This usually means:\n"
+                f"• Your cookies expired — re-export from grok.com and re-import\n"
+                f"• The selected model requires a paid plan\n"
+                f"• Cloudflare blocked the request\n\n"
+                f"Response snippet: {body_preview[:150]}"
+            )
+
+        return False, "", (
+            f"Grok returned HTTP {resp.status_code}. "
+            f"Please re-import your cookies from grok.com."
+        )
 
     except Exception as exc:
         logger.error("Grok send error: %s", exc, exc_info=True)
-        return False, "", f"Grok error: {exc}"
+        return False, "", f"Grok connection error: {exc}"
 
 
 # ─── Official API key senders (bypass Cloudflare) ────────────────────────────

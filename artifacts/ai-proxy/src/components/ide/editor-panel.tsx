@@ -276,13 +276,18 @@ function AiSidePanel({
 
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel() {
-  const { onOpenFileRef } = useIDE();
+  const { onOpenFileRef, setActiveFilePath } = useIDE();
   const { toast } = useToast();
 
   // ── Tab management ──────────────────────────────────────────────────────────
   const [openTabs, setOpenTabs]       = useState<string[]>([]);
-  const [activeTab, setActiveTab]     = useState<string | null>(null);
+  const [activeTab, setActiveTabRaw]  = useState<string | null>(null);
   const [tabStates, setTabStates]     = useState<Record<string, TabState>>({});
+
+  const setActiveTab = useCallback((p: string | null) => {
+    setActiveTabRaw(p);
+    setActiveFilePath(p);
+  }, [setActiveFilePath]);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -328,7 +333,7 @@ export function EditorPanel() {
   const openFile = useCallback((path: string) => {
     setOpenTabs(prev => prev.includes(path) ? prev : [...prev, path]);
     setActiveTab(path);
-  }, []);
+  }, [setActiveTab]);
 
   useEffect(() => {
     onOpenFileRef.current = openFile;

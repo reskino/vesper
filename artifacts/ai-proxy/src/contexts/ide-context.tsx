@@ -50,6 +50,10 @@ interface IDEContextValue {
   openFileInEditor: (path: string) => void;
   onOpenFileRef: React.MutableRefObject<((path: string) => void) | null>;
 
+  // ── Active file path (for terminal "Run" button) ───────────────────────────
+  activeFilePath: string | null;
+  setActiveFilePath: (path: string | null) => void;
+
   // ── New chat trigger ───────────────────────────────────────────────────────
   newChatKey: number;
   triggerNewChat: () => void;
@@ -75,6 +79,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [selectedAi, setSelectedAi]   = useState("__auto__");
   const [newChatKey, setNewChatKey]   = useState(0);
   const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
+  const [activeFilePath, setActiveFilePath]   = useState<string | null>(null);
 
   const onOpenFileRef = useRef<((path: string) => void) | null>(null);
 
@@ -105,6 +110,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       mobileSettingsTab, setMobileSettingsTab,
       selectedAi, setSelectedAi,
       openFileInEditor, onOpenFileRef,
+      activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
       importedProject, setImportedProject,
     }}>

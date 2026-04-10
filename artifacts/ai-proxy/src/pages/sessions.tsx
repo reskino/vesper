@@ -14,33 +14,40 @@ import {
   AlertTriangle, Zap,
 } from "lucide-react";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const CLOUDFLARE_BLOCKED = new Set(["chatgpt", "claude"]);
-const API_KEY_ONLY = new Set(["groq"]);
-const NO_AUTH = new Set(["pollinations"]);
-
-const API_KEY_LINKS: Record<string, { label: string; url: string }> = {
-  chatgpt: { label: "Get OpenAI API key", url: "https://platform.openai.com/api-keys" },
-  claude:  { label: "Get Anthropic API key", url: "https://console.anthropic.com/settings/keys" },
-  groq:    { label: "Get free Groq API key (no credit card)", url: "https://console.groq.com/keys" },
-};
-
-// ─── Login Guide Dialog ──────────────────────────────────────────────────────
-
-interface LoginGuideProps {
-  ai: { id: string; name: string; url: string };
-  onClose: () => void;
-  onSuccess: () => void;
+interface AiInfo {
+  id: string;
+  name: string;
+  url: string;
+  authMode: "none" | "api_key" | "api_key_or_cookies" | "cookies";
+  keyLabel?: string;
+  keyPrefix?: string;
+  keyUrl?: string;
+  keyUrlLabel?: string;
+  keyNote?: string;
+  hasSession?: boolean;
+  models?: Array<{ id: string; name: string; tier: string }>;
+  currentModel?: string;
 }
 
 type Mode = "api_key" | "cookies";
 
-function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
-  const isCloudflareBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
-  const isApiKeyOnly = API_KEY_ONLY.has(ai.id);
-  const [useApiKey, setUseApiKey] = useState(isCloudflareBlocked || isApiKeyOnly);
+// ─── Login Guide Dialog ──────────────────────────────────────────────────────
 
+interface LoginGuideProps {
+  ai: AiInfo;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
+  const isApiKeyOnly = ai.authMode === "api_key";
+  const isCookiesOnly = ai.authMode === "cookies";
+  const isCloudflareBlocked = ai.authMode === "api_key_or_cookies";
+
+  const defaultToApiKey = isApiKeyOnly || isCloudflareBlocked;
+  const [useApiKey, setUseApiKey] = useState(defaultToApiKey);
   const mode: Mode = useApiKey ? "api_key" : "cookies";
 
   return (
@@ -61,7 +68,7 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
         </div>
 
         {/* Mode toggle — only for ChatGPT/Claude (both options available) */}
-        {isCloudflareBlocked && !isApiKeyOnly && (
+        {isCloudflareBlocked && !isApiKeyOnly && !isCookiesOnly && (
           <div className="px-5 pt-4">
             <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-border">
               <div className="flex items-center gap-3">
@@ -79,10 +86,7 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className={useApiKey ? "text-muted-foreground" : "text-foreground"}>Cookies</span>
-                <Switch
-                  checked={useApiKey}
-                  onCheckedChange={setUseApiKey}
-                />
+                <Switch checked={useApiKey} onCheckedChange={setUseApiKey} />
                 <span className={useApiKey ? "text-foreground font-medium" : "text-muted-foreground"}>API Key</span>
               </div>
             </div>
@@ -109,7 +113,6 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const link = API_KEY_LINKS[ai.id];
 
   const handleSave = async () => {
     if (!apiKey.trim()) return;
@@ -136,47 +139,39 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
     }
   };
 
-  const placeholders: Record<string, string> = {
-    chatgpt: "sk-...",
-    claude: "sk-ant-...",
-    groq: "gsk_...",
-  };
+  const label = ai.keyLabel ?? `${ai.name} API Key`;
+  const placeholder = ai.keyPrefix ? `${ai.keyPrefix}...` : "Paste your API key...";
+  const note = ai.keyNote ?? `Enter your ${ai.name} API key to connect.`;
 
   return (
     <div className="space-y-4">
       <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 text-xs text-muted-foreground space-y-1">
         <p className="font-medium text-foreground flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5 text-primary" />
-          Why API key?
+          {ai.authMode === "api_key_or_cookies" ? "Why API key?" : "API Key"}
         </p>
-        <p>
-          {CLOUDFLARE_BLOCKED.has(ai.id)
-            ? `${ai.name} protects its web interface with Cloudflare, which blocks cloud server IPs regardless of cookies. An official API key bypasses this and connects directly.`
-            : `${ai.name} uses API key authentication for secure, reliable access with generous free limits.`}
-        </p>
+        <p>{note}</p>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          {ai.id === "chatgpt" ? "OpenAI API Key" : ai.id === "claude" ? "Anthropic API Key" : "Groq API Key"}
-        </label>
+        <label className="text-sm font-medium text-foreground">{label}</label>
         <input
           type="password"
           value={apiKey}
           onChange={e => { setApiKey(e.target.value); setError(null); }}
           onKeyDown={e => e.key === "Enter" && handleSave()}
-          placeholder={placeholders[ai.id] ?? "API key..."}
+          placeholder={placeholder}
           className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground font-mono focus:outline-none focus:border-primary transition-colors"
           autoFocus
         />
-        {link && (
+        {ai.keyUrl && ai.keyUrlLabel && (
           <a
-            href={link.url}
+            href={ai.keyUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
           >
-            <ExternalLink size={11} /> {link.label}
+            <ExternalLink size={11} /> {ai.keyUrlLabel}
           </a>
         )}
       </div>
@@ -392,7 +387,7 @@ function AiCard({
   onDelete,
   onVerify,
 }: {
-  ai: any;
+  ai: AiInfo;
   username?: string;
   authMode?: string;
   isVerifying: boolean;
@@ -401,10 +396,10 @@ function AiCard({
   onDelete: () => void;
   onVerify: () => void;
 }) {
-  const hasSession = ai.hasSession;
-  const isNoAuth = NO_AUTH.has(ai.id);
-  const isApiKeyOnlyAi = API_KEY_ONLY.has(ai.id);
-  const isBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
+  const hasSession = !!ai.hasSession;
+  const isNoAuth = ai.authMode === "none";
+  const isApiKeyOnly = ai.authMode === "api_key";
+  const isCloudflareBlocked = ai.authMode === "api_key_or_cookies";
 
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -446,12 +441,12 @@ function AiCard({
                     <Zap size={9} /> Free · No setup
                   </span>
                 )}
-                {isApiKeyOnlyAi && !hasSession && (
+                {isApiKeyOnly && !hasSession && (
                   <span className="flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                    <Key size={9} /> Free API key
+                    <Key size={9} /> API key
                   </span>
                 )}
-                {isBlocked && !hasSession && (
+                {isCloudflareBlocked && !hasSession && (
                   <span className="flex items-center gap-1 text-[10px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
                     <Key size={9} /> API key recommended
                   </span>
@@ -460,6 +455,11 @@ function AiCard({
 
               {/* URL */}
               <p className="text-xs text-muted-foreground mt-0.5 truncate">{ai.url}</p>
+
+              {/* Key note */}
+              {!hasSession && !isNoAuth && ai.keyNote && (
+                <p className="text-[10px] text-muted-foreground/70 mt-1 leading-relaxed line-clamp-2">{ai.keyNote}</p>
+              )}
 
               {/* Session info */}
               {hasSession && (
@@ -535,7 +535,7 @@ export function SessionsPage() {
   const { data: sessionsData, isLoading: sessionsLoading } = useListSessions();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [loginAi, setLoginAi] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [loginAi, setLoginAi] = useState<AiInfo | null>(null);
   const [usernames, setUsernames] = useState<Record<string, string>>({});
   const [authModes, setAuthModes] = useState<Record<string, string>>({});
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
@@ -584,8 +584,9 @@ export function SessionsPage() {
   };
 
   const isLoading = aisLoading || sessionsLoading;
-  const ais = aisData?.ais ?? [];
-  const connectedCount = ais.filter((ai: any) => ai.hasSession).length;
+  const ais: AiInfo[] = aisData?.ais ?? [];
+  const connectedCount = ais.filter((ai) => ai.hasSession).length;
+  const noAuthCount = ais.filter((ai) => ai.authMode === "none").length;
 
   if (isLoading) {
     return (
@@ -595,6 +596,12 @@ export function SessionsPage() {
     );
   }
 
+  // Group AIs: no-auth first, then api_key free tier, then api_key_or_cookies, then cookies-only
+  const sortOrder: Record<string, number> = { none: 0, api_key: 1, api_key_or_cookies: 2, cookies: 3 };
+  const sortedAis = [...ais].sort((a, b) =>
+    (sortOrder[a.authMode] ?? 9) - (sortOrder[b.authMode] ?? 9)
+  );
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Page header */}
@@ -603,12 +610,12 @@ export function SessionsPage() {
           <div>
             <h1 className="text-xl font-bold text-foreground">Sessions</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Connect AI services via API key or browser cookies
+              {noAuthCount} always-free · {ais.length - noAuthCount} with API key or cookies
             </p>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground font-medium">
-              {connectedCount}/{ais.length} connected
+              {connectedCount + noAuthCount}/{ais.length} ready
             </span>
             <button
               onClick={refreshAll}
@@ -626,29 +633,45 @@ export function SessionsPage() {
 
           {/* How to connect banner */}
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2.5">
-            <p className="text-sm font-semibold text-foreground">How to connect</p>
+            <p className="text-sm font-semibold text-foreground">Free AI options</p>
             <div className="space-y-2 text-xs text-muted-foreground">
               <div className="flex items-start gap-2">
                 <CheckCircle2 size={12} className="mt-0.5 text-emerald-400 shrink-0" />
-                <span><strong className="text-emerald-400">Pollinations AI</strong> — Always available, no setup needed. GPT-4o, Claude 3.7, DeepSeek for free.</span>
+                <span><strong className="text-emerald-400">Pollinations AI</strong> — Always free, no setup. GPT-4o, Claude 3.7, DeepSeek, Mistral.</span>
               </div>
               <div className="flex items-start gap-2">
                 <Key size={12} className="mt-0.5 text-blue-400 shrink-0" />
-                <span><strong className="text-blue-300">Groq</strong> — Free API key from console.groq.com (no credit card). Llama 3.3 70B, 1000 req/day.</span>
+                <span><strong className="text-blue-300">Groq</strong> — Free API key, ~1,000 req/day. Fastest Llama 3.3 70B inference.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Key size={12} className="mt-0.5 text-blue-400 shrink-0" />
+                <span><strong className="text-blue-300">Google Gemini</strong> — Free API key from AI Studio. 1,500 req/day on Flash.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Key size={12} className="mt-0.5 text-blue-400 shrink-0" />
+                <span><strong className="text-blue-300">OpenRouter</strong> — Free API key + many models with free quota (Llama 4, DeepSeek R1).</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Key size={12} className="mt-0.5 text-blue-400 shrink-0" />
+                <span><strong className="text-blue-300">Cerebras</strong> — Free API key. World's fastest inference (tokens/sec).</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Key size={12} className="mt-0.5 text-blue-400 shrink-0" />
+                <span><strong className="text-blue-300">Mistral, Cohere, Together, DeepSeek</strong> — Free tiers or very low cost.</span>
               </div>
               <div className="flex items-start gap-2">
                 <Key size={12} className="mt-0.5 text-amber-400 shrink-0" />
-                <span><strong className="text-amber-300">ChatGPT & Claude</strong> — Official API key required. Cloudflare blocks browser cookies from cloud servers.</span>
+                <span><strong className="text-amber-300">ChatGPT & Claude</strong> — Official API key required (Cloudflare blocks cookies).</span>
               </div>
               <div className="flex items-start gap-2">
                 <Cookie size={12} className="mt-0.5 text-muted-foreground shrink-0" />
-                <span><strong className="text-foreground">Grok</strong> — Export cookies from grok.com with Cookie Editor and paste the JSON here.</span>
+                <span><strong className="text-foreground">Grok</strong> — Export cookies from grok.com using Cookie Editor and paste JSON here.</span>
               </div>
             </div>
           </div>
 
           {/* AI Cards */}
-          {ais.map((ai: any) => (
+          {sortedAis.map((ai) => (
             <AiCard
               key={ai.id}
               ai={ai}
@@ -656,7 +679,7 @@ export function SessionsPage() {
               authMode={authModes[ai.id]}
               isVerifying={verifyingIds.has(ai.id)}
               isDeleting={deletingId === ai.id}
-              onConnect={() => setLoginAi({ id: ai.id, name: ai.name, url: ai.url })}
+              onConnect={() => setLoginAi(ai)}
               onDelete={() => handleDelete(ai.id, ai.name)}
               onVerify={() => verifySession(ai.id)}
             />

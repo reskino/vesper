@@ -679,10 +679,243 @@ def send_pollinations(model: str, prompt: str) -> Tuple[bool, str, str]:
         return False, "", f"Pollinations error: {exc}"
 
 
+def _send_gemini_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Google Gemini API. Free tier: 1,500 req/day on Flash."""
+    try:
+        import urllib.request, urllib.error
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": 8192},
+        }).encode()
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code in (400, 403):
+            return False, "", f"Gemini API key invalid or quota exceeded: {body_text}"
+        if exc.code == 429:
+            return False, "", "Gemini rate limit hit. Wait a moment and try again."
+        return False, "", f"Gemini API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Gemini send error: %s", exc, exc_info=True)
+        return False, "", f"Gemini error: {exc}"
+
+
+def _send_openrouter_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via OpenRouter. Many models are free with :free suffix."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://vesper.ai",
+                "X-Title": "Vesper",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "OpenRouter API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "OpenRouter rate limit hit. Try again later."
+        return False, "", f"OpenRouter API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("OpenRouter send error: %s", exc, exc_info=True)
+        return False, "", f"OpenRouter error: {exc}"
+
+
+def _send_mistral_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Mistral AI API. Free tier available."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.mistral.ai/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Mistral API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Mistral rate limit hit. Try again later."
+        return False, "", f"Mistral API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Mistral send error: %s", exc, exc_info=True)
+        return False, "", f"Mistral error: {exc}"
+
+
+def _send_cohere_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Cohere API. Trial keys are free."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "message": prompt,
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.cohere.com/v1/chat",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        text = data.get("text", "").strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Cohere API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Cohere rate limit hit. Try again later."
+        return False, "", f"Cohere API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Cohere send error: %s", exc, exc_info=True)
+        return False, "", f"Cohere error: {exc}"
+
+
+def _send_together_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Together AI API. $5 free credit on signup."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.together.xyz/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Together AI API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Together AI rate limit hit. Try again later."
+        return False, "", f"Together AI API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Together AI send error: %s", exc, exc_info=True)
+        return False, "", f"Together AI error: {exc}"
+
+
+def _send_cerebras_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Cerebras API. Free tier. Fastest inference in the world."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.cerebras.ai/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Cerebras API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Cerebras rate limit hit. Try again later."
+        return False, "", f"Cerebras API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Cerebras send error: %s", exc, exc_info=True)
+        return False, "", f"Cerebras error: {exc}"
+
+
+def _send_deepseek_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via DeepSeek API. Very low cost (~$0.14/1M tokens)."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.deepseek.com/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "DeepSeek API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "DeepSeek rate limit hit. Try again later."
+        return False, "", f"DeepSeek API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("DeepSeek send error: %s", exc, exc_info=True)
+        return False, "", f"DeepSeek error: {exc}"
+
+
 _API_KEY_DISPATCH = {
-    "chatgpt": _send_chatgpt_api,
-    "claude":  _send_claude_api,
-    "groq":    _send_groq_api,
+    "chatgpt":    _send_chatgpt_api,
+    "claude":     _send_claude_api,
+    "groq":       _send_groq_api,
+    "gemini":     _send_gemini_api,
+    "openrouter": _send_openrouter_api,
+    "mistral":    _send_mistral_api,
+    "cohere":     _send_cohere_api,
+    "together":   _send_together_api,
+    "cerebras":   _send_cerebras_api,
+    "deepseek":   _send_deepseek_api,
 }
 
 

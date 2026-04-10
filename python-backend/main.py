@@ -57,6 +57,12 @@ def list_ais():
             "icon": config.get("icon"),
             "models": config.get("models", []),
             "currentModel": get_active_model(ai_id),
+            "authMode": config.get("auth_mode", "cookies"),
+            "keyLabel": config.get("key_label"),
+            "keyPrefix": config.get("key_prefix"),
+            "keyUrl": config.get("key_url"),
+            "keyUrlLabel": config.get("key_url_label"),
+            "keyNote": config.get("key_note"),
         })
     return jsonify({"ais": ais})
 

@@ -31,6 +31,11 @@ def _fix_ld_library_path():
 _fix_ld_library_path()
 
 from config import AI_CONFIGS, SESSIONS_DIR, get_active_model, resolve_model
+from key_store import (
+    save_api_key, load_api_key, delete_api_key, api_key_exists,
+    save_session_state, load_session_state, delete_session_state, session_state_exists,
+    migrate_legacy_files,
+)
 from web_session_client import send_prompt_via_session
 
 logger = logging.getLogger(__name__)
@@ -48,40 +53,30 @@ def session_exists(ai_id: str) -> bool:
     """True if we have credentials or the AI needs none (e.g. Pollinations)."""
     from config import AI_CONFIGS
     cfg = AI_CONFIGS.get(ai_id, {})
-    # Providers that need no auth are always available
     if cfg.get("auth_mode") == "none":
         return True
-    # Cookie session file
-    path = get_session_path(ai_id)
-    if os.path.exists(path) and os.path.getsize(path) > 10:
-        return True
-    # API key file (for ChatGPT, Claude, Groq, etc.)
-    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
-    return os.path.exists(key_path) and os.path.getsize(key_path) > 5
+    return api_key_exists(ai_id) or session_state_exists(ai_id)
 
 
 def get_session_info(ai_id: str) -> dict:
+    has_key = api_key_exists(ai_id)
+    has_state = session_state_exists(ai_id)
+    has = has_key or has_state
     path = get_session_path(ai_id)
+    mtime_str = None
     if os.path.exists(path):
-        mtime = os.path.getmtime(path)
-        return {
-            "hasSession": True,
-            "sessionFile": path,
-            "lastUsed": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(mtime)),
-        }
-    return {"hasSession": False, "sessionFile": None, "lastUsed": None}
+        mtime_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(os.path.getmtime(path)))
+    return {"hasSession": has, "sessionFile": path if has_state else None, "lastUsed": mtime_str}
 
 
 def delete_session(ai_id: str) -> Tuple[bool, str]:
-    session_path = get_session_path(ai_id)
-    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
     deleted = []
-    if os.path.exists(session_path):
-        os.remove(session_path)
-        deleted.append("cookies")
-    if os.path.exists(key_path):
-        os.remove(key_path)
+    if api_key_exists(ai_id):
+        delete_api_key(ai_id)
         deleted.append("API key")
+    if session_state_exists(ai_id):
+        delete_session_state(ai_id)
+        deleted.append("cookies")
     if deleted:
         return True, f"Deleted {' and '.join(deleted)} for {ai_id}"
     return False, f"No session found for {ai_id}"
@@ -172,21 +167,15 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
         return send_pollinations(model, prompt)
 
     # Check for API key first (bypasses Cloudflare for ChatGPT/Claude/Groq)
-    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
-    if os.path.exists(key_path):
-        try:
-            with open(key_path) as f:
-                api_key = f.read().strip()
-            if api_key:
-                from web_session_client import send_via_api_key
-                return send_via_api_key(ai_id, api_key, model, prompt)
-        except Exception as e:
-            logger.warning("API key load failed for %s: %s", ai_id, e)
+    api_key = load_api_key(ai_id)
+    if api_key:
+        from web_session_client import send_via_api_key
+        return send_via_api_key(ai_id, api_key, model, prompt)
 
     session_path = get_session_path(ai_id)
     if not os.path.exists(session_path) or os.path.getsize(session_path) <= 10:
         return False, "", (
-            f"No valid session file for {ai_id}. "
+            f"No valid session for {ai_id}. "
             "Please import cookies or an API key on the Sessions page."
         )
 

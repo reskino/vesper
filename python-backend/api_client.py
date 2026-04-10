@@ -17,28 +17,12 @@ import time
 from typing import Tuple
 
 from config import AI_CONFIGS, SESSIONS_DIR, get_active_model, resolve_model
+from key_store import save_api_key as _ks_save, load_api_key as _ks_load
 
 logger = logging.getLogger(__name__)
 
-KEYS_FILE = os.path.join(SESSIONS_DIR, "keys.json")
 
-# ─── Key storage ─────────────────────────────────────────────────────────────
-
-def _load_keys() -> dict:
-    if os.path.exists(KEYS_FILE):
-        try:
-            with open(KEYS_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-def _save_keys(keys: dict):
-    os.makedirs(SESSIONS_DIR, exist_ok=True)
-    with open(KEYS_FILE, "w") as f:
-        json.dump(keys, f, indent=2)
-
+# ─── Key storage (delegates to key_store for KV-backed persistence) ──────────
 
 def get_api_key(ai_id: str) -> str | None:
     config = AI_CONFIGS.get(ai_id, {})
@@ -47,27 +31,20 @@ def get_api_key(ai_id: str) -> str | None:
         val = os.environ.get(env_var, "").strip()
         if val:
             return val
-    keys = _load_keys()
-    val = keys.get(ai_id, "").strip()
+    val = _ks_load(ai_id)
     return val or None
 
 
 def set_api_key(ai_id: str, key: str) -> bool:
     if ai_id not in AI_CONFIGS:
         return False
-    keys = _load_keys()
-    keys[ai_id] = key.strip()
-    _save_keys(keys)
-    return True
+    return _ks_save(ai_id, key)
 
 
 def delete_api_key(ai_id: str) -> Tuple[bool, str]:
-    keys = _load_keys()
-    if ai_id in keys:
-        del keys[ai_id]
-        _save_keys(keys)
-        return True, f"API key removed for {ai_id}"
-    return False, f"No stored key found for {ai_id}"
+    from key_store import delete_api_key as _ks_del
+    _ks_del(ai_id)
+    return True, f"API key removed for {ai_id}"
 
 
 def key_exists(ai_id: str) -> bool:

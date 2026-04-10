@@ -511,7 +511,7 @@ def import_session():
 @app.route("/api/sessions/import-key", methods=["POST"])
 def import_api_key():
     """Store an API key for any AI provider that supports API key auth."""
-    from config import SESSIONS_DIR
+    from key_store import save_api_key
     data = request.get_json()
     ai_id  = data.get("aiId")
     api_key = (data.get("apiKey") or "").strip()
@@ -525,24 +525,16 @@ def import_api_key():
     if cfg.get("auth_mode") not in ("api_key", "api_key_or_cookies"):
         return jsonify({"success": False, "message": f"{cfg['name']} does not support API key authentication."}), 400
 
-    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
-    try:
-        with open(key_path, "w") as f:
-            f.write(api_key)
+    ok = save_api_key(ai_id, api_key)
+    if ok:
         return jsonify({"success": True, "message": f"API key saved for {cfg['name']}.", "aiId": ai_id})
-    except Exception as exc:
-        return jsonify({"success": False, "message": str(exc)}), 500
+    return jsonify({"success": False, "message": "Failed to save API key."}), 500
 
 
 def get_api_key(ai_id: str) -> str:
     """Return the stored API key for an AI, or '' if none."""
-    from config import SESSIONS_DIR
-    key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
-    try:
-        with open(key_path) as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return ""
+    from key_store import load_api_key
+    return load_api_key(ai_id)
 
 
 @app.route("/api/sessions/verify/<ai_id>", methods=["GET"])
@@ -911,4 +903,6 @@ def agent_screenshot(filename: str):
 if __name__ == "__main__":
     port = int(os.environ.get("PYTHON_BACKEND_PORT", 5050))
     logger.info("Starting Universal AI Coding Proxy backend on port %d", port)
+    from key_store import migrate_legacy_files
+    migrate_legacy_files()
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   MessageSquare, Code2, TerminalSquare, Bot, Database,
   History, Moon, Sun, BookOpen, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
+import { useTheme } from "@/contexts/theme-context";
 
 const NAV = [
   { href: "/",         label: "Chat",     icon: MessageSquare },
@@ -18,18 +19,8 @@ const NAV = [
 
 export function Sidebar() {
   const [location] = useLocation();
-  const [dark, setDark] = useState(true);
+  const { isDark, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-  };
 
   return (
     <>
@@ -88,11 +79,11 @@ export function Sidebar() {
         <div className="p-2 border-t border-border/50 space-y-0.5">
           <button
             onClick={toggleTheme}
-            title={collapsed ? (dark ? "Light mode" : "Dark mode") : undefined}
+            title={collapsed ? (isDark ? "Light mode" : "Dark mode") : undefined}
             className={`flex items-center gap-3 px-2.5 py-2.5 rounded-xl w-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all ${collapsed ? "justify-center" : ""}`}
           >
-            {dark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
-            {!collapsed && <span className="text-sm font-semibold">{dark ? "Light mode" : "Dark mode"}</span>}
+            {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+            {!collapsed && <span className="text-sm font-semibold">{isDark ? "Light mode" : "Dark mode"}</span>}
           </button>
 
           <button

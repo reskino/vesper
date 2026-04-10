@@ -25,8 +25,9 @@ import { VesperLogo } from "@/components/vesper-logo";
 import {
   MessageSquare, Code2, FolderOpen, TerminalSquare,
   MessageSquarePlus, X, Sparkles, Bot,
-  ShieldCheck, Clock, BookOpen,
+  ShieldCheck, Clock, BookOpen, Sun, Moon,
 } from "lucide-react";
+import { useTheme } from "@/contexts/theme-context";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile chat bottom-sheet overlay
@@ -72,8 +73,8 @@ function MobileChatSheet() {
         aria-modal="true"
         className={`md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col
           rounded-t-[28px] overflow-hidden
-          bg-[#0a0a0c] border-t border-[#1e1e2e]
-          shadow-[0_-24px_80px_rgba(0,0,0,0.85)]
+          bg-surface border-t border-border
+          shadow-[0_-24px_80px_rgba(0,0,0,0.5)]
           transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
           ${showMobileChatSheet ? "translate-y-0" : "translate-y-full"}`}
         style={{
@@ -86,7 +87,7 @@ function MobileChatSheet() {
           className="shrink-0 flex flex-col items-center cursor-grab active:cursor-grabbing pt-3 pb-2"
           onTouchStart={handleTouchStart}
         >
-          <div className="w-10 h-1 rounded-full bg-[#2a2a3c]" />
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/20" />
         </div>
 
         {/* Sheet header */}
@@ -99,13 +100,13 @@ function MobileChatSheet() {
             </div>
             <div>
               <p className="font-bold text-[13px] text-foreground leading-none">Ask AI</p>
-              <p className="text-[10px] text-[#52526e] mt-0.5">Multi-model · Context-aware</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Multi-model · Context-aware</p>
             </div>
           </div>
           <button
             onClick={() => setShowMobileChatSheet(false)}
             className="h-9 w-9 flex items-center justify-center rounded-full
-              bg-[#141420] border border-[#1e1e2e] text-[#52526e]
+              bg-muted border border-border text-muted-foreground
               active:scale-95 transition-all"
             aria-label="Close chat"
           >
@@ -114,7 +115,7 @@ function MobileChatSheet() {
         </div>
 
         {/* Thin separator */}
-        <div className="h-px bg-[#141420] shrink-0 mx-4 mb-1" />
+        <div className="h-px bg-border shrink-0 mx-4 mb-1" />
 
         {/* Chat content */}
         <div className="flex-1 min-h-0">
@@ -137,6 +138,7 @@ const SETTINGS_TABS: { id: MobileSettingsTab; label: string; icon: ElementType }
 
 function MobileSettingsSheet() {
   const { showMobileSettings, setShowMobileSettings, mobileSettingsTab, setMobileSettingsTab } = useIDE();
+  const { isDark, toggleTheme } = useTheme();
 
   useEffect(() => {
     document.body.style.overflow = showMobileSettings ? "hidden" : "";
@@ -160,8 +162,8 @@ function MobileSettingsSheet() {
         aria-label="Settings"
         aria-modal="true"
         className={`md:hidden fixed inset-x-0 bottom-0 z-50 flex flex-col
-          bg-[#0a0a0c] border-t border-[#1e1e2e]
-          shadow-[0_-24px_80px_rgba(0,0,0,0.9)]
+          bg-surface border-t border-border
+          shadow-[0_-24px_80px_rgba(0,0,0,0.5)]
           transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
           ${showMobileSettings ? "translate-y-0" : "translate-y-full"}`}
         style={{
@@ -170,7 +172,7 @@ function MobileSettingsSheet() {
         }}
       >
         {/* Sheet header */}
-        <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#131318]">
+        <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/60">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10
               border border-primary/20 flex items-center justify-center">
@@ -178,22 +180,33 @@ function MobileSettingsSheet() {
             </div>
             <div>
               <p className="font-bold text-[13px] text-foreground leading-none">Vesper Settings</p>
-              <p className="text-[10px] text-[#52526e] mt-0.5">Providers · History · Help</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Providers · History · Help</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowMobileSettings(false)}
-            className="h-9 w-9 flex items-center justify-center rounded-full
-              bg-[#141420] border border-[#1e1e2e] text-[#52526e]
-              active:scale-95 transition-all"
-            aria-label="Close settings"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="h-9 w-9 flex items-center justify-center rounded-full
+                bg-muted border border-border text-muted-foreground
+                active:scale-95 transition-all"
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={() => setShowMobileSettings(false)}
+              className="h-9 w-9 flex items-center justify-center rounded-full
+                bg-muted border border-border text-muted-foreground
+                active:scale-95 transition-all"
+              aria-label="Close settings"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tab pills */}
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-[#131318]">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-border/60">
           {SETTINGS_TABS.map(({ id, label, icon: Icon }) => {
             const active = mobileSettingsTab === id;
             return (
@@ -203,7 +216,7 @@ function MobileSettingsSheet() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all
                   ${active
                     ? "bg-primary/15 text-primary border border-primary/25"
-                    : "text-[#52526e] hover:text-foreground hover:bg-[#141420] border border-transparent"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
                   }`}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -246,8 +259,8 @@ function MobileNav() {
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 z-30
-        bg-[#080809]/98 backdrop-blur-2xl border-t border-[#131318]
-        shadow-[0_-8px_40px_rgba(0,0,0,0.7)]"
+        bg-base/98 backdrop-blur-2xl border-t border-border/60
+        shadow-[0_-8px_40px_rgba(0,0,0,0.4)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Main navigation"
     >
@@ -272,10 +285,10 @@ function MobileNav() {
               <div className={`h-8 w-11 rounded-2xl flex items-center justify-center transition-all
                 ${active ? "bg-primary/15" : ""}`}>
                 <Icon className={`transition-all duration-150
-                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-[#3a3a5c]"}`} />
+                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-muted-foreground/60"}`} />
               </div>
               <span className={`text-[10px] font-bold tracking-wide transition-colors
-                ${active ? "text-primary" : "text-[#2a2a44]"}`}>
+                ${active ? "text-primary" : "text-muted-foreground/40"}`}>
                 {label}
               </span>
             </button>
@@ -318,10 +331,10 @@ function SidebarContent({ activeFilePath }: { activeFilePath: string | null }) {
   const { sidebarPanel } = useIDE();
   switch (sidebarPanel) {
     case "files":    return <FileExplorer activePath={activeFilePath} />;
-    case "agent":    return <div className="h-full overflow-y-auto bg-[#0a0a0c]"><AgentPage /></div>;
-    case "sessions": return <div className="h-full overflow-y-auto bg-[#0a0a0c]"><Sessions /></div>;
-    case "history":  return <div className="h-full overflow-y-auto bg-[#0a0a0c]"><History /></div>;
-    case "help":     return <div className="h-full overflow-y-auto bg-[#0a0a0c]"><HelpPage /></div>;
+    case "agent":    return <div className="h-full overflow-y-auto bg-surface"><AgentPage /></div>;
+    case "sessions": return <div className="h-full overflow-y-auto bg-surface"><Sessions /></div>;
+    case "history":  return <div className="h-full overflow-y-auto bg-surface"><History /></div>;
+    case "help":     return <div className="h-full overflow-y-auto bg-surface"><HelpPage /></div>;
     default:         return null;
   }
 }
@@ -337,19 +350,19 @@ function CollapsedChatRail() {
       title="Open chat panel (Ctrl+J)"
       aria-label="Open chat"
       className="hidden md:flex w-8 shrink-0 flex-col items-center justify-center gap-3
-        border-l border-[#131318] bg-[#080809] transition-colors
-        hover:bg-[#0e0e14] group"
+        border-l border-border/60 bg-base transition-colors
+        hover:bg-surface group"
     >
       {/* Pulsing bubble icon */}
       <div className="relative">
-        <MessageSquarePlus className="h-4 w-4 text-[#3a3a5c] group-hover:text-primary transition-colors" />
+        <MessageSquarePlus className="h-4 w-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
         <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary/60
-          ring-2 ring-[#080809] animate-pulse group-hover:bg-primary" />
+          ring-2 ring-background animate-pulse group-hover:bg-primary" />
       </div>
       {/* Rotated label */}
       <span
-        className="text-[9px] font-bold text-[#2a2a44] uppercase tracking-[0.15em]
-          group-hover:text-[#52526e] transition-colors select-none"
+        className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em]
+          group-hover:text-muted-foreground transition-colors select-none"
         style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
       >
         Chat
@@ -376,7 +389,7 @@ function DesktopWorkspace() {
 
             {showChat && (
               <>
-                <ResizableHandle className="w-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-col-resize" />
+                <ResizableHandle className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
                 <ResizablePanel defaultSize={45} minSize={25} maxSize={65}>
                   <ChatPanel newChatKey={newChatKey} />
                 </ResizablePanel>
@@ -391,7 +404,7 @@ function DesktopWorkspace() {
 
       {showTerminal && (
         <>
-          <ResizableHandle className="h-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-row-resize" />
+          <ResizableHandle className="h-px bg-border hover:bg-primary/40 transition-colors cursor-row-resize" />
           <ResizablePanel defaultSize={30} minSize={15} maxSize={60}>
             <TerminalPanel />
           </ResizablePanel>
@@ -417,7 +430,7 @@ function MobileWorkspace() {
         <EditorPanel />
       </div>
       <div className={`h-full ${mobileTab === "agent"    ? "" : "hidden"}`}>
-        <div className="h-full overflow-y-auto bg-[#0a0a0c]"><AgentPage mobile /></div>
+        <div className="h-full overflow-y-auto bg-surface"><AgentPage mobile /></div>
       </div>
       <div className={`h-full ${mobileTab === "files"    ? "" : "hidden"}`}>
         <FileExplorer activePath={null} />
@@ -449,7 +462,7 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
   }, [toggleTerminal, toggleChat, triggerNewChat]);
 
   return (
-    <div className="flex flex-col h-dvh w-full bg-[#0d0d12] overflow-hidden font-sans">
+    <div className="flex flex-col h-dvh w-full bg-background overflow-hidden font-sans">
       <TopBar />
 
       {/* ── Desktop layout ──────────────────────────────────────────────────── */}
@@ -464,11 +477,11 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
                 maxSize={40}
                 className="min-w-0"
               >
-                <aside className="h-full flex flex-col border-r border-[#1a1a24] overflow-hidden bg-[#0a0a0c]">
+                <aside className="h-full flex flex-col border-r border-border overflow-hidden bg-surface">
                   <SidebarContent activeFilePath={null} />
                 </aside>
               </ResizablePanel>
-              <ResizableHandle className="w-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-col-resize" />
+              <ResizableHandle className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
             </>
           )}
           <ResizablePanel defaultSize={sidebarPanel ? 82 : 100} minSize={40} className="min-w-0">

@@ -247,8 +247,8 @@ export interface AgentRunBody {
   workingDir?: string | null;
   /** Maximum number of tool calls */
   maxSteps?: number;
-  /** Which agent persona to use — builder (default) or orchestrator (multi-role) */
-  agentType?: 'builder' | 'orchestrator';
+  /** Which agent persona to use — builder (default), orchestrator (multi-role), or scholar (research) */
+  agentType?: 'builder' | 'orchestrator' | 'scholar';
 }
 
 export type AgentStepType = (typeof AgentStepType)[keyof typeof AgentStepType];

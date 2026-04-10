@@ -32,7 +32,7 @@ import {
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
   AlertCircle, Upload, Copy, Check, RotateCcw, Sparkles,
   FolderOpen, Search, Bug, FlaskConical, Globe, Code2,
-  BookOpen, Zap, ArrowRight,
+  BookOpen, Zap, ArrowRight, ChevronsRight,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -406,7 +406,7 @@ export function ChatPanel({ newChatKey, compact = false }: {
   newChatKey: number;
   compact?: boolean;
 }) {
-  const { selectedAi, importedProject, setImportedProject } = useIDE();
+  const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
   const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
@@ -576,16 +576,25 @@ export function ChatPanel({ newChatKey, compact = false }: {
             </span>
           )}
         </div>
-        {messages.length > 0 && (
+        <div className="flex items-center gap-0.5">
+          {messages.length > 0 && (
+            <button
+              onClick={handleRegen}
+              disabled={isPending}
+              className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
+              title="Regenerate last response"
+            >
+              <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
+            </button>
+          )}
           <button
-            onClick={handleRegen}
-            disabled={isPending}
-            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
-            title="Regenerate last response"
+            onClick={toggleChat}
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] transition-all duration-150"
+            title="Collapse chat panel (Ctrl+J)"
           >
-            <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
+            <ChevronsRight className="h-3 w-3" />
           </button>
-        )}
+        </div>
       </div>
 
       {/* ── Messages ───────────────────────────────────────────────────── */}

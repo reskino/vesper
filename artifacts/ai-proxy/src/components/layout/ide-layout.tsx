@@ -226,6 +226,38 @@ function SidebarContent({ activeFilePath }: { activeFilePath: string | null }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Collapsed chat rail — thin vertical bar shown when chat is hidden (desktop)
+// ─────────────────────────────────────────────────────────────────────────────
+function CollapsedChatRail() {
+  const { toggleChat } = useIDE();
+  return (
+    <button
+      onClick={toggleChat}
+      title="Open chat panel (Ctrl+J)"
+      aria-label="Open chat"
+      className="hidden md:flex w-8 shrink-0 flex-col items-center justify-center gap-3
+        border-l border-[#131318] bg-[#080809] transition-colors
+        hover:bg-[#0e0e14] group"
+    >
+      {/* Pulsing bubble icon */}
+      <div className="relative">
+        <MessageSquarePlus className="h-4 w-4 text-[#3a3a5c] group-hover:text-primary transition-colors" />
+        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary/60
+          ring-2 ring-[#080809] animate-pulse group-hover:bg-primary" />
+      </div>
+      {/* Rotated label */}
+      <span
+        className="text-[9px] font-bold text-[#2a2a44] uppercase tracking-[0.15em]
+          group-hover:text-[#52526e] transition-colors select-none"
+        style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+      >
+        Chat
+      </span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Desktop: IDE workspace (editor + chat split + terminal)
 // ─────────────────────────────────────────────────────────────────────────────
 function DesktopWorkspace() {
@@ -234,20 +266,26 @@ function DesktopWorkspace() {
   return (
     <ResizablePanelGroup direction="vertical" className="flex-1 min-w-0 h-full">
       <ResizablePanel defaultSize={showTerminal ? 70 : 100} minSize={30}>
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={showChat ? 55 : 100} minSize={30}>
-            <EditorPanel />
-          </ResizablePanel>
+        {/* Horizontal flex: resizable panels on the left, collapsed rail (if needed) on the right */}
+        <div className="flex h-full min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+            <ResizablePanel defaultSize={showChat ? 55 : 100} minSize={30}>
+              <EditorPanel />
+            </ResizablePanel>
 
-          {showChat && (
-            <>
-              <ResizableHandle className="w-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-col-resize" />
-              <ResizablePanel defaultSize={45} minSize={25} maxSize={65}>
-                <ChatPanel newChatKey={newChatKey} />
-              </ResizablePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
+            {showChat && (
+              <>
+                <ResizableHandle className="w-px bg-[#1a1a24] hover:bg-primary/40 transition-colors cursor-col-resize" />
+                <ResizablePanel defaultSize={45} minSize={25} maxSize={65}>
+                  <ChatPanel newChatKey={newChatKey} />
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+
+          {/* Collapsed rail appears when chat is hidden */}
+          {!showChat && <CollapsedChatRail />}
+        </div>
       </ResizablePanel>
 
       {showTerminal && (

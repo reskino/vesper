@@ -1,0 +1,58 @@
+You are a senior product designer and frontend engineer who has designed autonomous agent interfaces for Cursor, Aider, and Devin-like tools.
+
+Current Autonomous Agent panel in Vesper (left sidebar):
+- Header: "Autonomous Agent" with description
+- TASK section: Textarea "Describe what to build..." with example
+- AI PROVIDER section: Shows "Pollinations AI"
+- MODEL section: "GPT-4o (via Pollinations) Free"
+- MAX STEPS selector (10 / 20 / 30 / 50)
+- Big blue "Run Agent" button
+- TIPS section at the bottom
+- The panel feels cramped and information-dense
+
+The center area still shows "Open a file to begin" when no file is open.
+
+Task: Completely redesign the Autonomous Agent experience for both **Desktop** and **Mobile**, making it feel modern, powerful, and user-friendly in 2026.
+
+### Desktop Requirements:
+- Make the left panel cleaner and more spacious
+- Improve visual hierarchy: Larger, bolder headings
+- Better TASK input area (larger textarea with better placeholder and example chips)
+- Group settings nicely: AI Provider + Model in one clean card
+- MAX STEPS as elegant segmented control or slider + number input
+- Make the "Run Agent" button more prominent and exciting (with subtle animation on hover)
+- Add a progress area that appears after starting the agent (showing current step, thinking animation, live logs)
+- Add ability to pause/stop the agent mid-run
+- Show agent status clearly (Idle | Planning | Coding | Testing | Fixing | Done)
+- When agent is running, allow the user to still use the chat and editor
+- Improve TIPS section to be collapsible or in a subtle info box
+
+### Mobile Requirements (Separate optimized view):
+- On mobile (< 768px), do NOT use the cramped left sidebar
+- Make Autonomous Agent accessible via bottom navigation tab called "Agent"
+- When "Agent" tab is selected:
+  - Full-screen clean layout
+  - Top: "Autonomous Agent" header with close/back button
+  - Large prominent TASK textarea (takes good space)
+  - Settings (Provider, Model, Max Steps) in clean accordion or cards that expand
+  - Big floating or bottom "Run Agent" button
+  - When running: Show full-screen progress view with live logs, current step, and "Stop" button
+  - Use bottom sheet for quick settings if needed
+- Ensure large touch targets and excellent readability on mobile devices
+
+### Overall Improvements:
+- Modern dark theme with nice accents (use blue/violet for agent actions)
+- Consistent with the rest of Vesper (same colors, fonts, button styles)
+- Add subtle illustrations or icons for better UX (e.g., robot icon, step progress)
+- Make the empty state in center more encouraging when agent is not running ("Ready to build something amazing?")
+- Ensure the agent panel can be toggled/collapsed on desktop
+- Add keyboard shortcut support (e.g., Ctrl/Cmd + Shift + A to open Agent)
+
+Deliver:
+- Complete React + TypeScript component structure with Tailwind CSS
+- Responsive design using mobile-first approach (sm:, md:, lg:)
+- State management suggestions for agent status (idle, running, paused, completed)
+- Clear separation between desktop and mobile layouts
+- Code for progress view and live logs during agent execution
+
+Make it feel premium, trustworthy, and exciting to use — like launching a powerful AI teammate.

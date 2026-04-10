@@ -200,9 +200,27 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
             proof_token = _solve_chatgpt_pow(pow_spec)
 
         # ── Step 3: send conversation ──────────────────────────────────────────
-        # Reasoning models (o-series) need reasoning_effort; resolve legacy IDs
-        _O_SERIES = {"o1", "o1-mini", "o1-pro", "o3-mini", "o3", "o3-pro", "o4-mini", "o4"}
-        _MODEL_ALIASES = {"__auto__": "gpt-4o"}
+        # GPT-5 Thinking and o-series models need reasoning_effort in the payload.
+        # GPT-5.x Pro uses xhigh; standard Thinking uses high; o-series uses medium.
+        _REASONING_EFFORT: dict[str, str] = {
+            # GPT-5.x thinking/pro
+            "gpt-5.4":         "high",
+            "gpt-5.4-pro":     "xhigh",
+            "gpt-5.2":         "medium",
+            "gpt-5.2-pro":     "xhigh",
+            "gpt-5.1":         "medium",
+            "gpt-5":           "medium",
+            # o-series (legacy, still in API)
+            "o4-mini":         "medium",
+            "o4-mini-high":    "high",
+            "o4":              "high",
+            "o3":              "high",
+            "o3-pro":          "xhigh",
+            "o3-mini":         "medium",
+            "o1":              "medium",
+            "o1-pro":          "high",
+        }
+        _MODEL_ALIASES = {"__auto__": "gpt-5.3"}
 
         def _do_conversation(mdl: str):
             mdl = _MODEL_ALIASES.get(mdl, mdl)
@@ -220,8 +238,9 @@ def send_chatgpt(session_path: str, model: str, prompt: str) -> Tuple[bool, str,
                 "history_and_training_disabled": False,
                 "conversation_mode": {"kind": "primary_assistant"},
             }
-            if mdl in _O_SERIES:
-                payload["reasoning_effort"] = "medium"
+            effort = _REASONING_EFFORT.get(mdl)
+            if effort:
+                payload["reasoning_effort"] = effort
             extra = {"openai-sentinel-chat-requirements-token": sentinel_token}
             if proof_token:
                 extra["openai-sentinel-proof-token"] = proof_token

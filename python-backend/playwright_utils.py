@@ -137,6 +137,14 @@ def create_session_interactive(ai_id: str) -> Tuple[bool, str]:
             try:
                 context.storage_state(path=session_path)
                 logger.info("Session saved for %s at %s", ai_id, session_path)
+                # Also persist to KV so the session survives filesystem resets
+                try:
+                    with open(session_path) as _f:
+                        import json as _json_mod
+                        _state = _json_mod.load(_f)
+                    save_session_state(ai_id, _state)
+                except Exception as _exc:
+                    logger.warning("KV save after browser login failed for %s: %s", ai_id, _exc)
                 return True, f"Session created and saved for {config['name']}"
             except Exception as exc:
                 logger.error("Failed to save session for %s: %s", ai_id, exc)
@@ -179,11 +187,23 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
         return send_via_api_key(ai_id, api_key, model, prompt)
 
     session_path = get_session_path(ai_id)
+    # If file is missing/empty, try to restore from KV on the fly
     if not os.path.exists(session_path) or os.path.getsize(session_path) <= 10:
-        return False, "", (
-            f"No valid session for {ai_id}. "
-            "Please import cookies or an API key on the Sessions page."
-        )
+        state = load_session_state(ai_id)
+        if state:
+            import json as _json_mod
+            os.makedirs(os.path.dirname(session_path), exist_ok=True)
+            try:
+                with open(session_path, "w") as _f:
+                    _json_mod.dump(state, _f)
+                logger.info("Restored %s session file from KV on-demand", ai_id)
+            except Exception as _exc:
+                logger.warning("On-demand restore failed for %s: %s", ai_id, _exc)
+        if not os.path.exists(session_path) or os.path.getsize(session_path) <= 10:
+            return False, "", (
+                f"No valid session for {ai_id}. "
+                "Please import cookies or an API key on the Sessions page."
+            )
 
     success, text, error = send_prompt_via_session(ai_id, session_path, model, prompt)
     return success, text, error

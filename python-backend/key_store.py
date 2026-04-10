@@ -209,7 +209,7 @@ def any_credential_exists(ai_id: str) -> bool:
     return api_key_exists(ai_id) or session_state_exists(ai_id)
 
 
-# ─── On-startup migration: pull all legacy txt/json files into KV ────────────
+# ─── On-startup: push legacy files → KV, then restore KV → files ─────────────
 
 def migrate_legacy_files():
     """Run once at startup to move any file-based credentials into KV."""
@@ -244,3 +244,43 @@ def migrate_legacy_files():
                         logger.info("Migrated %s session state to KV", ai_id)
                 except Exception:
                     pass
+
+
+def restore_from_kv():
+    """
+    Restore all credentials from KV → local files.
+    Call at startup so web_session_client can read session files
+    even after a filesystem reset.
+    """
+    if not _KV_URL:
+        return
+
+    # ── API keys ──────────────────────────────────────────────────────────────
+    for kv_key in _kv_list("vesper_key_"):
+        ai_id = kv_key[len("vesper_key_"):]
+        val = _kv_get(kv_key)
+        if not val:
+            continue
+        path = os.path.join(_SESSIONS_DIR, f"{ai_id}_api_key.txt")
+        try:
+            with open(path, "w") as f:
+                f.write(val.strip())
+            logger.info("Restored %s API key from KV to file", ai_id)
+        except Exception as exc:
+            logger.warning("Could not restore %s API key file: %s", ai_id, exc)
+
+    # ── Cookie / session states ───────────────────────────────────────────────
+    for kv_key in _kv_list("vesper_session_"):
+        ai_id = kv_key[len("vesper_session_"):]
+        blob = _kv_get(kv_key)
+        if not blob or blob in ("{}", "null"):
+            continue
+        path = os.path.join(_SESSIONS_DIR, f"{ai_id}_state.json")
+        try:
+            # Validate JSON before writing
+            json.loads(blob)
+            with open(path, "w") as f:
+                f.write(blob)
+            logger.info("Restored %s session state from KV to file", ai_id)
+        except Exception as exc:
+            logger.warning("Could not restore %s session file: %s", ai_id, exc)

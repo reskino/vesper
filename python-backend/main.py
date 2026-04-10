@@ -509,6 +509,9 @@ def import_session():
     try:
         with open(session_path, "w") as f:
             _json.dump(state, f, indent=2)
+        # ── Also persist to KV so sessions survive filesystem resets ──────────
+        from key_store import save_session_state as _ks_save_session
+        _ks_save_session(ai_id, state)
         n = len(state.get("cookies", []))
         return jsonify({
             "success": True,
@@ -975,6 +978,7 @@ def agent_screenshot(filename: str):
 if __name__ == "__main__":
     port = int(os.environ.get("PYTHON_BACKEND_PORT", 5050))
     logger.info("Starting Universal AI Coding Proxy backend on port %d", port)
-    from key_store import migrate_legacy_files
-    migrate_legacy_files()
+    from key_store import migrate_legacy_files, restore_from_kv
+    migrate_legacy_files()   # push any leftover local files → KV
+    restore_from_kv()        # pull all KV credentials → local files
     app.run(host="0.0.0.0", port=port, debug=False)

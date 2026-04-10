@@ -382,44 +382,70 @@ def send_claude(session_path: str, model: str, prompt: str) -> Tuple[bool, str, 
 
 # ─── Grok ─────────────────────────────────────────────────────────────────────
 
+def _extract_nested(obj: dict, *paths) -> str:
+    """Try multiple key paths on a dict and return the first non-empty string found."""
+    for path in paths:
+        val = obj
+        for key in path:
+            if not isinstance(val, dict):
+                val = None
+                break
+            val = val.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
 def _parse_grok_response(text: str) -> str:
     """
-    Grok streams NDJSON.  Each line may carry a token or the final complete message.
+    Grok streams NDJSON — each line is a JSON object.
+    Response shapes vary:
+      • Streaming token:   {"result": {"response": {"token": "word "}}}
+      • Final message:     {"result": {"response": {"message": "full text", "isSoftStop": true}}}
+      • Alt final shape:   {"result": {"message": "full text"}}
+      • Direct shapes:     {"message": "..."}, {"response": "..."}, {"answer": "..."}
+    With returnFinalResponseOnly=true only the last line(s) carry the full text.
     """
     tokens: list[str] = []
     final = ""
-    for line in text.splitlines():
-        line = line.strip()
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
         if not line:
             continue
         if line.startswith("data: "):
-            line = line[6:]
+            line = line[6:].strip()
         try:
             obj = json.loads(line)
         except (json.JSONDecodeError, ValueError):
             continue
+        if not isinstance(obj, dict):
+            continue
 
-        # Streaming token
-        token = obj.get("token", "")
+        # Streaming token — result.response.token OR token at top level
+        token = _extract_nested(obj,
+            ("result", "response", "token"),
+            ("token",),
+        )
         if token:
             tokens.append(token)
             continue
 
-        # Final message — various shapes
-        for path in (
-            ("result", "message"),
+        # Final complete message — try every known shape
+        msg = _extract_nested(obj,
+            ("result", "response", "message"),       # primary grok.com shape
+            ("result", "message"),                    # older shape
+            ("result", "modelResponse", "message"),  # model response shape
             ("message",),
             ("response",),
             ("answer",),
-        ):
-            val = obj
-            for key in path:
-                val = val.get(key, {}) if isinstance(val, dict) else None
-            if isinstance(val, str) and val:
-                final = val
-                break
+        )
+        if msg:
+            final = msg
 
-    return ("".join(tokens) if tokens else final).strip()
+    # Prefer the final complete message; fall back to assembled tokens
+    result = final or "".join(tokens)
+    return result.strip()
 
 
 def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
@@ -458,92 +484,44 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
             "sendFinalMetadata": True,
         }
 
-        grok_com_endpoints = [
-            "https://grok.com/api/conversations",
-            "https://grok.com/rest/app-chat/conversations/new",
-            "https://grok.com/api/rpc",
-        ]
+        # Only use the verified working API endpoint (the others return HTML)
+        grok_api_url = "https://grok.com/rest/app-chat/conversations/new"
 
-        for url in grok_com_endpoints:
-            try:
-                resp = sess.post(url, json=payload_grok_com, headers=grok_headers, timeout=120)
-                logger.debug("Grok grok.com %s → %s", url, resp.status_code)
-                if resp.status_code == 404:
-                    continue
-                if resp.status_code == 401:
-                    return False, "", "Grok session expired — please re-import cookies from grok.com."
-                if resp.status_code == 403:
-                    body = resp.text.lower()
-                    if any(k in body for k in ("subscri", "premium", "upgrade", "plan")):
-                        free_model = get_free_model("grok")
-                        if free_model and free_model != model:
-                            resp2 = sess.post(
-                                url,
-                                json={**payload_grok_com, "modelName": free_model},
-                                headers=grok_headers,
-                                timeout=120,
-                            )
-                            if resp2.status_code == 200:
-                                text = _parse_grok_response(resp2.text)
-                                if text:
-                                    note = (
-                                        f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't "
-                                        f"have access to **{model}**.)_"
-                                    )
-                                    return True, text + note, ""
-                    continue
-                if resp.status_code >= 400:
-                    continue
-                text = _parse_grok_response(resp.text)
-                if text:
-                    return True, text, ""
-            except Exception as e:
-                logger.debug("Grok grok.com %s failed: %s", url, e)
-                continue
-
-        # ── Fallback: x.com API (older Grok access via X/Twitter) ────────────
-        x_headers = _chrome_headers(
-            "https://x.com",
-            "https://x.com/",
-            {"Content-Type": "application/json"},
-        )
-        # x.com needs the CSRF token from cookies
-        csrf = cookies.get("ct0", "")
-        if csrf:
-            x_headers["x-csrf-token"] = csrf
-
-        payload_x = {
-            "query": prompt,
-            "conversationId": str(uuid.uuid4()),
-            "model": model,
-        }
-
-        x_endpoints = [
-            "https://x.com/i/api/2/grok/add_response.json",
-            "https://x.com/i/api/2/grok/conversation.json",
-        ]
-
-        for url in x_endpoints:
-            try:
-                resp = sess.post(url, json=payload_x, headers=x_headers, timeout=120)
-                logger.debug("Grok x.com %s → %s", url, resp.status_code)
-                if resp.status_code == 404:
-                    continue
-                if resp.status_code in (401, 403):
-                    continue
-                if resp.status_code >= 400:
-                    continue
-                text = _parse_grok_response(resp.text)
-                if text:
-                    return True, text, ""
-            except Exception as e:
-                logger.debug("Grok x.com %s failed: %s", url, e)
-                continue
-
-        return False, "", (
-            "Grok API is unreachable. Please re-import cookies — make sure you export "
-            "them from grok.com (not x.com) while logged in."
-        )
+        try:
+            resp = sess.post(grok_api_url, json=payload_grok_com, headers=grok_headers, timeout=120)
+            logger.info("Grok %s → %s", grok_api_url, resp.status_code)
+            if resp.status_code == 401:
+                return False, "", "Grok session expired — please re-import cookies from grok.com while logged in."
+            if resp.status_code == 403:
+                body = resp.text.lower()
+                if any(k in body for k in ("subscri", "premium", "upgrade", "plan")):
+                    free_model = get_free_model("grok")
+                    if free_model and free_model != model:
+                        resp2 = sess.post(
+                            grok_api_url,
+                            json={**payload_grok_com, "modelName": free_model},
+                            headers=grok_headers,
+                            timeout=120,
+                        )
+                        if resp2.status_code == 200:
+                            text = _parse_grok_response(resp2.text)
+                            if text:
+                                note = (
+                                    f"\n\n_(Answered with **Grok 3 Mini** — your account doesn't "
+                                    f"have access to **{model}**.)_"
+                                )
+                                return True, text + note, ""
+                return False, "", f"Grok returned 403 — check your cookies or account plan."
+            if resp.status_code >= 400:
+                return False, "", f"Grok returned HTTP {resp.status_code} — please re-import cookies."
+            logger.debug("Grok raw response (first 500): %s", resp.text[:500])
+            text = _parse_grok_response(resp.text)
+            if text:
+                return True, text, ""
+            return False, "", f"Grok returned an unrecognized response format. Raw: {resp.text[:200]}"
+        except Exception as e:
+            logger.error("Grok request failed: %s", e, exc_info=True)
+            return False, "", f"Grok connection error: {e}"
 
     except Exception as exc:
         logger.error("Grok send error: %s", exc, exc_info=True)

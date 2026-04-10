@@ -79,6 +79,7 @@ router.post("/proxy/set-model", proxyToPython);
 router.get("/sessions", proxyToPython);
 router.post("/sessions/create", proxyToPython);
 router.post("/sessions/import", proxyToPython);
+router.post("/sessions/import-key", proxyToPython);
 router.delete("/sessions/:aiId/delete", proxyToPython);
 router.get("/sessions/browser-status/:aiId", proxyToPython);
 router.get("/sessions/browser-screenshot/:aiId", proxyToPython);

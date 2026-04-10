@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   useListAis, getListAisQueryKey,
   useListSessions, getListSessionsQueryKey,
@@ -9,8 +9,223 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ShieldCheck, ShieldAlert, Trash2, Loader2,
   RefreshCw, Globe, Monitor, Upload, X,
-  CheckCircle2, AlertCircle, LogIn,
+  CheckCircle2, AlertCircle, LogIn, Mouse,
+  Keyboard, RotateCcw,
 } from "lucide-react";
+
+// ─── Browser Viewer ─────────────────────────────────────────────────────────
+
+interface BrowserViewerProps {
+  aiId: string;
+  aiName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function BrowserViewer({ aiId, aiName, onClose, onSaved }: BrowserViewerProps) {
+  const { toast } = useToast();
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("starting");
+  const [statusText, setStatusText] = useState("Launching browser…");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState(true);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const savedRef = useRef(false);
+
+  // Poll for screenshots and status
+  useEffect(() => {
+    pollRef.current = setInterval(async () => {
+      if (!active || savedRef.current) return;
+      try {
+        // Fetch status
+        const statusRes = await fetch(`/api/sessions/browser-status/${aiId}`);
+        const statusData = await statusRes.json();
+        setStatus(statusData.status ?? "starting");
+
+        if (statusData.status === "saved" && !savedRef.current) {
+          savedRef.current = true;
+          clearInterval(pollRef.current!);
+          setStatusText("Session saved!");
+          toast({ title: "Session saved", description: `${aiName} is now connected.` });
+          onSaved();
+          setTimeout(onClose, 1200);
+          return;
+        }
+        if (statusData.status === "error") {
+          setError(statusData.error ?? "Unknown error");
+          setStatusText("Error");
+          return;
+        }
+        if (statusData.status === "ready" || statusData.status === "starting") {
+          setStatusText(statusData.url ? `Viewing: ${statusData.url}` : "Browser starting…");
+        }
+
+        // Fetch screenshot
+        if (statusData.active !== false) {
+          const imgRes = await fetch(`/api/sessions/browser-screenshot/${aiId}`);
+          if (imgRes.ok) {
+            const imgData = await imgRes.json();
+            if (imgData.screenshot) setScreenshot(imgData.screenshot);
+          }
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 800);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [aiId, active]);
+
+  const sendAction = useCallback(async (payload: Record<string, unknown>) => {
+    try {
+      await fetch(`/api/sessions/browser-action/${aiId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // ignore
+    }
+  }, [aiId]);
+
+  const handleImgClick = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    const img = imgRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    // Map click coords from display size → 1280×900 browser viewport
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1280);
+    const y = Math.round(((e.clientY - rect.top)  / rect.height) * 900);
+    sendAction({ action: "click", x, y });
+  }, [sendAction]);
+
+  const handleImgKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    // Map common keys
+    const KEY_MAP: Record<string, string> = {
+      Enter: "Enter", Backspace: "Backspace", Tab: "Tab",
+      ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
+      ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight",
+      Escape: "Escape", Delete: "Delete", Home: "Home", End: "End",
+    };
+    if (KEY_MAP[e.key]) {
+      sendAction({ action: "key", key: KEY_MAP[e.key] });
+    } else if (e.key.length === 1) {
+      sendAction({ action: "type", text: e.key });
+    }
+  }, [sendAction]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatusText("Saving session…");
+    await sendAction({ action: "save" });
+    // Worker will set status to "saved" which our poll will detect
+  };
+
+  const handleQuit = async () => {
+    setActive(false);
+    await sendAction({ action: "quit" });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl shadow-2xl flex flex-col overflow-hidden"
+           style={{ maxHeight: "90vh" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Monitor size={16} className="text-green-400" />
+            <span className="text-white font-medium text-sm">
+              {aiName} — Log in, then click <strong>Save Session</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              status === "ready" ? "bg-green-500/20 text-green-400" :
+              status === "error" ? "bg-red-500/20 text-red-400" :
+              status === "saved" ? "bg-blue-500/20 text-blue-400" :
+              "bg-yellow-500/20 text-yellow-400"
+            }`}>
+              {statusText}
+            </span>
+            <button onClick={handleQuit} className="p-1 text-gray-400 hover:text-white transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Browser screenshot (interactive) */}
+        <div
+          className="flex-1 overflow-hidden bg-black flex items-center justify-center relative outline-none min-h-0"
+          tabIndex={0}
+          onKeyDown={handleImgKeyDown}
+          style={{ cursor: "default", minHeight: 300 }}
+        >
+          {error ? (
+            <div className="text-center p-8">
+              <AlertCircle size={40} className="text-red-400 mx-auto mb-3" />
+              <p className="text-red-300 font-medium mb-1">Browser error</p>
+              <p className="text-gray-400 text-sm">{error}</p>
+            </div>
+          ) : !screenshot ? (
+            <div className="text-center p-8">
+              <Loader2 size={40} className="text-blue-400 mx-auto mb-3 animate-spin" />
+              <p className="text-gray-300 font-medium">Starting browser…</p>
+              <p className="text-gray-500 text-sm mt-1">This takes a few seconds</p>
+            </div>
+          ) : (
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events
+            <img
+              ref={imgRef}
+              src={screenshot}
+              alt="Browser view"
+              onClick={handleImgClick}
+              className="w-full h-full object-contain"
+              style={{ cursor: "pointer", maxHeight: "calc(90vh - 120px)" }}
+              draggable={false}
+            />
+          )}
+
+          {/* Interaction hints overlay */}
+          {screenshot && (
+            <div className="absolute bottom-2 left-2 flex gap-2 pointer-events-none">
+              <span className="bg-black/60 text-gray-400 text-[10px] px-2 py-1 rounded flex items-center gap-1">
+                <Mouse size={10} />Click to interact
+              </span>
+              <span className="bg-black/60 text-gray-400 text-[10px] px-2 py-1 rounded flex items-center gap-1">
+                <Keyboard size={10} />Click viewer then type
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 flex-shrink-0">
+          <p className="text-xs text-gray-500">
+            Log in with your account, then click Save Session
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleQuit}
+              className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-white text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || status === "starting" || !!error}
+              className="px-4 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+              Save Session
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Import Session Dialog ─────────────────────────────────────────────────────
 
@@ -22,17 +237,17 @@ interface ImportDialogProps {
 
 function ImportDialog({ ai, onClose, onSuccess }: ImportDialogProps) {
   const { toast } = useToast();
-  const [json, setJson] = useState("");
+  const [jsonText, setJsonText] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleImport = async () => {
-    if (!json.trim()) return;
+    if (!jsonText.trim()) return;
     setLoading(true);
     try {
       const res = await fetch("/api/sessions/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiId: ai.id, stateJson: json.trim() }),
+        body: JSON.stringify({ aiId: ai.id, stateJson: jsonText.trim() }),
       });
       const data = await res.json();
       if (data.success) {
@@ -63,188 +278,34 @@ function ImportDialog({ ai, onClose, onSuccess }: ImportDialogProps) {
         </div>
 
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4 text-sm text-blue-300">
-          <p className="font-medium mb-1">How to export your browser session:</p>
+          <p className="font-medium mb-1">Export session from your browser:</p>
           <ol className="list-decimal ml-4 space-y-1 text-blue-200/80">
             <li>Open {ai.name} in Chrome and log in</li>
-            <li>Install the <strong>EditThisCookie</strong> or <strong>Cookie-Editor</strong> extension</li>
-            <li>Export cookies as JSON and paste below</li>
+            <li>Open DevTools → Application → Cookies</li>
+            <li>Or use <strong>EditThisCookie</strong> extension to export as JSON</li>
+            <li>Paste the JSON below</li>
           </ol>
-          <p className="mt-2 text-xs text-blue-200/60">
-            Or use the Live Browser Login below for a guided experience.
-          </p>
         </div>
 
         <textarea
-          value={json}
-          onChange={e => setJson(e.target.value)}
-          placeholder='Paste Playwright storage_state JSON here ({"cookies": [...], "origins": [...]})'
+          value={jsonText}
+          onChange={e => setJsonText(e.target.value)}
+          placeholder={'{"cookies": [...], "origins": [...]}'}
           className="w-full h-40 bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm text-gray-200 font-mono resize-none focus:outline-none focus:border-blue-500 mb-4"
         />
 
         <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 text-sm transition-colors"
-          >
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 text-sm transition-colors">
             Cancel
           </button>
           <button
             onClick={handleImport}
-            disabled={!json.trim() || loading}
+            disabled={!jsonText.trim() || loading}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center gap-2"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             Import Session
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Browser Login Dialog ─────────────────────────────────────────────────────
-
-interface BrowserLoginDialogProps {
-  ai: { id: string; name: string; url: string };
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-function BrowserLoginDialog({ ai, onClose, onSuccess }: BrowserLoginDialogProps) {
-  const { toast } = useToast();
-  const [status, setStatus] = useState<"idle" | "launching" | "waiting" | "saving" | "done" | "error">("idle");
-  const [message, setMessage] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const handleLaunch = async () => {
-    setStatus("launching");
-    setMessage("Launching browser...");
-    try {
-      const res = await fetch("/api/sessions/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiId: ai.id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStatus("waiting");
-        setMessage("Browser opened. Log into " + ai.name + " and then click Save Session.");
-        // Poll for session completion
-        pollRef.current = setInterval(async () => {
-          try {
-            const statusRes = await fetch(`/api/sessions/browser-status/${ai.id}`);
-            const statusData = await statusRes.json();
-            if (statusData.status === "saved") {
-              clearInterval(pollRef.current!);
-              setStatus("done");
-              setMessage("Session saved successfully!");
-              toast({ title: "Session created", description: `${ai.name} session is now active.` });
-              onSuccess();
-              setTimeout(onClose, 1500);
-            } else if (statusData.status === "error") {
-              clearInterval(pollRef.current!);
-              setStatus("error");
-              setMessage(statusData.error || "An error occurred.");
-            }
-          } catch {
-            // ignore poll errors
-          }
-        }, 2000);
-      } else {
-        setStatus("error");
-        setMessage(data.message || "Failed to launch browser.");
-      }
-    } catch (e: any) {
-      setStatus("error");
-      setMessage(e.message);
-    }
-  };
-
-  const handleSave = async () => {
-    setStatus("saving");
-    setMessage("Saving session...");
-    try {
-      await fetch(`/api/sessions/browser-action/${ai.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save" }),
-      });
-      setMessage("Session saved! Closing browser...");
-    } catch (e: any) {
-      setStatus("error");
-      setMessage(e.message);
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-            <Monitor size={18} className="text-green-400" />
-            Browser Login — {ai.name}
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-4 mb-4 text-sm text-gray-300 space-y-2">
-          <p>A browser window will open on the server and navigate to:</p>
-          <p className="font-mono text-blue-400 text-xs bg-gray-700 px-2 py-1 rounded">{ai.url}</p>
-          <p>Log in with your account, then click <strong className="text-white">Save Session</strong> below.</p>
-        </div>
-
-        {message && (
-          <div className={`rounded-lg p-3 mb-4 text-sm flex items-center gap-2 ${
-            status === "error" ? "bg-red-500/10 border border-red-500/30 text-red-300" :
-            status === "done" ? "bg-green-500/10 border border-green-500/30 text-green-300" :
-            "bg-blue-500/10 border border-blue-500/30 text-blue-300"
-          }`}>
-            {status === "launching" || status === "saving" ? (
-              <Loader2 size={14} className="animate-spin flex-shrink-0" />
-            ) : status === "done" ? (
-              <CheckCircle2 size={14} className="flex-shrink-0" />
-            ) : status === "error" ? (
-              <AlertCircle size={14} className="flex-shrink-0" />
-            ) : (
-              <Monitor size={14} className="flex-shrink-0" />
-            )}
-            {message}
-          </div>
-        )}
-
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-gray-400 text-sm transition-colors"
-          >
-            Cancel
-          </button>
-          {status === "idle" && (
-            <button
-              onClick={handleLaunch}
-              className="px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <Globe size={14} />
-              Open Browser
-            </button>
-          )}
-          {status === "waiting" && (
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <CheckCircle2 size={14} />
-              Save Session
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -262,10 +323,32 @@ export function SessionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [importAi, setImportAi] = useState<{ id: string; name: string } | null>(null);
   const [browserAi, setBrowserAi] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
 
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+  };
+
+  const handleLaunchBrowser = async (ai: { id: string; name: string; url: string }) => {
+    setLaunchingId(ai.id);
+    try {
+      const res = await fetch("/api/sessions/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiId: ai.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBrowserAi(ai);
+      } else {
+        toast({ variant: "destructive", title: "Failed to launch browser", description: data.message });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setLaunchingId(null);
+    }
   };
 
   const handleDelete = async (aiId: string, aiName: string) => {
@@ -277,7 +360,7 @@ export function SessionsPage() {
         toast({ title: "Session deleted", description: `${aiName} session removed.` });
         refreshAll();
       } else {
-        toast({ variant: "destructive", title: "Failed to delete", description: data.message });
+        toast({ variant: "destructive", title: "Delete failed", description: data.message });
       }
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
@@ -287,12 +370,10 @@ export function SessionsPage() {
   };
 
   const isLoading = aisLoading || sessionsLoading;
-
   const ais = aisData?.ais ?? [];
   const sessions = sessionsData?.sessions ?? [];
-
-  const getSession = (aiId: string) =>
-    sessions.find((s: any) => s.aiId === aiId);
+  const getSession = (aiId: string) => sessions.find((s: any) => s.aiId === aiId);
+  const connectedCount = ais.filter((ai: any) => ai.hasSession).length;
 
   if (isLoading) {
     return (
@@ -301,8 +382,6 @@ export function SessionsPage() {
       </div>
     );
   }
-
-  const connectedCount = ais.filter((ai: any) => ai.hasSession).length;
 
   return (
     <div className="flex flex-col h-full bg-gray-950">
@@ -316,9 +395,7 @@ export function SessionsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-400">
-              {connectedCount}/{ais.length} connected
-            </span>
+            <span className="text-sm text-gray-400">{connectedCount}/{ais.length} connected</span>
             <button
               onClick={refreshAll}
               className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
@@ -333,21 +410,22 @@ export function SessionsPage() {
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-4">
 
-          {/* How it works */}
+          {/* How it works banner */}
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-sm text-blue-200/80">
-            <p className="font-medium text-blue-300 mb-2">How this works</p>
-            <ul className="space-y-1 list-disc ml-4 text-blue-200/70">
-              <li>Click <strong className="text-blue-200">Browser Login</strong> to open a browser and log in with your account</li>
-              <li>Your session cookies are saved locally — no API keys or payments required</li>
-              <li>Prompts are sent via each service's internal API using those cookies</li>
-              <li>Cloudflare is bypassed using browser-grade TLS fingerprinting</li>
-            </ul>
+            <p className="font-medium text-blue-300 mb-1">How it works</p>
+            <p>
+              Click <strong className="text-blue-200">Browser Login</strong> — a headless browser opens on the server
+              and shows a live preview below. Log in with your account in that preview, then click
+              <strong className="text-blue-200"> Save Session</strong>. Your cookies are stored locally
+              and used for all future requests.
+            </p>
           </div>
 
           {/* AI Cards */}
           {ais.map((ai: any) => {
             const session = getSession(ai.id);
             const hasSession = ai.hasSession;
+            const isLaunching = launchingId === ai.id;
 
             return (
               <div
@@ -370,13 +448,11 @@ export function SessionsPage() {
                         <span className="text-white font-semibold">{ai.name}</span>
                         {hasSession ? (
                           <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
-                            <ShieldCheck size={11} />
-                            Active
+                            <ShieldCheck size={11} />Active
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
-                            <ShieldAlert size={11} />
-                            No session
+                            <ShieldAlert size={11} />No session
                           </span>
                         )}
                       </div>
@@ -389,61 +465,39 @@ export function SessionsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {hasSession && (
-                      <button
-                        onClick={() => handleDelete(ai.id, ai.name)}
-                        disabled={deletingId === ai.id}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                        title="Remove session"
-                      >
-                        {deletingId === ai.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
-                      </button>
-                    )}
-                  </div>
+                  {hasSession && (
+                    <button
+                      onClick={() => handleDelete(ai.id, ai.name)}
+                      disabled={deletingId === ai.id}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                      title="Remove session"
+                    >
+                      {deletingId === ai.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Trash2 size={14} />}
+                    </button>
+                  )}
                 </div>
 
-                {!hasSession && (
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => setBrowserAi({ id: ai.id, name: ai.name, url: ai.url })}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors"
-                    >
-                      <LogIn size={14} />
-                      Browser Login
-                    </button>
-                    <button
-                      onClick={() => setImportAi({ id: ai.id, name: ai.name })}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-600 hover:border-gray-500 text-gray-300 text-sm transition-colors"
-                    >
-                      <Upload size={14} />
-                      Import Cookies
-                    </button>
-                  </div>
-                )}
-
-                {hasSession && (
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => setBrowserAi({ id: ai.id, name: ai.name, url: ai.url })}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-600 text-gray-400 text-xs transition-colors"
-                    >
-                      <RefreshCw size={12} />
-                      Re-login
-                    </button>
-                    <button
-                      onClick={() => setImportAi({ id: ai.id, name: ai.name })}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-600 text-gray-400 text-xs transition-colors"
-                    >
-                      <Upload size={12} />
-                      Replace Cookies
-                    </button>
-                  </div>
-                )}
+                <div className="mt-4 flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleLaunchBrowser(ai)}
+                    disabled={isLaunching}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-60 text-white text-sm font-medium transition-colors"
+                  >
+                    {isLaunching
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : hasSession ? <RotateCcw size={14} /> : <LogIn size={14} />}
+                    {hasSession ? "Re-login" : "Browser Login"}
+                  </button>
+                  <button
+                    onClick={() => setImportAi({ id: ai.id, name: ai.name })}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-600 hover:border-gray-500 text-gray-300 text-sm transition-colors"
+                  >
+                    <Upload size={14} />
+                    Import Cookies
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -459,10 +513,11 @@ export function SessionsPage() {
         />
       )}
       {browserAi && (
-        <BrowserLoginDialog
-          ai={browserAi}
+        <BrowserViewer
+          aiId={browserAi.id}
+          aiName={browserAi.name}
           onClose={() => setBrowserAi(null)}
-          onSuccess={refreshAll}
+          onSaved={refreshAll}
         />
       )}
     </div>

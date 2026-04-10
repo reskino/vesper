@@ -35,7 +35,7 @@ export function Sidebar() {
     <>
       {/* ── Desktop sidebar ──────────────────────────── */}
       <aside
-        className={`hidden sm:flex shrink-0 flex-col border-r border-border bg-sidebar h-screen transition-[width] duration-200 ease-in-out
+        className={`hidden sm:flex shrink-0 flex-col border-r border-border bg-sidebar h-dvh transition-[width] duration-200 ease-in-out
           ${collapsed ? "w-[60px]" : "w-56"}`}
       >
         {/* Logo row */}
@@ -108,7 +108,7 @@ export function Sidebar() {
       </aside>
 
       {/* ── Mobile bottom nav ────────────────────────── */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-sidebar/98 backdrop-blur-xl border-t border-border/60 grid grid-cols-5 shadow-[0_-4px_24px_rgba(0,0,0,0.25)]">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-sidebar/98 backdrop-blur-xl border-t border-border/60 grid grid-cols-5 shadow-[0_-4px_24px_rgba(0,0,0,0.25)]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {[NAV[0], NAV[1], NAV[3], NAV[4], NAV[6]].map(({ href, label, icon: Icon }) => {
           const active = location === href;
           return (

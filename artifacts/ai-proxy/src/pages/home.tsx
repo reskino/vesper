@@ -496,15 +496,15 @@ export function Home() {
       <div className="flex-1 overflow-y-auto" ref={scrollRef}>
         {messages.length === 0 ? (
           /* Empty state */
-          <div className="h-full flex flex-col items-center justify-center text-center px-4 py-10 gap-5">
+          <div className="min-h-full flex flex-col items-center justify-center text-center px-4 py-6 sm:py-10 gap-4 sm:gap-5">
             <div className="flex flex-col items-center gap-3">
               <div className="relative">
                 <div className="absolute inset-0 blur-2xl bg-primary/25 rounded-full scale-[2] opacity-60" />
-                <VesperLogo size={64} />
+                <VesperLogo size={52} />
               </div>
               <div>
-                <h2 className="text-3xl font-black tracking-tight">Vesper</h2>
-                <p className="text-[11px] font-bold text-muted-foreground mt-1 uppercase tracking-widest">by Skinopro Tech Solutions</p>
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Vesper</h2>
+                <p className="text-[11px] font-bold text-muted-foreground mt-0.5 uppercase tracking-widest">by Skinopro Tech Solutions</p>
               </div>
             </div>
             <TypewriterText />

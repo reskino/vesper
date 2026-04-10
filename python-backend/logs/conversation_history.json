@@ -49,5 +49,21 @@
       "timestamp": "2026-04-10T01:32:12.126380+00:00",
       "conversationId": "a332fe36-91f7-4e0b-9c23-2d30fd467f11"
     }
+  ],
+  "pollinations": [
+    {
+      "id": "f4ad4a2c-5408-4c15-9f45-4cc061977435",
+      "role": "user",
+      "content": "What is 2+2? One word answer.",
+      "timestamp": "2026-04-10T08:16:48.748851+00:00",
+      "conversationId": "19eb599e-efa0-457a-be43-f06d0ca1c02d"
+    },
+    {
+      "id": "df4cdcb1-f2db-4bde-9064-7042a809acc0",
+      "role": "assistant",
+      "content": "Four",
+      "timestamp": "2026-04-10T08:16:52.035321+00:00",
+      "conversationId": "19eb599e-efa0-457a-be43-f06d0ca1c02d"
+    }
   ]
 }

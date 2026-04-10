@@ -45,11 +45,17 @@ def get_session_path(ai_id: str) -> str:
 
 
 def session_exists(ai_id: str) -> bool:
-    """True if we have either a cookie session file OR an API key file for this AI."""
+    """True if we have credentials or the AI needs none (e.g. Pollinations)."""
+    from config import AI_CONFIGS
+    cfg = AI_CONFIGS.get(ai_id, {})
+    # Providers that need no auth are always available
+    if cfg.get("auth_mode") == "none":
+        return True
+    # Cookie session file
     path = get_session_path(ai_id)
     if os.path.exists(path) and os.path.getsize(path) > 10:
         return True
-    # API key fallback (for ChatGPT and Claude, which are Cloudflare-blocked)
+    # API key file (for ChatGPT, Claude, Groq, etc.)
     key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
     return os.path.exists(key_path) and os.path.getsize(key_path) > 5
 
@@ -160,7 +166,12 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
     model = get_active_model(ai_id)
     logger.info("Sending prompt to %s (model=%s, %d chars)", ai_id, model, len(prompt))
 
-    # Check for API key first (bypasses Cloudflare for ChatGPT/Claude)
+    # Pollinations — no auth needed, send directly
+    if ai_id == "pollinations":
+        from web_session_client import send_pollinations
+        return send_pollinations(model, prompt)
+
+    # Check for API key first (bypasses Cloudflare for ChatGPT/Claude/Groq)
     key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
     if os.path.exists(key_path):
         try:

@@ -10,6 +10,39 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 #        "plus" → requires ChatGPT Plus / Claude Pro / X Premium
 #        "pro"  → requires the top-tier paid plan
 AI_CONFIGS = {
+    "pollinations": {
+        "id": "pollinations",
+        "name": "Pollinations AI",
+        "url": "https://pollinations.ai",
+        "login_url": "https://pollinations.ai",
+        "icon": "pollinations",
+        "auth_mode": "none",  # no API key or cookies needed
+        "models": [
+            {"id": "openai",              "name": "GPT-4o (via Pollinations)", "tier": "free"},
+            {"id": "openai-large",        "name": "GPT-4.1 (via Pollinations)", "tier": "free"},
+            {"id": "mistral",             "name": "Mistral (via Pollinations)",  "tier": "free"},
+            {"id": "claude-sonnet-3-7",   "name": "Claude 3.7 (via Pollinations)", "tier": "free"},
+            {"id": "deepseek",            "name": "DeepSeek (via Pollinations)", "tier": "free"},
+        ],
+        "defaultModel": "openai",
+        "freeModel":    "openai",
+    },
+    "groq": {
+        "id": "groq",
+        "name": "Groq (Llama)",
+        "url": "https://console.groq.com",
+        "login_url": "https://console.groq.com/keys",
+        "icon": "groq",
+        "auth_mode": "api_key",
+        "models": [
+            {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B",   "tier": "free"},
+            {"id": "llama-3.1-8b-instant",    "name": "Llama 3.1 8B",    "tier": "free"},
+            {"id": "mixtral-8x7b-32768",      "name": "Mixtral 8x7B",    "tier": "free"},
+            {"id": "gemma2-9b-it",            "name": "Gemma 2 9B",      "tier": "free"},
+        ],
+        "defaultModel": "llama-3.3-70b-versatile",
+        "freeModel":    "llama-3.3-70b-versatile",
+    },
     "chatgpt": {
         "id": "chatgpt",
         "name": "ChatGPT",
@@ -59,7 +92,7 @@ AI_CONFIGS = {
     },
 }
 
-FALLBACK_ORDER = ["chatgpt", "grok", "claude"]
+FALLBACK_ORDER = ["pollinations", "groq", "chatgpt", "grok", "claude"]
 
 DEFAULT_TIMEOUT = 120000
 RESPONSE_POLL_INTERVAL = 2000

@@ -431,11 +431,13 @@ def _parse_grok_response(text: str) -> str:
             tokens.append(token)
             continue
 
-        # Final complete message — try every known shape
+        # Final complete message — confirmed from mem0ai/grok3-api reverse-engineering:
+        # The authoritative path is result.response.modelResponse.message
         msg = _extract_nested(obj,
-            ("result", "response", "message"),       # primary grok.com shape
-            ("result", "message"),                    # older shape
-            ("result", "modelResponse", "message"),  # model response shape
+            ("result", "response", "modelResponse", "message"),  # confirmed correct shape
+            ("result", "response", "message"),                    # fallback
+            ("result", "message"),                                # older shape
+            ("result", "modelResponse", "message"),
             ("message",),
             ("response",),
             ("answer",),
@@ -472,16 +474,26 @@ def send_grok(session_path: str, model: str, prompt: str) -> Tuple[bool, str, st
             {"Content-Type": "application/json"},
         )
 
+        # Payload structure confirmed by mem0ai/grok3-api reverse-engineering
         payload_grok_com = {
-            "temporary": True,
+            "temporary": False,
             "modelName": model,
             "message": prompt,
             "fileAttachments": [],
             "imageAttachments": [],
             "disableSearch": False,
             "enableImageGeneration": False,
-            "returnFinalResponseOnly": True,
+            "returnImageBytes": False,
+            "returnRawGrokInXaiRequest": False,
+            "enableImageStreaming": False,
+            "forceConcise": False,
+            "toolOverrides": {},
+            "enableSideBySide": False,
+            "isPreset": False,
             "sendFinalMetadata": True,
+            "customInstructions": "",
+            "deepsearchPreset": "",
+            "isReasoning": False,
         }
 
         # Only use the verified working API endpoint (the others return HTML)
@@ -598,9 +610,79 @@ def _send_claude_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, 
         return False, "", f"Claude (API key): {exc}"
 
 
+def _send_groq_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Groq's free API (OpenAI-compatible). Free tier: 1000 req/day, no credit card."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", "Groq API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", "Groq rate limit hit (free tier: 1000 req/day). Try again later."
+        return False, "", f"Groq API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Groq API send error: %s", exc, exc_info=True)
+        return False, "", f"Groq error: {exc}"
+
+
+def send_pollinations(model: str, prompt: str) -> Tuple[bool, str, str]:
+    """
+    Send via Pollinations.ai — completely free, no API key required.
+    OpenAI-compatible endpoint: https://text.pollinations.ai/openai
+    Models: openai (GPT-4o), openai-large (GPT-4.1), mistral, claude-sonnet-3-7, deepseek
+    """
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "private": True,
+        }).encode()
+        req = urllib.request.Request(
+            "https://text.pollinations.ai/openai",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        return False, "", f"Pollinations API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("Pollinations send error: %s", exc, exc_info=True)
+        return False, "", f"Pollinations error: {exc}"
+
+
 _API_KEY_DISPATCH = {
     "chatgpt": _send_chatgpt_api,
     "claude":  _send_claude_api,
+    "groq":    _send_groq_api,
 }
 
 

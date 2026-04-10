@@ -502,8 +502,8 @@ def import_api_key():
         return jsonify({"success": False, "message": "aiId and apiKey are required"}), 400
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "message": f"Unknown AI: {ai_id}"}), 400
-    if ai_id not in ("chatgpt", "claude"):
-        return jsonify({"success": False, "message": "API key mode is only supported for ChatGPT and Claude"}), 400
+    if ai_id not in ("chatgpt", "claude", "groq"):
+        return jsonify({"success": False, "message": "API key mode is only supported for ChatGPT, Claude, and Groq"}), 400
 
     key_path = os.path.join(SESSIONS_DIR, f"{ai_id}_api_key.txt")
     try:
@@ -533,8 +533,12 @@ def verify_session(ai_id):
 
     from playwright_utils import session_exists, get_session_path
 
-    # Check API key first for ChatGPT / Claude
-    if ai_id in ("chatgpt", "claude"):
+    # Pollinations — always active, no auth needed
+    if ai_id == "pollinations":
+        return jsonify({"success": True, "username": "No login required", "authMode": "none"})
+
+    # Check API key for ChatGPT / Claude / Groq
+    if ai_id in ("chatgpt", "claude", "groq"):
         api_key = get_api_key(ai_id)
         if api_key:
             # Verify API key is functional
@@ -562,6 +566,18 @@ def verify_session(ai_id):
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
                     return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
+                elif ai_id == "groq":
+                    import urllib.request, urllib.error as _ue
+                    req = urllib.request.Request(
+                        "https://api.groq.com/openai/v1/models",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        _json.loads(r.read())
+                    return jsonify({"success": True, "username": "API Key (Groq)", "authMode": "api_key"})
             except Exception as exc:
                 return jsonify({"success": False, "error": f"API key invalid: {exc}"})
 

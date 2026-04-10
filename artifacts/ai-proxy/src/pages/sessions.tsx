@@ -15,11 +15,17 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// AIs that are Cloudflare-blocked and recommend API keys over cookies
 const CLOUDFLARE_BLOCKED = new Set(["chatgpt", "claude"]);
+// AIs that ONLY support API key (no cookies at all)
+const API_KEY_ONLY = new Set(["groq"]);
+// AIs that need no setup at all
+const NO_AUTH = new Set(["pollinations"]);
 
 const API_KEY_LINKS: Record<string, { label: string; url: string }> = {
   chatgpt: { label: "Get OpenAI API key", url: "https://platform.openai.com/api-keys" },
   claude:  { label: "Get Anthropic API key", url: "https://console.anthropic.com/settings/keys" },
+  groq:    { label: "Get free Groq API key (no credit card)", url: "https://console.groq.com/keys" },
 };
 
 // ─── Login Guide Dialog ──────────────────────────────────────────────────────
@@ -35,7 +41,8 @@ type Mode = "api_key" | "cookies";
 function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
   const { toast } = useToast();
   const isCloudflareBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
-  const [mode, setMode] = useState<Mode>(isCloudflareBlocked ? "api_key" : "cookies");
+  const isApiKeyOnly = API_KEY_ONLY.has(ai.id);
+  const [mode, setMode] = useState<Mode>(isCloudflareBlocked || isApiKeyOnly ? "api_key" : "cookies");
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -51,8 +58,8 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
           </button>
         </div>
 
-        {/* Mode tabs — only shown for ChatGPT / Claude */}
-        {isCloudflareBlocked && (
+        {/* Mode tabs — shown for ChatGPT/Claude (both modes) but not Groq (API key only) */}
+        {isCloudflareBlocked && !isApiKeyOnly && (
           <div className="flex gap-1 px-5 pt-4">
             <button
               onClick={() => setMode("api_key")}
@@ -472,12 +479,20 @@ export function SessionsPage() {
             <p className="font-medium text-blue-300">How to connect</p>
             <div className="grid grid-cols-1 gap-1.5 text-blue-200/70 text-xs">
               <div className="flex items-start gap-2">
+                <CheckCircle2 size={13} className="flex-shrink-0 mt-0.5 text-green-400" />
+                <span><strong className="text-green-300">Pollinations AI</strong> — Always available, no setup needed. Uses GPT-4o, Claude 3.7, DeepSeek for free.</span>
+              </div>
+              <div className="flex items-start gap-2">
                 <Key size={13} className="flex-shrink-0 mt-0.5 text-blue-400" />
-                <span><strong className="text-blue-200">ChatGPT & Claude</strong> — Use an API key (recommended) or browser cookies. API keys work reliably from cloud servers.</span>
+                <span><strong className="text-blue-200">Groq</strong> — Free API key from console.groq.com (no credit card). Llama 3.3 70B, 1000 req/day.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Key size={13} className="flex-shrink-0 mt-0.5 text-blue-400" />
+                <span><strong className="text-blue-200">ChatGPT & Claude</strong> — Use an official API key. Cookies are blocked by Cloudflare from cloud servers.</span>
               </div>
               <div className="flex items-start gap-2">
                 <Cookie size={13} className="flex-shrink-0 mt-0.5 text-blue-400" />
-                <span><strong className="text-blue-200">Grok</strong> — Export cookies with Cookie Editor and paste the JSON here.</span>
+                <span><strong className="text-blue-200">Grok</strong> — Export cookies from grok.com with Cookie Editor and paste the JSON here.</span>
               </div>
             </div>
           </div>
@@ -486,6 +501,8 @@ export function SessionsPage() {
           {ais.map((ai: any) => {
             const hasSession = ai.hasSession;
             const isBlocked = CLOUDFLARE_BLOCKED.has(ai.id);
+            const isNoAuth = NO_AUTH.has(ai.id);
+            const isApiKeyOnlyAi = API_KEY_ONLY.has(ai.id);
             const mode = authModes[ai.id];
 
             return (
@@ -516,7 +533,17 @@ export function SessionsPage() {
                             <ShieldAlert size={11} /> No session
                           </span>
                         )}
-                        {isBlocked && !hasSession && (
+                        {isNoAuth && (
+                          <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 size={10} /> Free, no setup
+                          </span>
+                        )}
+                        {isApiKeyOnlyAi && !hasSession && (
+                          <span className="flex items-center gap-1 text-xs text-blue-400/80 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                            <Key size={10} /> Free API key
+                          </span>
+                        )}
+                        {isBlocked && !hasSession && !isNoAuth && (
                           <span className="flex items-center gap-1 text-xs text-amber-500/80 bg-amber-500/10 px-2 py-0.5 rounded-full">
                             <Key size={10} /> API key recommended
                           </span>
@@ -565,15 +592,17 @@ export function SessionsPage() {
                   )}
                 </div>
 
-                <div className="mt-4">
-                  <button
-                    onClick={() => setLoginAi({ id: ai.id, name: ai.name, url: ai.url })}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
-                  >
-                    {hasSession ? <RotateCcw size={14} /> : <LogIn size={14} />}
-                    {hasSession ? "Re-connect" : "Connect"}
-                  </button>
-                </div>
+                {!isNoAuth && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setLoginAi({ id: ai.id, name: ai.name, url: ai.url })}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+                    >
+                      {hasSession ? <RotateCcw size={14} /> : <LogIn size={14} />}
+                      {hasSession ? "Re-connect" : "Connect"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

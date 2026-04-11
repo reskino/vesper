@@ -287,10 +287,10 @@ function MobileNav() {
               <div className={`h-8 w-11 rounded-2xl flex items-center justify-center transition-all
                 ${active ? "bg-primary/15" : ""}`}>
                 <Icon className={`transition-all duration-150
-                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-muted-foreground/60"}`} />
+                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-muted-foreground/85"}`} />
               </div>
               <span className={`text-[10px] font-bold tracking-wide transition-colors
-                ${active ? "text-primary" : "text-muted-foreground/40"}`}>
+                ${active ? "text-primary" : "text-muted-foreground/70"}`}>
                 {label}
               </span>
             </button>
@@ -359,13 +359,13 @@ function CollapsedChatRail() {
     >
       {/* Pulsing bubble icon */}
       <div className="relative">
-        <MessageSquarePlus className="h-4 w-4 text-muted-foreground/60 group-hover:text-primary transition-colors" />
+        <MessageSquarePlus className="h-4 w-4 text-muted-foreground/85 group-hover:text-primary transition-colors" />
         <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary/60
           ring-2 ring-background animate-pulse group-hover:bg-primary" />
       </div>
       {/* Rotated label */}
       <span
-        className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em]
+        className="text-[9px] font-bold text-muted-foreground/70 uppercase tracking-[0.15em]
           group-hover:text-muted-foreground transition-colors select-none"
         style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
       >

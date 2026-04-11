@@ -165,7 +165,7 @@
   --card-border: 240 5% 15%;
   
   --sidebar: 240 10% 4%;
-  --sidebar-foreground: 240 4% 65%;
+  --sidebar-foreground: 240 5% 72%;
   --sidebar-border: 240 5% 15%;
   --sidebar-primary: 210 100% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
@@ -182,7 +182,7 @@
   --secondary: 240 5% 15%;
   --secondary-foreground: 0 0% 90%;
   --muted: 240 5% 12%;
-  --muted-foreground: 240 4% 65%;
+  --muted-foreground: 240 5% 72%;
   --accent: 210 100% 60%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;

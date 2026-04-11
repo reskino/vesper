@@ -99,7 +99,7 @@ function TabIcon({ name }: { name: string }) {
   if (["html", "htm"].includes(ext)) return <FileCode className="h-3 w-3 text-orange-400 shrink-0" />;
   if (ext === "rs") return <FileCode className="h-3 w-3 text-orange-600 shrink-0" />;
   if (ext === "sql") return <FileCode className="h-3 w-3 text-sky-400 shrink-0" />;
-  return <FileIcon className="h-3 w-3 text-[#52526e] shrink-0" />;
+  return <FileIcon className="h-3 w-3 text-[#9898b8] shrink-0" />;
 }
 
 // ── Per-tab state ─────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ function AiSidePanel({
         </div>
         <button
           onClick={onClose}
-          className="h-5 w-5 flex items-center justify-center rounded text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-colors"
+          className="h-5 w-5 flex items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors"
         >
           <X className="h-3 w-3" />
         </button>
@@ -209,7 +209,7 @@ function AiSidePanel({
       {/* Message list */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2" ref={scrollRef}>
         {messages.length === 0 && (
-          <p className="text-center py-6 text-[#52526e] text-xs">
+          <p className="text-center py-6 text-[#9898b8] text-xs">
             {activeTab ? "Ask about your code or use a quick action above." : "Open a file to enable the AI assistant."}
           </p>
         )}
@@ -240,7 +240,7 @@ function AiSidePanel({
           </div>
         ))}
         {askAi.isPending && (
-          <div className="flex items-center gap-1.5 text-[#52526e] text-xs px-2">
+          <div className="flex items-center gap-1.5 text-[#9898b8] text-xs px-2">
             <Loader2 className="h-3 w-3 animate-spin" /> Thinking…
           </div>
         )}
@@ -250,7 +250,7 @@ function AiSidePanel({
       <div className="shrink-0 px-2 py-2 border-t border-[#1a1a24]">
         <div className="flex gap-1">
           <input
-            className="flex-1 bg-[#141420] border border-[#1a1a24] focus:border-primary/40 rounded-lg px-2.5 py-1.5 text-xs outline-none text-foreground placeholder:text-[#3a3a5c] transition-colors"
+            className="flex-1 bg-[#141420] border border-[#1a1a24] focus:border-primary/40 rounded-lg px-2.5 py-1.5 text-xs outline-none text-foreground placeholder:text-[#7878a8] transition-colors"
             placeholder="Ask about this code…"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
@@ -481,7 +481,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       {/* ── Tab strip ────────────────────────────────────────────────────────── */}
       <div className="flex items-center border-b border-[#1a1a24] bg-[#0a0a0c] overflow-x-auto shrink-0 h-9">
         {openTabs.length === 0 ? (
-          <div className="flex items-center gap-2 px-4 text-[#3a3a5c] text-xs select-none">
+          <div className="flex items-center gap-2 px-4 text-[#7878a8] text-xs select-none">
             <FilePlus className="h-3.5 w-3.5" />
             <span>Open a file from the Explorer</span>
           </div>
@@ -497,7 +497,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 className={`flex items-center gap-1.5 px-3 h-full text-xs cursor-pointer border-r border-[#1a1a24] shrink-0 group transition-colors ${
                   isActive
                     ? "bg-[#0d0d12] text-foreground border-t-2 border-t-primary"
-                    : "bg-[#0a0a0c] text-[#52526e] hover:bg-[#111118] hover:text-[#a0a0c0]"
+                    : "bg-[#0a0a0c] text-[#9898b8] hover:bg-[#111118] hover:text-[#a0a0c0]"
                 }`}
                 title={tab}
               >
@@ -508,10 +508,10 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Unsaved changes" />
                 )}
                 {/* Saving spinner */}
-                {dirty && isSaving && <Loader2 className="h-2.5 w-2.5 animate-spin text-[#52526e] shrink-0" />}
+                {dirty && isSaving && <Loader2 className="h-2.5 w-2.5 animate-spin text-[#9898b8] shrink-0" />}
                 <button
                   onClick={e => closeTab(tab, e)}
-                  className="h-4 w-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-[#52526e] hover:text-foreground hover:bg-[#1e1e2e]"
+                  className="h-4 w-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-[#9898b8] hover:text-foreground hover:bg-[#1e1e2e]"
                   title="Close tab"
                 >
                   <X className="h-2.5 w-2.5" />
@@ -528,7 +528,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               <button
                 onClick={() => setWordWrap(w => w === "on" ? "off" : "on")}
                 className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
-                  wordWrap === "on" ? "text-primary bg-primary/10" : "text-[#52526e] hover:text-foreground hover:bg-[#141420]"
+                  wordWrap === "on" ? "text-primary bg-primary/10" : "text-[#9898b8] hover:text-foreground hover:bg-[#141420]"
                 }`}
                 title="Toggle word wrap (Alt+Z)"
               >
@@ -536,14 +536,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               </button>
               <button
                 onClick={() => setFontSize(s => Math.min(s + 1, 24))}
-                className="h-6 w-6 flex items-center justify-center rounded text-[#52526e] hover:text-foreground hover:bg-[#141420]"
+                className="h-6 w-6 flex items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420]"
                 title="Increase font size"
               >
                 <ZoomIn className="h-3 w-3" />
               </button>
               <button
                 onClick={() => setFontSize(s => Math.max(s - 1, 10))}
-                className="h-6 w-6 flex items-center justify-center rounded text-[#52526e] hover:text-foreground hover:bg-[#141420]"
+                className="h-6 w-6 flex items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420]"
                 title="Decrease font size"
               >
                 <ZoomOut className="h-3 w-3" />
@@ -552,7 +552,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 onClick={() => handleSave()}
                 disabled={!isDirty || isSaving}
                 className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
-                  isDirty ? "text-primary hover:bg-primary/10" : "text-[#3a3a5c]"
+                  isDirty ? "text-primary hover:bg-primary/10" : "text-[#7878a8]"
                 }`}
                 title="Save (Ctrl+S)"
               >
@@ -563,7 +563,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               <button
                 onClick={() => setShowAiPanel(a => !a)}
                 className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
-                  showAiPanel ? "text-primary bg-primary/10" : "text-[#52526e] hover:text-foreground hover:bg-[#141420]"
+                  showAiPanel ? "text-primary bg-primary/10" : "text-[#9898b8] hover:text-foreground hover:bg-[#141420]"
                 }`}
                 title="AI assistant (Zap)"
               >
@@ -586,11 +586,11 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               <div className="relative h-14 w-14 rounded-2xl bg-gradient-to-br from-[#1a1a2e] to-[#0d0d12]
                 border border-[#1e1e2e] flex items-center justify-center
                 shadow-[0_0_40px_rgba(99,102,241,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <FileCode className="h-6 w-6 text-[#2a2a40]" />
+                <FileCode className="h-6 w-6 text-[#7878a8]" />
               </div>
               <div>
-                <p className="text-[14px] font-semibold text-[#3a3a5c] tracking-tight">Open a file to begin</p>
-                <p className="text-[11px] text-[#252535] mt-1">
+                <p className="text-[14px] font-semibold text-[#7878a8] tracking-tight">Open a file to begin</p>
+                <p className="text-[11px] text-[#7878a8] mt-1">
                   Select from the Explorer or create a new file
                 </p>
               </div>
@@ -610,16 +610,16 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                   className="flex items-center justify-between px-3 py-1.5 rounded-lg
                     bg-[#0a0a0e] border border-[#141420] group hover:border-[#1e1e2e] transition-colors"
                 >
-                  <span className="text-[11px] text-[#2a2a40] group-hover:text-[#3a3a5c] transition-colors">{label}</span>
+                  <span className="text-[11px] text-[#7878a8] group-hover:text-[#7878a8] transition-colors">{label}</span>
                   <div className="flex items-center gap-1">
                     {keys.map((k, i) => (
                       <span key={i} className="flex items-center gap-1">
-                        <kbd className="text-[9px] font-bold font-mono text-[#2a2a40] group-hover:text-[#52526e]
+                        <kbd className="text-[9px] font-bold font-mono text-[#7878a8] group-hover:text-[#9898b8]
                           bg-[#141420] border border-[#1e1e2e] rounded px-1.5 py-0.5 transition-colors">
                           {k}
                         </kbd>
                         {i < keys.length - 1 && (
-                          <span className="text-[9px] text-[#1e1e2e]">+</span>
+                          <span className="text-[9px] text-[#7070a0]">+</span>
                         )}
                       </span>
                     ))}
@@ -643,14 +643,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                     onChange={handleEditorChange}
                     onMount={handleEditorMount}
                     loading={
-                      <div className="flex items-center justify-center h-full text-[#52526e]">
+                      <div className="flex items-center justify-center h-full text-[#9898b8]">
                         <Loader2 className="h-5 w-5 animate-spin" />
                       </div>
                     }
                   />
                 ) : (
                   /* Loading skeleton while file data is fetched */
-                  <div className="flex items-center justify-center h-full text-[#52526e]">
+                  <div className="flex items-center justify-center h-full text-[#9898b8]">
                     <Loader2 className="h-5 w-5 animate-spin" />
                   </div>
                 )}
@@ -676,11 +676,11 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       </div>
 
       {/* ── Status bar ───────────────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center justify-between px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#3a3a5c] font-mono select-none">
+      <div className="shrink-0 flex items-center justify-between px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none">
         <div className="flex items-center gap-3">
-          {activeTab && <span className="text-[#52526e]">{getLangLabel(activeTab)}</span>}
+          {activeTab && <span className="text-[#9898b8]">{getLangLabel(activeTab)}</span>}
           {isDirty && !isSaving && <span className="text-amber-400 flex items-center gap-1">● Unsaved</span>}
-          {isSaving   && <span className="text-[#52526e] flex items-center gap-1"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving…</span>}
+          {isSaving   && <span className="text-[#9898b8] flex items-center gap-1"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving…</span>}
         </div>
         {activeTab && (
           <div className="flex items-center gap-3">

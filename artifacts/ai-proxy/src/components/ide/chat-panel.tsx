@@ -48,8 +48,8 @@ import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 const getFileIcon = (name: string) => {
   if (/\.(js|ts|jsx|tsx)$/.test(name)) return <FileCode className="h-3.5 w-3.5 text-blue-400" />;
   if (/\.json$/.test(name)) return <FileJson className="h-3.5 w-3.5 text-yellow-400" />;
-  if (/\.md$/.test(name)) return <FileText className="h-3.5 w-3.5 text-[#52526e]" />;
-  return <FileIcon className="h-3.5 w-3.5 text-[#52526e]" />;
+  if (/\.md$/.test(name)) return <FileText className="h-3.5 w-3.5 text-[#9898b8]" />;
+  return <FileIcon className="h-3.5 w-3.5 text-[#9898b8]" />;
 };
 
 function MiniFileTreeItem({ node, depth = 0, onSelect }: {
@@ -65,7 +65,7 @@ function MiniFileTreeItem({ node, depth = 0, onSelect }: {
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? <ChevronDown className="h-3 w-3 mr-1 text-[#52526e]" /> : <ChevronRight className="h-3 w-3 mr-1 text-[#52526e]" />}
+          {expanded ? <ChevronDown className="h-3 w-3 mr-1 text-[#9898b8]" /> : <ChevronRight className="h-3 w-3 mr-1 text-[#9898b8]" />}
           <Folder className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
           <span className="truncate text-sm">{node.name}</span>
         </div>
@@ -125,7 +125,7 @@ function TypewriterText() {
   }, [displayed, typing, paused, phraseIdx]);
 
   return (
-    <p className="text-[#52526e] text-[13px] min-h-[1.5rem] text-center tracking-wide">
+    <p className="text-[#9898b8] text-[13px] min-h-[1.5rem] text-center tracking-wide">
       {displayed}
       <span className="inline-block w-px h-[0.9em] bg-primary/60 ml-0.5 align-middle animate-pulse" />
     </p>
@@ -173,7 +173,7 @@ function RoutingBadge({ info }: {
   return (
     <button
       onClick={() => setExpanded(e => !e)}
-      className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[#3a3a5c] hover:text-[#52526e] transition-colors text-left"
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[#7878a8] hover:text-[#9898b8] transition-colors text-left"
       aria-label="Show routing decision details"
     >
       <span className="flex items-center gap-1 bg-primary/10 text-primary/70 border border-primary/15 px-1.5 py-0.5 rounded-full font-semibold">
@@ -181,13 +181,13 @@ function RoutingBadge({ info }: {
         Vesper routed → {name}
       </span>
       {info.signals.slice(0, 2).map(s => (
-        <span key={s} className="bg-[#0a0a0c] border border-[#1a1a24] px-1.5 py-0.5 rounded-full text-[#52526e]">
+        <span key={s} className="bg-[#0a0a0c] border border-[#1a1a24] px-1.5 py-0.5 rounded-full text-[#9898b8]">
           {s}
         </span>
       ))}
-      <span className="text-[#2a2a40] font-mono">{pct}% confidence</span>
+      <span className="text-[#7878a8] font-mono">{pct}% confidence</span>
       {expanded && (
-        <span className="w-full text-[#3a3a5c] mt-0.5 italic">{info.reason}</span>
+        <span className="w-full text-[#7878a8] mt-0.5 italic">{info.reason}</span>
       )}
     </button>
   );
@@ -221,7 +221,7 @@ function MessageBubble({ msg, onExecute }: {
   return (
     <div className="px-4 py-1.5 group">
       {msg.aiId && !msg.routingInfo && (
-        <p className="text-[10px] text-[#3a3a5c] font-mono mb-1 pl-1">{msg.aiId}</p>
+        <p className="text-[10px] text-[#7878a8] font-mono mb-1 pl-1">{msg.aiId}</p>
       )}
       <div className={`text-[15px] md:text-sm leading-relaxed ${msg.error ? "text-red-400" : "text-foreground"}`}>
         {msg.error ? (
@@ -237,7 +237,7 @@ function MessageBubble({ msg, onExecute }: {
       <div className="flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={copy}
-          className="flex items-center gap-1.5 h-6 px-2 rounded-md text-[#52526e] hover:text-foreground
+          className="flex items-center gap-1.5 h-6 px-2 rounded-md text-[#9898b8] hover:text-foreground
             hover:bg-[#141420] transition-colors text-xs"
           aria-label="Copy response"
         >
@@ -332,7 +332,7 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
 
       {/* ── Quick prompts — 2-col grid on ALL screens ─────────────────────── */}
       <div className="px-3 pb-5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#2a2a40] mb-2.5 px-0.5 select-none">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#7878a8] mb-2.5 px-0.5 select-none">
           Quick actions
         </p>
         <div className="grid grid-cols-2 gap-1.5">
@@ -347,13 +347,13 @@ function EmptyState({ onPrompt, connectedCount }: { onPrompt: (p: string) => voi
             >
               <div className="mt-0.5 h-6 w-6 rounded-lg bg-[#141420] border border-[#1e1e2e] flex items-center justify-center shrink-0
                 group-hover:bg-[#1a1a2a] group-hover:border-[#2a2a3c] transition-all">
-                <Icon className="h-3 w-3 text-[#52526e] group-hover:text-[#a0a0c0] transition-colors" />
+                <Icon className="h-3 w-3 text-[#9898b8] group-hover:text-[#a0a0c0] transition-colors" />
               </div>
               <div className="min-w-0">
                 <p className="text-[12px] font-medium text-[#7070a0] group-hover:text-foreground transition-colors leading-tight">
                   {label}
                 </p>
-                <p className="text-[10px] text-[#3a3a5c] group-hover:text-[#52526e] mt-0.5 transition-colors hidden sm:block">
+                <p className="text-[10px] text-[#7878a8] group-hover:text-[#9898b8] mt-0.5 transition-colors hidden sm:block">
                   {desc}
                 </p>
               </div>
@@ -384,11 +384,11 @@ function ImportedProjectBanner({
       <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
       <span className="flex-1 truncate text-[#a0a0c0]">
         <span className="text-primary font-semibold">{name}</span>
-        <span className="ml-1 text-[#52526e]">· {fileCount} files in AI context</span>
+        <span className="ml-1 text-[#9898b8]">· {fileCount} files in AI context</span>
       </span>
       <button
         onClick={onDetach}
-        className="text-[#52526e] hover:text-foreground transition-colors p-0.5 rounded"
+        className="text-[#9898b8] hover:text-foreground transition-colors p-0.5 rounded"
         title="Remove project from AI context (keeps files in sidebar)"
         aria-label="Detach project from AI context"
       >
@@ -562,7 +562,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <Sparkles className="h-3 w-3 text-primary/70" />
-            <span className="text-[11px] font-bold text-[#3a3a5c] uppercase tracking-widest">Chat</span>
+            <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Chat</span>
           </div>
           {hasImportedProject && (
             <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
@@ -582,7 +582,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             <button
               onClick={handleRegen}
               disabled={isPending}
-              className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
+              className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
               title="Regenerate last response"
             >
               <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
@@ -590,7 +590,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           )}
           <button
             onClick={toggleChat}
-            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#111118] transition-all duration-150"
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] transition-all duration-150"
             title="Collapse chat panel (Ctrl+J)"
           >
             <ChevronsRight className="h-3 w-3" />
@@ -609,7 +609,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
                 <button
                   onClick={handleRegen}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[#52526e] bg-[#141420]
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[#9898b8] bg-[#141420]
                     border border-[#1a1a24] hover:text-foreground disabled:opacity-40 transition-colors text-xs"
                 >
                   <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
@@ -645,7 +645,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-[#141420] border-t border-[#1a1a24] text-sm">
           <span className="text-primary shrink-0">📎</span>
           <span className="flex-1 truncate text-[#a0a0c0] font-mono text-xs">{attachment}</span>
-          <button onClick={clearAttachment} className="text-[#52526e] hover:text-red-400 transition-colors p-1" aria-label="Remove attachment">
+          <button onClick={clearAttachment} className="text-[#9898b8] hover:text-red-400 transition-colors p-1" aria-label="Remove attachment">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -655,8 +655,8 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       {isFilePickerOpen && (
         <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a0c] max-h-52 overflow-y-auto">
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#1a1a24]">
-            <span className="text-[11px] font-bold text-[#52526e] uppercase tracking-wider">Attach from workspace</span>
-            <button onClick={() => setIsFilePickerOpen(false)} className="text-[#52526e] hover:text-foreground p-1" aria-label="Close file picker">
+            <span className="text-[11px] font-bold text-[#9898b8] uppercase tracking-wider">Attach from workspace</span>
+            <button onClick={() => setIsFilePickerOpen(false)} className="text-[#9898b8] hover:text-foreground p-1" aria-label="Close file picker">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -667,7 +667,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             />
           ) : (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-[#52526e]" />
+              <Loader2 className="h-5 w-5 animate-spin text-[#9898b8]" />
             </div>
           )}
         </div>
@@ -701,7 +701,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             disabled={isPending}
             aria-label="Chat input"
             className="flex-1 bg-transparent resize-none outline-none text-[16px] md:text-sm
-              text-foreground placeholder:text-[#3a3a5c] py-3 pl-4 max-h-40 min-h-[52px]
+              text-foreground placeholder:text-[#7878a8] py-3 pl-4 max-h-40 min-h-[52px]
               md:min-h-[42px] leading-relaxed"
             style={{ height: "auto" }}
           />
@@ -712,7 +712,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
               <button
                 onClick={() => setShowAttachMenu(o => !o)}
                 className="h-9 w-9 md:h-8 md:w-8 flex items-center justify-center rounded-xl
-                  text-[#52526e] hover:text-foreground hover:bg-[#1e1e2e] transition-colors"
+                  text-[#9898b8] hover:text-foreground hover:bg-[#1e1e2e] transition-colors"
                 aria-label="Attach file"
                 data-attach-menu
               >
@@ -762,7 +762,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           </div>
         </div>
 
-        <p className="mt-1.5 text-center text-[11px] text-[#3a3a5c] hidden md:block">
+        <p className="mt-1.5 text-center text-[11px] text-[#7878a8] hidden md:block">
           Shift+Enter for new line · Enter to send
         </p>
       </div>

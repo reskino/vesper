@@ -202,7 +202,7 @@ function AgentCard({ agent, onStop, onClear }: {
               </span>
             )}
             {agent.ai_id && (
-              <span className="text-[9px] text-muted-foreground/60 font-mono bg-white/5 px-1 rounded">
+              <span className="text-[9px] text-muted-foreground/85 font-mono bg-white/5 px-1 rounded">
                 {agent.ai_id}
               </span>
             )}
@@ -212,7 +212,7 @@ function AgentCard({ agent, onStop, onClear }: {
               </span>
             )}
             {elapsed && (
-              <span className="text-[9px] text-muted-foreground/50 ml-auto">{elapsed}</span>
+              <span className="text-[9px] text-muted-foreground/80 ml-auto">{elapsed}</span>
             )}
           </div>
           <p className="text-xs text-foreground/90 mt-0.5 truncate">
@@ -249,9 +249,9 @@ function AgentCard({ agent, onStop, onClear }: {
             </button>
           )}
           {expanded ? (
-            <ChevronDown className="h-3 w-3 text-muted-foreground/50" />
+            <ChevronDown className="h-3 w-3 text-muted-foreground/80" />
           ) : (
-            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            <ChevronRight className="h-3 w-3 text-muted-foreground/80" />
           )}
         </div>
       </div>
@@ -271,7 +271,7 @@ function AgentCard({ agent, onStop, onClear }: {
       {expanded && (
         <div className="border-t border-border/50 divide-y divide-border/30 max-h-72 overflow-y-auto">
           {agent.steps.length === 0 && (
-            <p className="text-[11px] text-muted-foreground/50 px-3 py-3 text-center">
+            <p className="text-[11px] text-muted-foreground/80 px-3 py-3 text-center">
               No steps yet…
             </p>
           )}
@@ -288,7 +288,7 @@ function AgentCard({ agent, onStop, onClear }: {
                         {toolIcon} {step.tool}
                       </span>
                       {step.elapsedMs !== undefined && (
-                        <span className="text-[9px] text-muted-foreground/40">{step.elapsedMs}ms</span>
+                        <span className="text-[9px] text-muted-foreground/70">{step.elapsedMs}ms</span>
                       )}
                     </div>
                     {step.result && (
@@ -314,7 +314,7 @@ function AgentCard({ agent, onStop, onClear }: {
       {/* Stats bar */}
       {agent.steps.length > 0 && (
         <div className="border-t border-border/30 px-3 py-1.5 flex items-center gap-3 bg-black/10">
-          <span className="text-[9px] text-muted-foreground/50">
+          <span className="text-[9px] text-muted-foreground/80">
             {agent.steps.length} steps · {toolSteps.length} tools · {errorSteps.length} errors
           </span>
           {agent.files_written && agent.files_written.length > 0 && (
@@ -404,8 +404,8 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
           <Plus className="h-3 w-3 text-primary" />
         </div>
         <span className="text-xs font-semibold text-foreground">Spawn New Agent</span>
-        {open ? <ChevronDown className="h-3 w-3 ml-auto text-muted-foreground/50" />
-               : <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground/50" />}
+        {open ? <ChevronDown className="h-3 w-3 ml-auto text-muted-foreground/80" />
+               : <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground/80" />}
       </button>
 
       {open && (
@@ -421,7 +421,7 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
               placeholder="Describe what this agent should do…"
               rows={3}
               className="w-full bg-black/20 border border-border/60 rounded-lg px-3 py-2
-                text-xs text-foreground placeholder:text-muted-foreground/40
+                text-xs text-foreground placeholder:text-muted-foreground/70
                 resize-none focus:outline-none focus:border-primary/50 transition-colors"
             />
           </div>
@@ -617,9 +617,9 @@ export default function AgentsPage() {
 
         {!loading && agents.length === 0 && (
           <div className="text-center py-10">
-            <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground/50">No agents running</p>
-            <p className="text-[10px] text-muted-foreground/30 mt-1">
+            <Users className="h-8 w-8 text-muted-foreground/85 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground/80">No agents running</p>
+            <p className="text-[10px] text-muted-foreground/85 mt-1">
               Spawn multiple agents to run tasks in parallel
             </p>
           </div>
@@ -627,7 +627,7 @@ export default function AgentsPage() {
 
         {running.length > 0 && (
           <div className="mb-2">
-            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-2">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
               Running ({running.length})
             </p>
             {running.map(a => (
@@ -643,7 +643,7 @@ export default function AgentsPage() {
 
         {done.length > 0 && (
           <div>
-            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-2">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-2">
               Completed ({done.length})
             </p>
             {done.map(a => (

@@ -45,7 +45,7 @@ function FileTypeIcon({ name }: { name: string }) {
   if (ext === "go") return <FileCode className="h-3.5 w-3.5 text-cyan-400 shrink-0" />;
   if (ext === "sql") return <FileCode className="h-3.5 w-3.5 text-sky-400 shrink-0" />;
   if (ext === "sh") return <FileCode className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
-  return <FileIcon className="h-3.5 w-3.5 text-[#52526e] shrink-0" />;
+  return <FileIcon className="h-3.5 w-3.5 text-[#9898b8] shrink-0" />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,14 +78,14 @@ function FilePreviewSheet({
             <FileTypeIcon name={file.name} />
             <span className="text-sm font-semibold text-foreground truncate">{file.path || file.name}</span>
             {file.size && (
-              <span className="text-[10px] text-[#52526e] shrink-0">
+              <span className="text-[10px] text-[#9898b8] shrink-0">
                 {(file.size / 1024).toFixed(0)} KB
               </span>
             )}
           </div>
           <button
             onClick={onClose}
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-colors ml-2 shrink-0"
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors ml-2 shrink-0"
             aria-label="Close preview"
           >
             <X className="h-4 w-4" />
@@ -95,7 +95,7 @@ function FilePreviewSheet({
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {file.skipped ? (
-            <div className="flex items-center gap-2 p-4 text-sm text-[#52526e] italic">
+            <div className="flex items-center gap-2 p-4 text-sm text-[#9898b8] italic">
               <SkipForward className="h-4 w-4 shrink-0" />
               {file.content}
             </div>
@@ -139,7 +139,7 @@ function TreeNode({
           onClick={() => setExpanded(e => !e)}
           aria-expanded={expanded}
         >
-          <span className="mr-0.5 text-[#52526e] shrink-0">
+          <span className="mr-0.5 text-[#9898b8] shrink-0">
             {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           </span>
           {expanded
@@ -163,7 +163,7 @@ function TreeNode({
     <button
       className={`w-full flex items-center py-0.5 rounded text-left transition-colors
         ${node.skipped
-          ? "text-[#3a3a5c] hover:bg-[#141420]"
+          ? "text-[#7878a8] hover:bg-[#141420]"
           : "text-[#8080a0] hover:bg-[#141420] hover:text-foreground"
         }`}
       style={{ paddingLeft: `${indent + 14}px` }}
@@ -171,7 +171,7 @@ function TreeNode({
       title={node.skipped ? "File skipped (binary or too large)" : node.path}
     >
       {node.skipped ? (
-        <SkipForward className="h-3.5 w-3.5 text-[#3a3a5c] shrink-0" />
+        <SkipForward className="h-3.5 w-3.5 text-[#7878a8] shrink-0" />
       ) : (
         <FileTypeIcon name={node.name} />
       )}
@@ -179,7 +179,7 @@ function TreeNode({
         {node.name}
       </span>
       {!node.skipped && node.size && node.size > 10_000 && (
-        <span className="ml-auto text-[10px] text-[#3a3a5c] pr-1 shrink-0">
+        <span className="ml-auto text-[10px] text-[#7878a8] pr-1 shrink-0">
           {(node.size / 1024).toFixed(0)}k
         </span>
       )}
@@ -261,7 +261,7 @@ export function ImportedTree() {
         </div>
         <div>
           <p className="text-sm font-semibold text-foreground mb-1">Import your project</p>
-          <p className="text-xs text-[#52526e] leading-relaxed max-w-[180px] mx-auto">
+          <p className="text-xs text-[#9898b8] leading-relaxed max-w-[180px] mx-auto">
             Import a local folder so the AI can see your full codebase
           </p>
         </div>
@@ -273,7 +273,7 @@ export function ImportedTree() {
           <FolderInput className="h-4 w-4" />
           Open Folder
         </button>
-        <p className="text-[10px] text-[#3a3a5c] max-w-[180px]">
+        <p className="text-[10px] text-[#7878a8] max-w-[180px]">
           Files stay in your browser — nothing is uploaded to any server
         </p>
 
@@ -303,7 +303,7 @@ export function ImportedTree() {
             {pct !== null ? `Reading files… ${pct}%` : "Opening folder…"}
           </p>
           {(progress?.current || progressMsg) && (
-            <p className="text-[11px] text-[#52526e] font-mono truncate max-w-[200px]">
+            <p className="text-[11px] text-[#9898b8] font-mono truncate max-w-[200px]">
               {progress?.current || progressMsg}
             </p>
           )}
@@ -338,14 +338,14 @@ export function ImportedTree() {
           <div className="flex items-center gap-0.5 shrink-0">
             <button
               onClick={handleOpenFolder}
-              className="h-5 w-5 flex items-center justify-center rounded text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-colors"
+              className="h-5 w-5 flex items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors"
               title="Import a different folder"
             >
               <FolderInput className="h-3 w-3" />
             </button>
             <button
               onClick={() => setImportedProject(null)}
-              className="h-5 w-5 flex items-center justify-center rounded text-[#52526e] hover:text-red-400 hover:bg-[#141420] transition-colors"
+              className="h-5 w-5 flex items-center justify-center rounded text-[#9898b8] hover:text-red-400 hover:bg-[#141420] transition-colors"
               title="Clear imported project"
             >
               <X className="h-3 w-3" />
@@ -357,11 +357,11 @@ export function ImportedTree() {
             {readableFiles} files
           </span>
           {totalFiles > readableFiles && (
-            <span className="text-[10px] text-[#52526e]">
+            <span className="text-[10px] text-[#9898b8]">
               {totalFiles - readableFiles} skipped
             </span>
           )}
-          <span className="text-[10px] text-[#52526e]">· added to AI context</span>
+          <span className="text-[10px] text-[#9898b8]">· added to AI context</span>
         </div>
       </div>
 
@@ -460,7 +460,7 @@ export function FolderImportButton({ className = "" }: { className?: string }) {
         className={`h-5 w-5 flex items-center justify-center rounded transition-colors
           ${importedProject
             ? "text-primary hover:text-foreground hover:bg-[#141420]"
-            : "text-[#52526e] hover:text-[#a0a0c0] hover:bg-[#141420]"
+            : "text-[#9898b8] hover:text-[#a0a0c0] hover:bg-[#141420]"
           } ${className}`}
         title={importedProject ? `Project: ${importedProject.name}` : "Import local folder for AI context"}
       >

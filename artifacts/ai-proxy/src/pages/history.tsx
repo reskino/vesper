@@ -155,9 +155,9 @@ export function History() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-border rounded-2xl">
-              <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+              <MessageSquare className="h-8 w-8 text-muted-foreground/70 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">No history found</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Start a conversation to see it here</p>
+              <p className="text-xs text-muted-foreground/85 mt-1">Start a conversation to see it here</p>
             </div>
           ) : (
             filtered.map((conv, i) => {

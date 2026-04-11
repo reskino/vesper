@@ -489,7 +489,7 @@ export function TerminalPanel() {
             {tilde(cwdRef.current)}
           </span>
           {cwdInfo && (
-            <span className="hidden lg:inline text-[10px] text-muted-foreground/60 font-mono shrink-0">
+            <span className="hidden lg:inline text-[10px] text-muted-foreground/85 font-mono shrink-0">
               {cwdInfo.python} · Node {cwdInfo.node}
             </span>
           )}

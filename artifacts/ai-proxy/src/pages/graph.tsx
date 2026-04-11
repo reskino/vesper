@@ -316,7 +316,7 @@ export default function GraphPage() {
             Code Graph
           </span>
           {analysis && (
-            <span className="text-[10px] text-[#4a4a6a] ml-1">
+            <span className="text-[10px] text-[#8888b0] ml-1">
               {analysis.nodeCount} nodes · {analysis.edgeCount} edges · {analysis.communities.length} clusters
             </span>
           )}
@@ -324,7 +324,7 @@ export default function GraphPage() {
         <div className="flex items-center gap-1">
           <button
             onClick={fetchJobs}
-            className="p-1 text-[#4a4a6a] hover:text-foreground rounded transition-colors"
+            className="p-1 text-[#8888b0] hover:text-foreground rounded transition-colors"
             title="Refresh"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -360,7 +360,7 @@ export default function GraphPage() {
               className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border transition-colors
                 ${activeJob?.id === j.id
                   ? "border-primary/60 bg-primary/10 text-primary"
-                  : "border-[#1a1a2e] text-[#5a5a7a] hover:text-foreground"}`}
+                  : "border-[#1a1a2e] text-[#8888aa] hover:text-foreground"}`}
             >
               {j.running
                 ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -370,7 +370,7 @@ export default function GraphPage() {
               <span className="font-mono">{j.id}</span>
               <button
                 onClick={e => { e.stopPropagation(); deleteJob(j.id); }}
-                className="ml-0.5 text-[#3a3a5a] hover:text-red-400"
+                className="ml-0.5 text-[#7878a8] hover:text-red-400"
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -383,8 +383,8 @@ export default function GraphPage() {
       {runningJob && (
         <div className="shrink-0 px-3 py-2 border-b border-[#0e0e1a] bg-[#08081a]">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-[#6060a0] capitalize">{runningJob.phase}</span>
-            <span className="text-[10px] text-[#4a4a6a]">
+            <span className="text-[10px] text-[#9090c0] capitalize">{runningJob.phase}</span>
+            <span className="text-[10px] text-[#8888b0]">
               {runningJob.total > 0 ? `${runningJob.progress}/${runningJob.total}` : ""}
             </span>
           </div>
@@ -416,14 +416,14 @@ export default function GraphPage() {
         {/* Graph canvas */}
         <div className="flex-1 relative overflow-hidden">
           {!graphData && !runningJob && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#3a3a5a]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#7878a8]">
               <Network className="h-12 w-12 opacity-20" />
               <p className="text-sm">Enter a directory and click Analyze</p>
               <p className="text-xs opacity-60">Supports 20 languages via tree-sitter AST</p>
             </div>
           )}
           {runningJob && !graphData && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#4a4a6a]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#8888b0]">
               <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
               <p className="text-xs">Building knowledge graph…</p>
             </div>
@@ -433,7 +433,7 @@ export default function GraphPage() {
               {/* Search overlay */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
                 <div className="flex items-center gap-1 bg-[#0c0c18]/90 border border-[#1a1a2e] rounded px-2 py-1">
-                  <Search className="h-3 w-3 text-[#4a4a6a]" />
+                  <Search className="h-3 w-3 text-[#8888b0]" />
                   <input
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -461,7 +461,7 @@ export default function GraphPage() {
               <div className="px-3 py-2 border-b border-[#0e0e1a]">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-semibold text-[#8080a8] uppercase tracking-wide">Selected</span>
-                  <button onClick={() => setSelectedNode(null)} className="text-[#3a3a5a] hover:text-foreground">
+                  <button onClick={() => setSelectedNode(null)} className="text-[#7878a8] hover:text-foreground">
                     <X className="h-3 w-3" />
                   </button>
                 </div>
@@ -473,7 +473,7 @@ export default function GraphPage() {
                   {selectedNode.label ?? selectedNode.id}
                 </span>
                 {selectedNode.type && (
-                  <div className="mt-0.5 text-[10px] text-[#5a5a7a]">{selectedNode.type}</div>
+                  <div className="mt-0.5 text-[10px] text-[#8888aa]">{selectedNode.type}</div>
                 )}
                 {selectedNode.source_file && (
                   <button
@@ -498,7 +498,7 @@ export default function GraphPage() {
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-[#0c0c18] rounded p-1.5 text-center">
                     <div className="text-xs font-bold text-foreground">{value}</div>
-                    <div className="text-[9px] text-[#4a4a6a]">{label}</div>
+                    <div className="text-[9px] text-[#8888b0]">{label}</div>
                   </div>
                 ))}
               </div>
@@ -508,7 +508,7 @@ export default function GraphPage() {
             <div className="px-3 py-2 border-b border-[#0e0e1a]">
               <button
                 onClick={() => setShowAnalysis(v => !v)}
-                className="flex items-center justify-between w-full text-[10px] font-semibold text-[#6060a0] uppercase tracking-wide mb-1"
+                className="flex items-center justify-between w-full text-[10px] font-semibold text-[#9090c0] uppercase tracking-wide mb-1"
               >
                 <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> Clusters</span>
                 {showAnalysis ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -521,8 +521,8 @@ export default function GraphPage() {
                         className="h-2 w-2 rounded-full shrink-0"
                         style={{ background: communityColor(c.id) }}
                       />
-                      <span className="text-[10px] text-[#6060a0] flex-1">Cluster {c.id}</span>
-                      <span className="text-[10px] text-[#4a4a6a]">{c.size}</span>
+                      <span className="text-[10px] text-[#9090c0] flex-1">Cluster {c.id}</span>
+                      <span className="text-[10px] text-[#8888b0]">{c.size}</span>
                     </div>
                   ))}
                 </div>
@@ -532,14 +532,14 @@ export default function GraphPage() {
             {/* God nodes (hubs) */}
             {analysis.godNodes.length > 0 && (
               <div className="px-3 py-2 border-b border-[#0e0e1a]">
-                <div className="text-[10px] font-semibold text-[#6060a0] uppercase tracking-wide mb-1 flex items-center gap-1">
+                <div className="text-[10px] font-semibold text-[#9090c0] uppercase tracking-wide mb-1 flex items-center gap-1">
                   <GitBranch className="h-3 w-3" /> Hub Nodes
                 </div>
                 <div className="space-y-0.5">
                   {analysis.godNodes.slice(0, 6).map(n => (
                     <div key={n.id} className="text-[10px] text-[#7070a0] font-mono truncate">
                       {n.id.slice(0, 24)}
-                      <span className="text-[#3a3a5a] ml-1">×{n.degree}</span>
+                      <span className="text-[#7878a8] ml-1">×{n.degree}</span>
                     </div>
                   ))}
                 </div>
@@ -551,7 +551,7 @@ export default function GraphPage() {
               <div className="px-3 py-2">
                 <button
                   onClick={() => setShowQuestions(v => !v)}
-                  className="flex items-center justify-between w-full text-[10px] font-semibold text-[#6060a0] uppercase tracking-wide mb-1"
+                  className="flex items-center justify-between w-full text-[10px] font-semibold text-[#9090c0] uppercase tracking-wide mb-1"
                 >
                   <span className="flex items-center gap-1"><Lightbulb className="h-3 w-3" /> Questions</span>
                   {showQuestions ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -559,7 +559,7 @@ export default function GraphPage() {
                 {showQuestions && (
                   <div className="space-y-1.5">
                     {analysis.suggestedQuestions.map((q, i) => (
-                      <div key={i} className="text-[10px] text-[#5a5a80] leading-tight">
+                      <div key={i} className="text-[10px] text-[#8888b0] leading-tight">
                         · {q}
                       </div>
                     ))}

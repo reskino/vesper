@@ -227,7 +227,7 @@ function ModelSelectorDropdown({
 
             {/* Divider */}
             <div className="mx-2 border-t border-border my-1" />
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Direct — no fallback</p>
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/85">Direct — no fallback</p>
 
             {ais.map(ai => {
               const isSel = !isAuto && selectedAi === ai.id;
@@ -706,7 +706,7 @@ export function Home() {
                 )}
               </div>
 
-              <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">Enter to send · Shift+Enter for newline</span>
+              <span className="text-[10px] text-muted-foreground/80 hidden sm:inline">Enter to send · Shift+Enter for newline</span>
             </div>
           </div>
         </div>

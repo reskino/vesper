@@ -31,7 +31,7 @@ export function ActivityBar() {
                   className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150
                     ${active
                       ? "text-foreground bg-[#1a1a28]"
-                      : "text-[#3a3a5c] hover:text-[#a0a0c0] hover:bg-[#111118]"
+                      : "text-[#7878a8] hover:text-[#a0a0c0] hover:bg-[#111118]"
                     }`}
                   aria-label={label}
                 >
@@ -58,7 +58,7 @@ export function ActivityBar() {
             <Link href="/sessions">
               <button
                 className="w-8 h-8 flex items-center justify-center rounded-lg
-                  text-[#3a3a5c] hover:text-[#a0a0c0] hover:bg-[#111118] transition-all duration-150"
+                  text-[#7878a8] hover:text-[#a0a0c0] hover:bg-[#111118] transition-all duration-150"
                 aria-label="Settings"
               >
                 <Settings style={{ width: 15, height: 15 }} />

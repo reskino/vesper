@@ -595,7 +595,7 @@ export default function Editor() {
         <div className="flex items-center gap-1 px-3 py-1 border-b border-border/50 bg-card/50 shrink-0">
           {activeTab.split("/").map((part, i, arr) => (
             <span key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/40" />}
+              {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/70" />}
               <span className={`text-[11px] ${i === arr.length - 1 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                 {part}
               </span>
@@ -608,7 +608,7 @@ export default function Editor() {
       <div className="flex-1 overflow-auto bg-[#1a1b26]" style={{ fontSize: `${fontSize}px` }}>
         {fileLoading && activeTab && !tabStates[activeTab]?.loaded ? (
           <div className="h-full flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/70" />
           </div>
         ) : activeTab && tabStates[activeTab]?.loaded ? (
           <CodeMirror
@@ -645,9 +645,9 @@ export default function Editor() {
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center gap-4 px-6">
             <div className="rounded-2xl bg-white/5 p-6 border border-white/10">
-              <TerminalSquare className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+              <TerminalSquare className="h-10 w-10 text-muted-foreground/85 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Select a file to start editing</p>
-              <p className="text-[11px] text-muted-foreground/50 mt-1">Ctrl+F to search · Ctrl+S to save</p>
+              <p className="text-[11px] text-muted-foreground/80 mt-1">Ctrl+F to search · Ctrl+S to save</p>
             </div>
           </div>
         )}
@@ -676,7 +676,7 @@ export default function Editor() {
               {getLanguageLabel(activeTab)}
             </span>
           )}
-          <span className="text-[10px] text-muted-foreground/40">UTF-8</span>
+          <span className="text-[10px] text-muted-foreground/70">UTF-8</span>
         </div>
       </div>
     </div>
@@ -742,8 +742,8 @@ export default function Editor() {
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0" ref={aiScrollRef}>
         {aiMessages.length === 0 ? (
           <div className="text-center py-6 space-y-2">
-            <MessageSquare className="h-8 w-8 text-muted-foreground/20 mx-auto" />
-            <p className="text-xs text-muted-foreground/50">
+            <MessageSquare className="h-8 w-8 text-muted-foreground/55 mx-auto" />
+            <p className="text-xs text-muted-foreground/80">
               Open a file and ask the AI to explain, fix, refactor, or improve your code.
             </p>
           </div>
@@ -827,7 +827,7 @@ export default function Editor() {
               : <ChevronUp className="h-3.5 w-3.5" />}
           </button>
         </div>
-        <p className="text-[10px] text-muted-foreground/40 mt-1 text-right">Enter to send · Shift+Enter for newline</p>
+        <p className="text-[10px] text-muted-foreground/70 mt-1 text-right">Enter to send · Shift+Enter for newline</p>
       </div>
     </div>
   );

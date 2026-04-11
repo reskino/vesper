@@ -111,11 +111,11 @@ function StepCard({ step, isActive = false, defaultOpen = false }: {
             Step {step.step} — {isActive ? "Reasoning…" : "Thought"}
           </span>
           {step.elapsedMs ? (
-            <span className="text-[10px] text-[#52526e] mr-1">{(step.elapsedMs / 1000).toFixed(1)}s</span>
+            <span className="text-[10px] text-[#9898b8] mr-1">{(step.elapsedMs / 1000).toFixed(1)}s</span>
           ) : null}
           {open
-            ? <ChevronDown className="h-3.5 w-3.5 text-[#52526e]" />
-            : <ChevronRight className="h-3.5 w-3.5 text-[#52526e]" />}
+            ? <ChevronDown className="h-3.5 w-3.5 text-[#9898b8]" />
+            : <ChevronRight className="h-3.5 w-3.5 text-[#9898b8]" />}
         </button>
         {open && step.content && (
           <div className="px-3 py-2.5 border-t border-[#1a1a24] text-sm bg-[#0a0a0c]">
@@ -128,7 +128,7 @@ function StepCard({ step, isActive = false, defaultOpen = false }: {
 
   if (step.type === "tool") {
     const toolName = step.tool || "tool";
-    const colorClass = TOOL_COLORS[toolName] || "bg-[#141420] text-[#52526e] border-[#1a1a24]";
+    const colorClass = TOOL_COLORS[toolName] || "bg-[#141420] text-[#9898b8] border-[#1a1a24]";
     const icon = TOOL_ICONS[toolName] || <Terminal className="h-3 w-3" />;
     const summary = getStepSummary(step);
     const screenshot = step.result ? parseScreenshot(step.result) : null;
@@ -148,7 +148,7 @@ function StepCard({ step, isActive = false, defaultOpen = false }: {
             {icon}
             <span className="hidden sm:inline">{toolName}</span>
           </span>
-          {summary && <code className="text-[11px] text-[#52526e] font-mono truncate flex-1">{summary}</code>}
+          {summary && <code className="text-[11px] text-[#9898b8] font-mono truncate flex-1">{summary}</code>}
           <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             {isRunning && (
               <span className="flex gap-0.5">
@@ -163,24 +163,24 @@ function StepCard({ step, isActive = false, defaultOpen = false }: {
               </span>
             )}
             {step.elapsedMs ? (
-              <span className="text-[10px] text-[#52526e]">{(step.elapsedMs / 1000).toFixed(1)}s</span>
+              <span className="text-[10px] text-[#9898b8]">{(step.elapsedMs / 1000).toFixed(1)}s</span>
             ) : null}
           </div>
           {open
-            ? <ChevronDown className="h-3 w-3 text-[#52526e] shrink-0" />
-            : <ChevronRight className="h-3 w-3 text-[#52526e] shrink-0" />}
+            ? <ChevronDown className="h-3 w-3 text-[#9898b8] shrink-0" />
+            : <ChevronRight className="h-3 w-3 text-[#9898b8] shrink-0" />}
         </button>
         {open && (
           <div className="border-t border-[#1a1a24]">
             {step.params && Object.keys(step.params).length > 0 && (
               <div className="px-3 py-2 bg-[#0a0a0c] border-b border-[#1a1a24]">
-                <p className="text-[9px] text-[#52526e] font-bold uppercase tracking-widest mb-1">Params</p>
+                <p className="text-[9px] text-[#9898b8] font-bold uppercase tracking-widest mb-1">Params</p>
                 <pre className="text-[11px] font-mono whitespace-pre-wrap break-all text-[#a0a0c0]">{JSON.stringify(step.params, null, 2)}</pre>
               </div>
             )}
             {step.result && (
               <div className="px-3 py-2 space-y-2 bg-[#0a0a0c]">
-                <p className="text-[9px] text-[#52526e] font-bold uppercase tracking-widest">Result</p>
+                <p className="text-[9px] text-[#9898b8] font-bold uppercase tracking-widest">Result</p>
                 {screenshot && (
                   <img src={screenshot} alt="Screenshot" className="w-full rounded-lg border border-[#1a1a24] object-cover max-h-60" />
                 )}
@@ -190,7 +190,7 @@ function StepCard({ step, isActive = false, defaultOpen = false }: {
               </div>
             )}
             {isRunning && (
-              <div className="px-3 py-2.5 text-xs text-[#52526e] flex items-center gap-2 bg-[#0a0a0c]">
+              <div className="px-3 py-2.5 text-xs text-[#9898b8] flex items-center gap-2 bg-[#0a0a0c]">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Executing…
               </div>
@@ -273,7 +273,7 @@ function derivePhase(isRunning: boolean, result: { success: boolean } | null, cu
 }
 
 const PHASE_CONFIG: Record<AgentPhase, { label: string; color: string; bg: string; border: string; pulse: boolean }> = {
-  idle:       { label: "Idle",       color: "text-[#52526e]", bg: "bg-[#141420]",        border: "border-[#1a1a24]",    pulse: false },
+  idle:       { label: "Idle",       color: "text-[#9898b8]", bg: "bg-[#141420]",        border: "border-[#1a1a24]",    pulse: false },
   starting:   { label: "Starting…",  color: "text-amber-400", bg: "bg-amber-500/10",      border: "border-amber-500/20", pulse: true  },
   planning:   { label: "Planning",   color: "text-violet-400",bg: "bg-violet-500/10",     border: "border-violet-500/20",pulse: true  },
   coding:     { label: "Coding",     color: "text-blue-400",  bg: "bg-blue-500/10",       border: "border-blue-500/20",  pulse: true  },
@@ -297,7 +297,7 @@ function MaxStepsControl({ value, onChange, disabled }: { value: number; onChang
           className={`flex-1 text-[11px] py-1 rounded-lg font-bold transition-all
             ${value === n
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-[#52526e] hover:text-foreground disabled:cursor-not-allowed"
+              : "text-[#9898b8] hover:text-foreground disabled:cursor-not-allowed"
             }`}
         >
           {n}
@@ -463,7 +463,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
           flex items-center justify-center shrink-0">
           <Bot className="h-3.5 w-3.5 text-primary" />
         </div>
-        <span className="text-[11px] font-bold text-[#3a3a5c] uppercase tracking-widest flex-1 min-w-0 truncate">
+        <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest flex-1 min-w-0 truncate">
           Agent
         </span>
 
@@ -479,7 +479,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
         {currentTask && (
           <button
             onClick={() => setShowSetup(v => !v)}
-            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#141420] transition-colors shrink-0"
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#141420] transition-colors shrink-0"
             title={showSetup ? "Show execution log" : "Show setup"}
           >
             {showSetup
@@ -496,7 +496,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
 
             {/* Task textarea */}
             <div className="space-y-1.5">
-              <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Task</label>
+              <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">Task</label>
               <div className={`relative rounded-2xl border transition-colors
                 ${task.trim() ? "border-primary/30 bg-[#0d0d12]" : "border-[#1a1a24] bg-[#0d0d12]"}
                 focus-within:border-primary/50`}>
@@ -508,12 +508,12 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                   placeholder={"Describe what to build…\n\ne.g. Create a Flask API with /hello and /time endpoints"}
                   disabled={isRunning}
                   className={`w-full bg-transparent resize-none text-[13px] text-foreground
-                    placeholder:text-[#3a3a5c] focus:outline-none leading-relaxed
+                    placeholder:text-[#7878a8] focus:outline-none leading-relaxed
                     px-3 pt-3 pb-2 ${mobile ? "min-h-40" : "min-h-28"}`}
                   style={{ minHeight: mobile ? 160 : 112 }}
                 />
                 <div className="flex items-center justify-between px-3 pb-2">
-                  <span className="text-[9px] text-[#2a2a44]">Ctrl+Enter to run</span>
+                  <span className="text-[9px] text-[#7878a8]">Ctrl+Enter to run</span>
                   {task.trim() && (
                     <span className="text-[9px] text-primary font-medium">{task.length} chars</span>
                   )}
@@ -523,14 +523,14 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
 
             {/* Example chips */}
             <div className="space-y-1.5">
-              <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Examples</label>
+              <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">Examples</label>
               <div className="space-y-1">
                 {EXAMPLE_TASKS.map((ex, i) => (
                   <button
                     key={i}
                     onClick={() => { setTask(ex); textareaRef.current?.focus(); }}
                     disabled={isRunning}
-                    className="w-full text-left text-[11px] text-[#52526e] hover:text-foreground px-2.5 py-1.5
+                    className="w-full text-left text-[11px] text-[#9898b8] hover:text-foreground px-2.5 py-1.5
                       rounded-xl border border-[#1a1a24] hover:border-primary/20 hover:bg-[#111118]
                       transition-all leading-snug disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -542,7 +542,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
 
             {/* Agent Persona selector */}
             <div className="space-y-1.5">
-              <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Agent Persona</label>
+              <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">Agent Persona</label>
               <div className="grid grid-cols-2 gap-1.5">
                 {([
                   {
@@ -551,7 +551,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     icon: <Zap className="h-3.5 w-3.5" />,
                     desc: "Plan, code, test & ship",
                     active: "border-primary/40 bg-primary/10 text-primary",
-                    inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                   {
                     id: "orchestrator",
@@ -559,7 +559,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     icon: <Sparkles className="h-3.5 w-3.5" />,
                     desc: "8 specialist roles",
                     active: "border-violet-500/40 bg-violet-500/10 text-violet-400",
-                    inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                   {
                     id: "scholar",
@@ -567,7 +567,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     icon: <FileText className="h-3.5 w-3.5" />,
                     desc: "Research & papers",
                     active: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-                    inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                   {
                     id: "search_master",
@@ -575,7 +575,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     icon: <Globe className="h-3.5 w-3.5" />,
                     desc: "Deep web research",
                     active: "border-sky-500/40 bg-sky-500/10 text-sky-400",
-                    inactive: "border-[#1a1a24] text-[#52526e] hover:border-[#2a2a3c] hover:text-foreground",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                 ] as const).map(({ id, label, icon, desc, active, inactive }) => (
                   <button
@@ -599,7 +599,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
             {/* Provider + Model card */}
             <div className="rounded-2xl border border-[#1a1a24] bg-[#0d0d12] overflow-hidden">
               <div className="px-3 pt-2.5 pb-1">
-                <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">AI Provider</label>
+                <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">AI Provider</label>
               </div>
               <div className="px-2 pb-2">
                 <Select value={selectedAi} onValueChange={setSelectedAi} disabled={isRunning}>
@@ -613,7 +613,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                             <span className="flex items-center gap-2">
                               {ai.name}
                               {!ai.hasSession && ai.id !== "pollinations" && (
-                                <span className="text-[10px] text-[#52526e]">(no session)</span>
+                                <span className="text-[10px] text-[#9898b8]">(no session)</span>
                               )}
                             </span>
                           </SelectItem>
@@ -633,7 +633,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                 <>
                   <div className="h-px bg-[#131318] mx-3" />
                   <div className="px-3 pt-2 pb-0.5">
-                    <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Model</label>
+                    <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">Model</label>
                   </div>
                   <div className="px-2 pb-2">
                     <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isRunning}>
@@ -663,7 +663,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
             {/* Max Steps */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest">Max Steps</label>
+                <label className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest">Max Steps</label>
                 <span className="text-[10px] font-bold text-primary">{maxSteps} steps</span>
               </div>
               <MaxStepsControl value={maxSteps} onChange={setMaxSteps} disabled={isRunning} />
@@ -728,24 +728,24 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                   onClick={() => setShowTips(v => !v)}
                   className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#111118] transition-colors"
                 >
-                  <AlertCircle className="h-3 w-3 text-[#52526e] shrink-0" />
-                  <span className="text-[10px] font-bold text-[#3a3a5c] uppercase tracking-widest flex-1">Tips</span>
+                  <AlertCircle className="h-3 w-3 text-[#9898b8] shrink-0" />
+                  <span className="text-[10px] font-bold text-[#7878a8] uppercase tracking-widest flex-1">Tips</span>
                   {showTips
-                    ? <ChevronUp className="h-3.5 w-3.5 text-[#52526e]" />
-                    : <ChevronDown className="h-3.5 w-3.5 text-[#52526e]" />}
+                    ? <ChevronUp className="h-3.5 w-3.5 text-[#9898b8]" />
+                    : <ChevronDown className="h-3.5 w-3.5 text-[#9898b8]" />}
                 </button>
                 {showTips && (
                   <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-[#1a1a24] bg-[#0a0a0c]">
-                    <p className="text-[10px] text-[#52526e] leading-relaxed">
+                    <p className="text-[10px] text-[#9898b8] leading-relaxed">
                       • <strong className="text-[#a0a0c0]">Best models:</strong> Claude Sonnet, GPT-4o, Gemini 2.5 Flash, DeepSeek V3
                     </p>
-                    <p className="text-[10px] text-[#52526e] leading-relaxed">
+                    <p className="text-[10px] text-[#9898b8] leading-relaxed">
                       • <strong className="text-[#a0a0c0]">Pollinations (GPT-4o)</strong> is always free — great starting point
                     </p>
-                    <p className="text-[10px] text-[#52526e] leading-relaxed">
+                    <p className="text-[10px] text-[#9898b8] leading-relaxed">
                       • The agent auto-installs Python packages before running code
                     </p>
-                    <p className="text-[10px] text-[#52526e] leading-relaxed">
+                    <p className="text-[10px] text-[#9898b8] leading-relaxed">
                       • <strong className="text-[#a0a0c0]">Ctrl+Enter</strong> to run from the task input
                     </p>
                   </div>
@@ -772,17 +772,17 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
               ) : result ? (
                 <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
               ) : (
-                <Bot className="h-3.5 w-3.5 text-[#52526e] shrink-0" />
+                <Bot className="h-3.5 w-3.5 text-[#9898b8] shrink-0" />
               )}
               <span className="text-[12px] font-medium text-foreground truncate flex-1">{currentTask}</span>
               <div className="flex items-center gap-1.5 shrink-0">
                 {steps.length > 0 && (
-                  <span className="text-[9px] font-bold text-[#52526e] bg-[#141420] border border-[#1a1a24] px-1.5 py-0.5 rounded-md">
+                  <span className="text-[9px] font-bold text-[#9898b8] bg-[#141420] border border-[#1a1a24] px-1.5 py-0.5 rounded-md">
                     {steps.length} steps
                   </span>
                 )}
                 {result?.totalElapsedMs && (
-                  <span className="text-[9px] font-bold text-[#52526e] bg-[#141420] border border-[#1a1a24] px-1.5 py-0.5 rounded-md">
+                  <span className="text-[9px] font-bold text-[#9898b8] bg-[#141420] border border-[#1a1a24] px-1.5 py-0.5 rounded-md">
                     {fmt(result.totalElapsedMs)}
                   </span>
                 )}
@@ -822,7 +822,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     </div>
                   </div>
                   <h3 className="text-sm font-bold mb-1">Ready to Build</h3>
-                  <p className="text-[11px] text-[#52526e] leading-relaxed">
+                  <p className="text-[11px] text-[#9898b8] leading-relaxed">
                     Describe your task and hit Run Agent. The AI will plan, code, test, and fix until it's done.
                   </p>
                 </div>
@@ -882,7 +882,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
               {result && (
                 <button
                   onClick={handleReset}
-                  className="w-full flex items-center justify-center gap-2 text-xs text-[#52526e]
+                  className="w-full flex items-center justify-center gap-2 text-xs text-[#9898b8]
                     hover:text-foreground px-4 py-2.5 rounded-xl border border-[#1a1a24]
                     hover:border-primary/20 hover:bg-[#111118] transition-all"
                 >

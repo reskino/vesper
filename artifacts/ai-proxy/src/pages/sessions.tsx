@@ -62,12 +62,12 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
             </div>
             <div>
               <p className="font-semibold text-foreground text-sm">Connect {ai.name}</p>
-              <p className="text-[10px] text-[#52526e]">{ai.url}</p>
+              <p className="text-[10px] text-[#9898b8]">{ai.url}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center rounded-xl text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-colors"
+            className="h-8 w-8 flex items-center justify-center rounded-xl text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors"
           >
             <X size={15} />
           </button>
@@ -78,22 +78,22 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
           <div className="px-5 pt-4">
             <div className="flex items-center justify-between p-3 rounded-xl bg-[#111118] border border-[#1e1e2e]">
               <div className="flex items-center gap-3">
-                <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${useApiKey ? "bg-primary/15 text-primary" : "bg-[#1a1a24] text-[#52526e]"}`}>
+                <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${useApiKey ? "bg-primary/15 text-primary" : "bg-[#1a1a24] text-[#9898b8]"}`}>
                   {useApiKey ? <Key size={13} /> : <Cookie size={13} />}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     {useApiKey ? "API Key" : "Browser Cookies"}
                   </p>
-                  <p className="text-[10px] text-[#52526e]">
+                  <p className="text-[10px] text-[#9898b8]">
                     {useApiKey ? "Recommended — bypasses Cloudflare" : "May not work from cloud servers"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-[#52526e]">
-                <span className={useApiKey ? "text-[#52526e]" : "text-foreground"}>Cookies</span>
+              <div className="flex items-center gap-2 text-xs text-[#9898b8]">
+                <span className={useApiKey ? "text-[#9898b8]" : "text-foreground"}>Cookies</span>
                 <Switch checked={useApiKey} onCheckedChange={setUseApiKey} />
-                <span className={useApiKey ? "text-foreground font-medium" : "text-[#52526e]"}>API Key</span>
+                <span className={useApiKey ? "text-foreground font-medium" : "text-[#9898b8]"}>API Key</span>
               </div>
             </div>
           </div>
@@ -161,12 +161,12 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
           <div>
             <p className="font-medium text-emerald-400">API key saved &amp; persisted</p>
-            <p className="text-[#52526e] mt-0.5">Your key is stored and will survive server restarts. Enter a new key below only if you want to replace it.</p>
+            <p className="text-[#9898b8] mt-0.5">Your key is stored and will survive server restarts. Enter a new key below only if you want to replace it.</p>
           </div>
         </div>
       )}
 
-      <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 text-xs text-[#52526e] space-y-1">
+      <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 text-xs text-[#9898b8] space-y-1">
         <p className="font-medium text-foreground flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5 text-primary" />
           {ai.authMode === "api_key_or_cookies" ? "Why API key?" : "API Key"}
@@ -207,7 +207,7 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
         {!alreadySaved && (
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#52526e] hover:text-foreground hover:bg-[#111118] text-sm transition-colors"
+            className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#9898b8] hover:text-foreground hover:bg-[#111118] text-sm transition-colors"
           >
             Cancel
           </button>
@@ -282,7 +282,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
                   ? "bg-primary text-primary-foreground"
                   : step > s
                   ? "bg-emerald-500 text-white"
-                  : "bg-[#1a1a24] text-[#52526e]"
+                  : "bg-[#1a1a24] text-[#9898b8]"
               }`}
             >
               {step > s ? <CheckCircle2 size={13} /> : s}
@@ -298,7 +298,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
         <div className="space-y-3">
           <div>
             <p className="text-foreground font-medium mb-1">Log in to {ai.name}</p>
-            <p className="text-[#52526e] text-sm">Open the site in your browser and sign in.</p>
+            <p className="text-[#9898b8] text-sm">Open the site in your browser and sign in.</p>
           </div>
           <a
             href={ai.url}
@@ -309,7 +309,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
             <ExternalLink size={15} />
             Open {ai.name}
           </a>
-          <div className="bg-[#111118] rounded-xl p-3 text-xs text-[#52526e] space-y-1">
+          <div className="bg-[#111118] rounded-xl p-3 text-xs text-[#9898b8] space-y-1">
             <p>• Log in with your {ai.name} account</p>
             <p>• Complete any 2FA or verification steps</p>
             <p>• Once on the main chat page, come back here</p>
@@ -327,7 +327,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
         <div className="space-y-3">
           <div>
             <p className="text-foreground font-medium mb-1">Export your cookies</p>
-            <p className="text-[#52526e] text-sm">Use Cookie Editor to copy your session cookies as JSON.</p>
+            <p className="text-[#9898b8] text-sm">Use Cookie Editor to copy your session cookies as JSON.</p>
           </div>
           <div className="bg-[#111118] rounded-xl p-3 space-y-2">
             <p className="text-xs font-medium text-foreground">1. Install Cookie Editor (free, open-source)</p>
@@ -344,14 +344,14 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
               </a>
             </div>
           </div>
-          <div className="bg-[#111118] rounded-xl p-3 space-y-1.5 text-xs text-[#52526e]">
+          <div className="bg-[#111118] rounded-xl p-3 space-y-1.5 text-xs text-[#9898b8]">
             <p className="text-foreground font-medium">2. Export your cookies</p>
             <p>• Go to <strong className="text-foreground">{ai.url}</strong></p>
             <p>• Click <strong className="text-foreground">Cookie Editor</strong> in your toolbar</p>
             <p>• Click <strong className="text-foreground">Export → Export as JSON</strong></p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#52526e] hover:text-foreground hover:bg-[#111118] text-sm transition-colors">
+            <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#9898b8] hover:text-foreground hover:bg-[#111118] text-sm transition-colors">
               ← Back
             </button>
             <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium transition-colors">
@@ -365,7 +365,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
         <div className="space-y-3">
           <div>
             <p className="text-foreground font-medium mb-1">Paste & save</p>
-            <p className="text-[#52526e] text-sm">Paste the JSON you copied from Cookie Editor.</p>
+            <p className="text-[#9898b8] text-sm">Paste the JSON you copied from Cookie Editor.</p>
           </div>
           <textarea
             value={jsonText}
@@ -380,7 +380,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
             </div>
           )}
           <div className="flex gap-2">
-            <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#52526e] hover:text-foreground hover:bg-[#111118] text-sm transition-colors">
+            <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl border border-[#1e1e2e] text-[#9898b8] hover:text-foreground hover:bg-[#111118] text-sm transition-colors">
               ← Back
             </button>
             <button
@@ -435,7 +435,7 @@ function AiRow({
 
       {/* Avatar letter */}
       <span className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0
-        ${ready ? "bg-emerald-500/15 text-emerald-400" : "bg-[#141420] text-[#52526e]"}`}>
+        ${ready ? "bg-emerald-500/15 text-emerald-400" : "bg-[#141420] text-[#9898b8]"}`}>
         {ai.name[0]}
       </span>
 
@@ -455,9 +455,9 @@ function AiRow({
         {hasSession && !isNoAuth && (
           <>
             {isVerifying ? (
-              <Loader2 className="h-3 w-3 text-[#52526e] animate-spin" />
+              <Loader2 className="h-3 w-3 text-[#9898b8] animate-spin" />
             ) : username ? (
-              <span className="text-[10px] text-[#52526e] truncate max-w-[52px]" title={username}>
+              <span className="text-[10px] text-[#9898b8] truncate max-w-[52px]" title={username}>
                 {username}
               </span>
             ) : null}
@@ -467,7 +467,7 @@ function AiRow({
             <button
               onClick={e => { e.stopPropagation(); onDelete(); }}
               disabled={isDeleting}
-              className="h-5 w-5 flex items-center justify-center rounded-md text-[#3a3a5c] hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+              className="h-5 w-5 flex items-center justify-center rounded-md text-[#7878a8] hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
               title="Remove session"
             >
               {isDeleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
@@ -479,7 +479,7 @@ function AiRow({
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition-colors
             ${ai.authMode === "api_key" || ai.authMode === "api_key_or_cookies"
               ? "text-blue-400 bg-blue-500/10 border-blue-500/20 group-hover:bg-blue-500/15"
-              : "text-[#52526e] bg-[#141420] border-[#1a1a24] group-hover:bg-[#1a1a24]"
+              : "text-[#9898b8] bg-[#141420] border-[#1a1a24] group-hover:bg-[#1a1a24]"
             }`}>
             {ai.authMode === "cookies" ? "Cookies" : "API Key"}
           </span>
@@ -488,7 +488,7 @@ function AiRow({
         {hasSession && !isNoAuth && (
           <button
             onClick={e => { e.stopPropagation(); onConnect(); }}
-            className="h-5 w-5 flex items-center justify-center rounded-md text-[#3a3a5c] hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+            className="h-5 w-5 flex items-center justify-center rounded-md text-[#7878a8] hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
             title="Re-connect"
           >
             <RotateCcw size={10} />
@@ -507,8 +507,8 @@ function SectionHeader({ icon: Icon, label, color, count }: {
   return (
     <div className="flex items-center gap-1.5 px-4 pt-3 pb-1.5">
       <Icon className={`h-2.5 w-2.5 ${color}`} />
-      <span className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest flex-1">{label}</span>
-      <span className="text-[9px] font-bold text-[#2a2a44] bg-[#111118] px-1.5 py-0.5 rounded-md">{count}</span>
+      <span className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest flex-1">{label}</span>
+      <span className="text-[9px] font-bold text-[#7878a8] bg-[#111118] px-1.5 py-0.5 rounded-md">{count}</span>
     </div>
   );
 }
@@ -629,7 +629,7 @@ export function SessionsPage() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[#131318] bg-[#080809]">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="text-[11px] font-bold text-[#3a3a5c] uppercase tracking-widest">Providers</span>
+          <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Providers</span>
         </div>
 
         {/* Ready chip */}
@@ -648,7 +648,7 @@ export function SessionsPage() {
           className={`h-6 w-6 flex items-center justify-center rounded-lg transition-colors shrink-0
             ${showValidation
               ? "text-primary bg-primary/15 hover:bg-primary/25"
-              : "text-[#3a3a5c] hover:text-foreground hover:bg-[#141420]"
+              : "text-[#7878a8] hover:text-foreground hover:bg-[#141420]"
             }`}
           title="Validate model IDs against live provider APIs"
         >
@@ -657,7 +657,7 @@ export function SessionsPage() {
 
         <button
           onClick={refreshAll}
-          className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#141420] transition-colors shrink-0"
+          className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#141420] transition-colors shrink-0"
           title="Refresh"
         >
           <RefreshCw size={12} />
@@ -672,13 +672,13 @@ export function SessionsPage() {
               <FlaskConical className="h-3 w-3 text-primary" />
               <span className="text-[10px] font-bold text-[#a0a0c0] uppercase tracking-widest">Model Validation</span>
             </div>
-            <button onClick={() => setShowValidation(false)} className="text-[#3a3a5c] hover:text-foreground transition-colors">
+            <button onClick={() => setShowValidation(false)} className="text-[#7878a8] hover:text-foreground transition-colors">
               <X size={11} />
             </button>
           </div>
 
           {validating && (
-            <div className="flex items-center gap-2 px-3 py-3 text-xs text-[#52526e]">
+            <div className="flex items-center gap-2 px-3 py-3 text-xs text-[#9898b8]">
               <Loader2 size={12} className="animate-spin text-primary" />
               Checking live provider APIs…
             </div>
@@ -714,7 +714,7 @@ export function SessionsPage() {
                         <p className="text-red-400/80">{result.error}</p>
                       )}
                       {isSkipped && (
-                        <p className="text-[#52526e]">No models endpoint available</p>
+                        <p className="text-[#9898b8]">No models endpoint available</p>
                       )}
                       {!isError && !isSkipped && (
                         <div className="space-y-0.5">
@@ -733,7 +733,7 @@ export function SessionsPage() {
                                 <span key={id} className="font-mono text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1 py-0.5 rounded">{id}</span>
                               ))}
                               {result.live_only.length > 5 && (
-                                <span className="text-[#52526e]">+{result.live_only.length - 5} more</span>
+                                <span className="text-[#9898b8]">+{result.live_only.length - 5} more</span>
                               )}
                             </div>
                           )}
@@ -747,7 +747,7 @@ export function SessionsPage() {
                 })}
 
                 {Object.values(validateResults).every((r: any) => r.status === "no_key") && (
-                  <p className="text-center text-[#52526e] py-3 text-[10px]">
+                  <p className="text-center text-[#9898b8] py-3 text-[10px]">
                     No API keys stored yet — add a key to validate its models
                   </p>
                 )}
@@ -761,15 +761,15 @@ export function SessionsPage() {
       <div className="shrink-0 px-3 py-2 border-b border-[#131318]">
         <div className="flex items-center gap-2 bg-[#111118] border border-[#1a1a24] rounded-xl px-2.5 py-1.5
           focus-within:border-primary/30 transition-colors">
-          <Search className="h-3 w-3 text-[#3a3a5c] shrink-0" />
+          <Search className="h-3 w-3 text-[#7878a8] shrink-0" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search providers…"
-            className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-[#3a3a5c] focus:outline-none"
+            className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-[#7878a8] focus:outline-none"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="text-[#3a3a5c] hover:text-foreground transition-colors">
+            <button onClick={() => setSearch("")} className="text-[#7878a8] hover:text-foreground transition-colors">
               <X size={11} />
             </button>
           )}
@@ -783,8 +783,8 @@ export function SessionsPage() {
           {/* Empty search result */}
           {sortedFiltered.length === 0 && (
             <div className="flex flex-col items-center justify-center py-10 text-center px-4">
-              <ShieldAlert className="h-6 w-6 text-[#3a3a5c] mb-2" />
-              <p className="text-sm text-[#52526e]">No providers match "{search}"</p>
+              <ShieldAlert className="h-6 w-6 text-[#7878a8] mb-2" />
+              <p className="text-sm text-[#9898b8]">No providers match "{search}"</p>
             </div>
           )}
 
@@ -807,15 +807,15 @@ export function SessionsPage() {
           {/* Cookies */}
           {cookieAis.length > 0 && (
             <div className="mt-1">
-              <SectionHeader icon={Cookie} label="Cookies" color="text-[#52526e]" count={cookieAis.length} />
+              <SectionHeader icon={Cookie} label="Cookies" color="text-[#9898b8]" count={cookieAis.length} />
               {cookieAis.map(ai => <AiRow key={ai.id} {...makeRowProps(ai)} />)}
             </div>
           )}
 
           {/* Tips footer */}
           <div className="mx-3 mt-4 p-3 rounded-xl bg-[#111118] border border-[#1a1a24]">
-            <p className="text-[9px] font-bold text-[#3a3a5c] uppercase tracking-widest mb-2">Quick start</p>
-            <div className="space-y-1.5 text-[10px] text-[#52526e] leading-relaxed">
+            <p className="text-[9px] font-bold text-[#7878a8] uppercase tracking-widest mb-2">Quick start</p>
+            <div className="space-y-1.5 text-[10px] text-[#9898b8] leading-relaxed">
               <div className="flex items-start gap-1.5">
                 <ShieldCheck className="h-2.5 w-2.5 text-emerald-400 mt-0.5 shrink-0" />
                 <span><strong className="text-[#a0a0c0]">Pollinations</strong> — always free, no setup</span>

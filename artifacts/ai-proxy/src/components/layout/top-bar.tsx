@@ -81,7 +81,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-1.5 text-[#52526e] text-xs">
+      <div className="flex items-center gap-1.5 text-[#9898b8] text-xs">
         <Loader2 className="h-3 w-3 animate-spin" />
         {!compact && "Loading…"}
       </div>
@@ -106,7 +106,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
             <span className={`h-1.5 w-1.5 rounded-full ${anyConnected ? "bg-emerald-400" : "bg-primary animate-pulse"}`} />
             <span>Auto</span>
             {!compact && (
-              <span className="hidden sm:inline text-[11px] text-[#52526e] font-normal">
+              <span className="hidden sm:inline text-[11px] text-[#9898b8] font-normal">
                 · {anyConnected ? `${ais.filter((a: any) => a.hasSession).length} AI${ais.filter((a: any) => a.hasSession).length !== 1 ? "s" : ""} ready` : "Best available"}
               </span>
             )}
@@ -116,11 +116,11 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
             {currentAi && <StatusDot hasSession={currentAi.hasSession} />}
             <span className="truncate max-w-[100px]">{currentAi?.name ?? "Select AI"}</span>
             {!compact && activeModel && (
-              <span className="hidden sm:inline text-[11px] text-[#52526e] font-normal">· {activeModel.name}</span>
+              <span className="hidden sm:inline text-[11px] text-[#9898b8] font-normal">· {activeModel.name}</span>
             )}
           </>
         )}
-        <ChevronDown className="h-3 w-3 text-[#52526e] shrink-0" />
+        <ChevronDown className="h-3 w-3 text-[#9898b8] shrink-0" />
       </button>
 
       {open && (
@@ -141,17 +141,17 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
               onClick={() => { setSelectedAi("__auto__"); setOpen(false); }}
             >
               <div className="flex items-center gap-2.5 flex-1 px-3 py-2.5">
-                <Zap className={`h-3.5 w-3.5 ${isAuto ? "text-primary" : "text-[#52526e]"}`} />
+                <Zap className={`h-3.5 w-3.5 ${isAuto ? "text-primary" : "text-[#9898b8]"}`} />
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium ${isAuto ? "text-primary" : "text-foreground"}`}>Auto</p>
-                  <p className="text-[10px] text-[#52526e]">Best available AI with fallback</p>
+                  <p className="text-[10px] text-[#9898b8]">Best available AI with fallback</p>
                 </div>
                 {isAuto && <Check className="h-3.5 w-3.5 text-primary" />}
               </div>
             </div>
 
             <div className="mx-2 border-t border-[#1a1a24] my-1" />
-            <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#3a3a5c]">Direct Providers</p>
+            <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#7878a8]">Direct Providers</p>
 
             {ais.map((ai: any) => {
               const isSel = !isAuto && selectedAi === ai.id;
@@ -169,7 +169,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium ${isSel ? "text-primary" : "text-foreground"}`}>{ai.name}</p>
                         {mdl ? (
-                          <p className="text-[10px] text-[#52526e] font-mono truncate">{mdl.name}</p>
+                          <p className="text-[10px] text-[#9898b8] font-mono truncate">{mdl.name}</p>
                         ) : (
                           <p className="text-[10px] text-amber-400/80">Not connected</p>
                         )}
@@ -178,7 +178,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
                     </button>
                     {ai.models?.length > 1 && (
                       <button
-                        className="pr-3 py-3 min-h-[44px] text-[#52526e] hover:text-foreground transition-colors"
+                        className="pr-3 py-3 min-h-[44px] text-[#9898b8] hover:text-foreground transition-colors"
                         onClick={e => { e.stopPropagation(); setExpandedAi(isExp ? null : ai.id); }}
                         aria-label={`${isExp ? "Collapse" : "Expand"} ${ai.name} models`}
                       >
@@ -196,7 +196,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
                             min-h-[40px] ${
                             ai.currentModel === m.id
                               ? "bg-primary/10 text-primary font-medium"
-                              : "text-[#52526e] hover:bg-[#141420] hover:text-foreground"
+                              : "text-[#9898b8] hover:bg-[#141420] hover:text-foreground"
                           }`}
                           onClick={e => { e.stopPropagation(); handleSetModel(ai.id, m.id); setOpen(false); setExpandedAi(null); }}
                         >
@@ -229,7 +229,7 @@ function IconBtn({ icon: Icon, label, active, onClick, shortcut }: {
           className={`h-8 w-8 flex items-center justify-center rounded-lg transition-all
             ${active
               ? "bg-primary/20 text-primary border border-primary/30"
-              : "text-[#52526e] hover:text-[#a0a0c0] hover:bg-[#141420]"
+              : "text-[#9898b8] hover:text-[#a0a0c0] hover:bg-[#141420]"
             }`}
           aria-label={label}
         >
@@ -237,7 +237,7 @@ function IconBtn({ icon: Icon, label, active, onClick, shortcut }: {
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="text-xs">
-        {label}{shortcut && <span className="ml-1 text-[#52526e]">{shortcut}</span>}
+        {label}{shortcut && <span className="ml-1 text-[#9898b8]">{shortcut}</span>}
       </TooltipContent>
     </Tooltip>
   );
@@ -287,7 +287,7 @@ export function TopBar() {
             <button
               onClick={triggerNewChat}
               className="h-8 w-8 flex items-center justify-center rounded-lg
-                text-[#52526e] hover:text-foreground hover:bg-[#141420]
+                text-[#9898b8] hover:text-foreground hover:bg-[#141420]
                 transition-all duration-150"
               aria-label="New Chat"
             >
@@ -295,7 +295,7 @@ export function TopBar() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
-            New Chat <kbd className="ml-1 text-[10px] text-[#52526e] bg-[#0a0a0c] border border-[#1a1a24] rounded px-1">⌃N</kbd>
+            New Chat <kbd className="ml-1 text-[10px] text-[#9898b8] bg-[#0a0a0c] border border-[#1a1a24] rounded px-1">⌃N</kbd>
           </TooltipContent>
         </Tooltip>
 
@@ -312,7 +312,7 @@ export function TopBar() {
             <button
               onClick={() => setShowMobileSettings(true)}
               className="h-8 w-8 flex items-center justify-center rounded-lg md:hidden
-                text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
+                text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
               aria-label="Providers & Settings"
             >
               <Settings className="h-[15px] w-[15px]" />
@@ -325,7 +325,7 @@ export function TopBar() {
             <Link href="/sessions">
               <button
                 className="h-8 w-8 items-center justify-center rounded-lg hidden md:flex
-                  text-[#52526e] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
+                  text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-all duration-150"
                 aria-label="Sessions & Settings"
               >
                 <Settings className="h-[15px] w-[15px]" />

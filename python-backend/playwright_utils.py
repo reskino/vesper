@@ -175,10 +175,18 @@ def send_prompt(ai_id: str, prompt: str) -> Tuple[bool, str, str]:
     model = resolve_model(ai_id, get_active_model(ai_id))
     logger.info("Sending prompt to %s (model=%s, %d chars)", ai_id, model, len(prompt))
 
-    # Pollinations — no auth needed, send directly
-    if ai_id == "pollinations":
-        from web_session_client import send_pollinations
-        return send_pollinations(model, prompt)
+    # No-auth providers — send directly without any credentials
+    if config.get("auth_mode") == "none":
+        if ai_id == "pollinations":
+            from web_session_client import send_pollinations
+            return send_pollinations(model, prompt)
+        # Generic handler for other auth_mode=none OpenAI-compat providers (e.g. LLM7)
+        if config.get("api_format") == "openai_compat":
+            from web_session_client import _send_openai_compat_api
+            base = config.get("api_base", config["url"].rstrip("/") + "/v1")
+            endpoint = base.rstrip("/") + "/chat/completions"
+            return _send_openai_compat_api(endpoint, "", model, prompt, config["name"])
+        return False, "", f"{ai_id} has no auth but no supported api_format."
 
     # Check for API key first (bypasses Cloudflare for ChatGPT/Claude/Groq)
     api_key = load_api_key(ai_id)

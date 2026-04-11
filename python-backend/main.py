@@ -596,85 +596,67 @@ def get_api_key(ai_id: str) -> str:
 
 @app.route("/api/sessions/verify/<ai_id>", methods=["GET"])
 def verify_session(ai_id):
-    """Verify saved cookies are valid and return the logged-in username."""
+    """Verify saved credentials are valid and return the logged-in username."""
     if ai_id not in AI_CONFIGS:
         return jsonify({"success": False, "error": f"Unknown AI: {ai_id}"}), 400
 
     from playwright_utils import session_exists, get_session_path
 
-    # Pollinations — always active, no auth needed
-    if ai_id == "pollinations":
+    cfg = AI_CONFIGS[ai_id]
+
+    # No-auth providers (Pollinations, LLM7, etc.) — always active, no key needed
+    if cfg.get("auth_mode") == "none":
         return jsonify({"success": True, "username": "No login required", "authMode": "none"})
 
-    # Check API key for any provider that supports api_key auth mode
-    cfg = AI_CONFIGS[ai_id]
+    # ── API key providers ─────────────────────────────────────────────────────
+    # Map of ai_id → (models_url, headers_fn) for live ping verification.
+    # Use a Bearer token pattern for all OpenAI-compat providers.
+    def _bearer(key): return {"Authorization": f"Bearer {key}"}
+    _VERIFY_PINGS = {
+        "chatgpt":     lambda k: ("https://api.openai.com/v1/models",                        _bearer(k)),
+        "claude":      lambda k: ("https://api.anthropic.com/v1/models",                     {"x-api-key": k, "anthropic-version": "2023-06-01"}),
+        "groq":        lambda k: ("https://api.groq.com/openai/v1/models",                   {**_bearer(k), "User-Agent": "Vesper"}),
+        "gemini":      lambda k: (f"https://generativelanguage.googleapis.com/v1beta/models?key={k}", {}),
+        "openrouter":  lambda k: ("https://openrouter.ai/api/v1/models",                     _bearer(k)),
+        "mistral":     lambda k: ("https://api.mistral.ai/v1/models",                        _bearer(k)),
+        "cerebras":    lambda k: ("https://api.cerebras.ai/v1/models",                       _bearer(k)),
+        "deepseek":    lambda k: ("https://api.deepseek.com/v1/models",                      _bearer(k)),
+        "cohere":      lambda k: ("https://api.cohere.com/v1/models",                        _bearer(k)),
+        "nvidia":      lambda k: ("https://integrate.api.nvidia.com/v1/models",              _bearer(k)),
+        "github":      lambda k: ("https://models.inference.ai.azure.com/v1/models",         _bearer(k)),
+        "huggingface": lambda k: ("https://router.huggingface.co/v1/models",                 _bearer(k)),
+        "kluster":     lambda k: ("https://api.kluster.ai/v1/models",                        _bearer(k)),
+        "siliconflow": lambda k: ("https://api.siliconflow.cn/v1/models",                    _bearer(k)),
+        "zhipu":       lambda k: ("https://open.bigmodel.cn/api/paas/v4/models",             _bearer(k)),
+    }
+
     if cfg.get("auth_mode") in ("api_key", "api_key_or_cookies"):
         api_key = get_api_key(ai_id)
         if api_key:
             import urllib.request, urllib.error as _ue
-            try:
-                # Provider-specific lightweight verification
-                if ai_id == "chatgpt":
-                    req = urllib.request.Request(
-                        "https://api.openai.com/v1/models",
-                        headers={"Authorization": f"Bearer {api_key}"},
-                    )
+            ping_fn = _VERIFY_PINGS.get(ai_id)
+            if ping_fn:
+                try:
+                    url, headers = ping_fn(api_key)
+                    req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
-                elif ai_id == "claude":
-                    req = urllib.request.Request(
-                        "https://api.anthropic.com/v1/models",
-                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        _json.loads(r.read())
-                elif ai_id == "groq":
-                    req = urllib.request.Request(
-                        "https://api.groq.com/openai/v1/models",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        },
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        _json.loads(r.read())
-                elif ai_id == "gemini":
-                    req = urllib.request.Request(
-                        f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        _json.loads(r.read())
-                elif ai_id == "openrouter":
-                    req = urllib.request.Request(
-                        "https://openrouter.ai/api/v1/models",
-                        headers={"Authorization": f"Bearer {api_key}"},
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        _json.loads(r.read())
-                elif ai_id == "mistral":
-                    req = urllib.request.Request(
-                        "https://api.mistral.ai/v1/models",
-                        headers={"Authorization": f"Bearer {api_key}"},
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        _json.loads(r.read())
-                else:
-                    # For providers without a lightweight ping endpoint,
-                    # just confirm the key exists and is non-empty
-                    pass
-                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
-            except _ue.HTTPError as exc:
-                if exc.code in (401, 403):
-                    return jsonify({"success": False, "error": "API key invalid or expired"})
-                # Non-auth errors (e.g. 429) still mean the key exists
-                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
-            except Exception as exc:
-                # Network issues etc — key is stored, treat as valid
-                logger.warning("Verify API key for %s failed with non-auth error: %s", ai_id, exc)
-                return jsonify({"success": True, "username": "API Key", "authMode": "api_key"})
+                    return jsonify({"success": True, "username": "API Key ✓", "authMode": "api_key"})
+                except _ue.HTTPError as exc:
+                    if exc.code in (401, 403):
+                        return jsonify({"success": False, "error": "API key invalid or expired"})
+                    # 429, 5xx, etc. → key exists, provider just busy
+                    return jsonify({"success": True, "username": "API Key ✓", "authMode": "api_key"})
+                except Exception as exc:
+                    # Network timeout or other transient error — key IS stored, treat as valid
+                    logger.warning("Verify ping for %s failed (non-auth): %s", ai_id, exc)
+                    return jsonify({"success": True, "username": "API Key ✓", "authMode": "api_key"})
+            else:
+                # Provider has no ping URL — key existence is sufficient
+                return jsonify({"success": True, "username": "API Key ✓", "authMode": "api_key"})
 
     if not session_exists(ai_id):
-        return jsonify({"success": False, "error": "No session file found"})
+        return jsonify({"success": False, "error": "No API key or session saved"})
 
     session_path = get_session_path(ai_id)
 

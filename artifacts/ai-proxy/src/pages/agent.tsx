@@ -232,6 +232,13 @@ const AGENT_CAPABLE_AI_IDS = new Set([
   "nvidia", "github", "huggingface", "kluster", "siliconflow", "zhipu",
 ]);
 
+// Priority order for Auto Best — most capable connected AI wins
+const AGENT_AUTO_PRIORITY = [
+  "claude", "chatgpt", "gemini", "groq", "openrouter", "deepseek",
+  "mistral", "cerebras", "kluster", "huggingface", "nvidia", "github",
+  "together", "siliconflow", "zhipu", "pollinations", "llm7",
+];
+
 const BEST_AGENT_MODELS: Record<string, string[]> = {
   // ── Always-free ─────────────────────────────────────────────────────────
   pollinations: ["openai-large", "openai", "claude-sonnet-3-7"],
@@ -312,8 +319,8 @@ function MaxStepsControl({ value, onChange, disabled }: { value: number; onChang
 export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   const [task, setTask]               = useState("");
   const [agentType, setAgentType]     = useState<"builder" | "orchestrator" | "scholar" | "search_master">("builder");
-  const [selectedAi, setSelectedAi]   = useState("pollinations");
-  const [selectedModel, setSelectedModel] = useState("openai");
+  const [selectedAi, setSelectedAi]   = useState("__auto__");
+  const [selectedModel, setSelectedModel] = useState("");
   const [maxSteps, setMaxSteps]       = useState(20);
   const [isRunning, setIsRunning]     = useState(false);
   const [isStopping, setIsStopping]   = useState(false);
@@ -343,19 +350,33 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   });
 
   const availableAis = (ais?.ais ?? []).filter((a: any) => AGENT_CAPABLE_AI_IDS.has(a.id));
-  const currentAiInfo = availableAis.find((a: any) => a.id === selectedAi);
+
+  const isAutoMode = selectedAi === "__auto__";
+
+  // Resolve the actual AI to use — when in auto mode, pick the best connected one
+  const resolvedAi = useMemo(() => {
+    if (!isAutoMode) return selectedAi;
+    for (const id of AGENT_AUTO_PRIORITY) {
+      const ai = availableAis.find((a: any) => a.id === id);
+      if (ai && (ai.hasSession || id === "pollinations" || id === "llm7")) return id;
+    }
+    return availableAis[0]?.id ?? "pollinations";
+  }, [isAutoMode, selectedAi, availableAis]);
+
+  const resolvedAiInfo = availableAis.find((a: any) => a.id === resolvedAi);
+  const currentAiInfo = resolvedAiInfo;
   const currentAiModels = (currentAiInfo?.models ?? []) as Array<{ id: string; name: string; tier?: string }>;
   const agentModels = currentAiModels.filter(m => {
-    const best = BEST_AGENT_MODELS[selectedAi];
+    const best = BEST_AGENT_MODELS[resolvedAi];
     return !best || best.includes(m.id) || m.id === "__auto__";
   });
   const modelsToShow = agentModels.length > 1 ? agentModels : currentAiModels;
 
   useEffect(() => {
-    const ai = availableAis.find((a: any) => a.id === selectedAi);
+    const ai = availableAis.find((a: any) => a.id === resolvedAi);
     if (!ai) return;
     const models = (ai.models ?? []) as Array<{ id: string }>;
-    const best = BEST_AGENT_MODELS[selectedAi];
+    const best = BEST_AGENT_MODELS[resolvedAi];
     if (best) {
       const match = models.find(m => best.includes(m.id));
       if (match) { setSelectedModel(match.id); return; }
@@ -363,7 +384,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
     const auto = models.find(m => m.id === "__auto__");
     if (auto) setSelectedModel("__auto__");
     else if (models[0]) setSelectedModel(models[0].id);
-  }, [selectedAi]);
+  }, [resolvedAi]);
 
   useEffect(() => {
     if (!statusData) return;
@@ -409,7 +430,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
     setIsRunning(true);
     setShowSetup(false);
     runAgentMutation.mutate(
-      { data: { aiId: selectedAi, modelId: selectedModel || null, task: task.trim(), maxSteps, agentType } },
+      { data: { aiId: resolvedAi, modelId: selectedModel || null, task: task.trim(), maxSteps, agentType } },
       {
         onError: err => {
           setIsRunning(false);
@@ -418,7 +439,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
         }
       }
     );
-  }, [task, agentType, selectedAi, selectedModel, maxSteps, runAgentMutation, toast]);
+  }, [task, agentType, resolvedAi, selectedModel, maxSteps, runAgentMutation, toast]);
 
   const handleStop = async () => {
     if (!isRunning || isStopping) return;
@@ -607,12 +628,20 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* Auto Best option — always first */}
+                    <SelectItem value="__auto__">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                        Auto Best
+                        <span className="text-[10px] font-normal text-[#9898b8]">picks best connected AI</span>
+                      </span>
+                    </SelectItem>
                     {availableAis.length > 0
                       ? availableAis.map((ai: any) => (
                           <SelectItem key={ai.id} value={ai.id}>
                             <span className="flex items-center gap-2">
                               {ai.name}
-                              {!ai.hasSession && ai.id !== "pollinations" && (
+                              {!ai.hasSession && ai.id !== "pollinations" && ai.id !== "llm7" && (
                                 <span className="text-[10px] text-[#9898b8]">(no session)</span>
                               )}
                             </span>
@@ -628,6 +657,16 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Auto Best resolved-AI badge */}
+              {isAutoMode && resolvedAiInfo && (
+                <div className="px-3 pb-2.5 flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                  <span className="text-[10px] text-[#9898b8]">
+                    Using <span className="text-foreground font-semibold">{resolvedAiInfo.name}</span>
+                  </span>
+                </div>
+              )}
 
               {modelsToShow.length > 0 && (
                 <>

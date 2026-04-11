@@ -6,7 +6,7 @@ import {
   ChevronRight, Terminal, FileEdit, Globe, Package, Wifi,
   Loader2, CheckCircle2, XCircle, Clock, Zap, Users,
   AlertCircle, Camera, List, FileDiff, FolderPlus, FileCode,
-  WifiOff, Server, Search, FileText,
+  WifiOff, Server, Search, FileText, Bot,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,6 +29,7 @@ interface AgentStatus {
   label?: string;
   role?: string;
   ai_id?: string;
+  model_id?: string;
   running: boolean;
   task?: string;
   current_action?: string | null;
@@ -42,6 +43,35 @@ interface AgentStatus {
   files_written?: string[];
   created_at?: number;
 }
+
+// ─── Provider + model config (mirrors agent.tsx) ───────────────────────────
+
+const AGENT_CAPABLE_AI_IDS = new Set([
+  "pollinations", "llm7",
+  "gemini", "groq", "openrouter",
+  "chatgpt", "claude", "mistral", "cerebras", "deepseek", "together",
+  "nvidia", "github", "huggingface", "kluster", "siliconflow", "zhipu",
+]);
+
+const BEST_AGENT_MODELS: Record<string, string[]> = {
+  pollinations: ["openai-large", "openai", "claude-sonnet-3-7"],
+  llm7:         ["codestral-latest", "gpt-oss-20b", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"],
+  chatgpt:      ["gpt-4o", "gpt-4.1", "o3"],
+  claude:       ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"],
+  gemini:       ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-pro"],
+  groq:         ["llama-3.3-70b-versatile", "qwen-qwq-32b", "deepseek-r1-distill-llama-70b"],
+  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free", "deepseek/deepseek-r1:free"],
+  mistral:      ["codestral-latest", "mistral-large-latest"],
+  cerebras:     ["llama-3.3-70b", "qwen-3-32b"],
+  deepseek:     ["deepseek-chat", "deepseek-reasoner"],
+  together:     ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
+  nvidia:       ["meta/llama-3.3-70b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1", "meta/llama-4-maverick-17b-128e-instruct"],
+  github:       ["gpt-4o", "DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
+  huggingface:  ["moonshotai/Kimi-K2.5", "deepseek-ai/DeepSeek-R1", "openai/gpt-oss-120b"],
+  kluster:      ["deepseek-ai/DeepSeek-R1-0528", "klusterai/Meta-Llama-3.3-70B-Instruct-Turbo", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"],
+  siliconflow:  ["Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"],
+  zhipu:        ["glm-4", "glm-4-airx", "glm-4-air"],
+};
 
 // ─── Tool visuals ─────────────────────────────────────────────────────────────
 
@@ -85,6 +115,11 @@ const ROLE_COLORS: Record<string, string> = {
   orchestrator: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  builder: "Builder", scholar: "Scholar",
+  search_master: "Search Master", orchestrator: "Orchestrator",
+};
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
 async function fetchAgents(): Promise<AgentStatus[]> {
@@ -94,7 +129,8 @@ async function fetchAgents(): Promise<AgentStatus[]> {
 }
 
 async function spawnAgent(payload: {
-  aiId: string; task: string; role: string; maxSteps: number; label?: string;
+  aiId: string; task: string; role: string; maxSteps: number;
+  modelId?: string; label?: string;
 }): Promise<{ agentId: string }> {
   const r = await fetch(`${BASE_URL}api/agents/spawn`, {
     method: "POST",
@@ -137,6 +173,10 @@ function AgentCard({ agent, onStop, onClear }: {
     ? `${(agent.result.totalElapsedMs / 1000).toFixed(1)}s`
     : null;
 
+  const shortModel = agent.model_id
+    ? agent.model_id.split("/").pop()?.split(":")[0] ?? agent.model_id
+    : null;
+
   return (
     <div className={`rounded-xl border ${statusColor} overflow-hidden mb-3`}>
       {/* Header */}
@@ -153,16 +193,23 @@ function AgentCard({ agent, onStop, onClear }: {
         )}
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-mono text-muted-foreground">#{agent.agent_id}</span>
             {agent.role && (
               <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border
                 ${ROLE_COLORS[agent.role] || "bg-slate-500/10 text-slate-400 border-slate-500/20"}`}>
-                {agent.role}
+                {ROLE_LABELS[agent.role] || agent.role}
               </span>
             )}
             {agent.ai_id && (
-              <span className="text-[9px] text-muted-foreground/60 font-mono">{agent.ai_id}</span>
+              <span className="text-[9px] text-muted-foreground/60 font-mono bg-white/5 px-1 rounded">
+                {agent.ai_id}
+              </span>
+            )}
+            {shortModel && (
+              <span className="text-[9px] text-primary/50 font-mono truncate max-w-[120px]" title={agent.model_id}>
+                {shortModel}
+              </span>
             )}
             {elapsed && (
               <span className="text-[9px] text-muted-foreground/50 ml-auto">{elapsed}</span>
@@ -173,7 +220,7 @@ function AgentCard({ agent, onStop, onClear }: {
           </p>
           {agent.running && agent.current_action && (
             <p className="text-[10px] text-primary/70 mt-0.5 truncate animate-pulse">
-              {agent.current_action}
+              ↳ {agent.current_action}
             </p>
           )}
         </div>
@@ -289,23 +336,58 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
   const { toast } = useToast();
   const [task, setTask] = useState("");
   const [aiId, setAiId] = useState(selectedAi === "__auto__" ? "" : selectedAi);
+  const [modelId, setModelId] = useState("__auto__");
   const [role, setRole] = useState("builder");
   const [maxSteps, setMaxSteps] = useState(20);
   const [spawning, setSpawning] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const ais = aisData?.ais?.filter(a => a.hasSession) || [];
+  const allAis = (aisData?.ais ?? []).filter((a: any) => AGENT_CAPABLE_AI_IDS.has(a.id));
+  const selectedAiInfo = allAis.find((a: any) => a.id === aiId);
+  const allModels = (selectedAiInfo?.models ?? []) as Array<{ id: string; name: string; tier?: string }>;
+  const bestIds = aiId ? (BEST_AGENT_MODELS[aiId] ?? []) : [];
+  const filteredModels = allModels.filter(m => bestIds.includes(m.id) || m.id === "__auto__");
+  const modelsToShow = filteredModels.length > 1 ? filteredModels : allModels;
+
+  useEffect(() => {
+    if (!aiId) return;
+    const best = BEST_AGENT_MODELS[aiId];
+    const models = (allAis.find((a: any) => a.id === aiId)?.models ?? []) as Array<{ id: string }>;
+    if (best) {
+      const match = models.find(m => best.includes(m.id));
+      if (match) { setModelId(match.id); return; }
+    }
+    const auto = models.find(m => m.id === "__auto__");
+    setModelId(auto ? "__auto__" : models[0]?.id ?? "__auto__");
+  }, [aiId]);
+
+  const tierColor = (tier?: string) => {
+    if (tier === "pro") return "text-amber-400";
+    if (tier === "plus") return "text-blue-400";
+    return "text-emerald-400";
+  };
+  const tierLabel = (tier?: string) => {
+    if (tier === "pro") return "Max";
+    if (tier === "plus") return "Plus";
+    return "Free";
+  };
 
   const handleSpawn = async () => {
     if (!task.trim() || !aiId) return;
     setSpawning(true);
     try {
-      await spawnAgent({ aiId, task: task.trim(), role, maxSteps });
+      await spawnAgent({
+        aiId,
+        task: task.trim(),
+        role,
+        maxSteps,
+        modelId: modelId !== "__auto__" ? modelId : undefined,
+      });
       setTask("");
       setOpen(false);
       onSpawned();
       toast({ description: "Agent spawned successfully" });
-    } catch (e) {
+    } catch {
       toast({ description: "Failed to spawn agent", variant: "destructive" });
     } finally {
       setSpawning(false);
@@ -328,6 +410,7 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
 
       {open && (
         <div className="border-t border-border/50 p-3 space-y-3">
+          {/* Task */}
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
               Task
@@ -343,24 +426,57 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* Provider */}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+              AI Provider
+            </label>
+            <select
+              value={aiId}
+              onChange={e => setAiId(e.target.value)}
+              className="w-full bg-black/20 border border-border/60 rounded-lg px-2 py-1.5
+                text-xs text-foreground focus:outline-none focus:border-primary/50 transition-colors"
+            >
+              <option value="">Select provider…</option>
+              {allAis.map((ai: any) => (
+                <option key={ai.id} value={ai.id}>
+                  {ai.name}{!ai.hasSession ? " (no key)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Model */}
+          {aiId && modelsToShow.length > 0 && (
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-                AI Provider
+                Model
               </label>
               <select
-                value={aiId}
-                onChange={e => setAiId(e.target.value)}
+                value={modelId}
+                onChange={e => setModelId(e.target.value)}
                 className="w-full bg-black/20 border border-border/60 rounded-lg px-2 py-1.5
                   text-xs text-foreground focus:outline-none focus:border-primary/50 transition-colors"
               >
-                <option value="">Select AI…</option>
-                {ais.map(ai => (
-                  <option key={ai.id} value={ai.id}>{ai.name}</option>
+                {modelsToShow.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.tier ? ` · ${tierLabel(m.tier)}` : ""}
+                  </option>
                 ))}
               </select>
+              {modelId && modelId !== "__auto__" && (() => {
+                const m = modelsToShow.find(m => m.id === modelId);
+                return m?.tier ? (
+                  <p className={`text-[9px] mt-0.5 ${tierColor(m.tier)}`}>
+                    {tierLabel(m.tier)} tier model selected
+                  </p>
+                ) : null;
+              })()}
             </div>
+          )}
 
+          {/* Role + Max Steps */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
                 Role
@@ -377,17 +493,16 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
                 <option value="orchestrator">Orchestrator</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-              Max Steps: {maxSteps}
-            </label>
-            <input
-              type="range" min={5} max={50} value={maxSteps}
-              onChange={e => setMaxSteps(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                Max Steps: {maxSteps}
+              </label>
+              <input
+                type="range" min={5} max={50} step={5} value={maxSteps}
+                onChange={e => setMaxSteps(Number(e.target.value))}
+                className="w-full mt-2 accent-primary"
+              />
+            </div>
           </div>
 
           <button
@@ -398,7 +513,7 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
               disabled:opacity-40 disabled:cursor-not-allowed
               hover:opacity-90 active:scale-[0.98] transition-all"
           >
-            {spawning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            {spawning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
             {spawning ? "Spawning…" : "Spawn Agent"}
           </button>
         </div>
@@ -503,7 +618,7 @@ export default function AgentsPage() {
         {!loading && agents.length === 0 && (
           <div className="text-center py-10">
             <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground/50">No agents yet</p>
+            <p className="text-xs text-muted-foreground/50">No agents running</p>
             <p className="text-[10px] text-muted-foreground/30 mt-1">
               Spawn multiple agents to run tasks in parallel
             </p>

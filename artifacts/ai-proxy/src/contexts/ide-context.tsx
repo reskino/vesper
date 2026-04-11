@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { ImportedFileNode } from "@/lib/folder-import";
 
-export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "agents" | "help" | null;
+export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "agents" | "graph" | "help" | null;
 export type MobileTab     = "chat" | "editor" | "files" | "terminal" | "agent";
 export type MobileSettingsTab = "sessions" | "history" | "help";
 

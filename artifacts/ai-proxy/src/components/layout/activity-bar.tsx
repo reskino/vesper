@@ -1,4 +1,4 @@
-import { Files, Bot, Key, History, HelpCircle, Settings, Users } from "lucide-react";
+import { Files, Bot, Key, History, HelpCircle, Settings, Users, Network } from "lucide-react";
 import { useIDE, type SidebarPanel } from "@/contexts/ide-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "wouter";
@@ -7,6 +7,7 @@ const PANELS: { id: Exclude<SidebarPanel, null>; icon: React.ElementType; label:
   { id: "files",    icon: Files,      label: "Explorer" },
   { id: "agent",    icon: Bot,        label: "Agent" },
   { id: "agents",   icon: Users,      label: "Swarm" },
+  { id: "graph",    icon: Network,    label: "Code Graph" },
   { id: "sessions", icon: Key,        label: "Sessions" },
   { id: "history",  icon: History,    label: "History" },
   { id: "help",     icon: HelpCircle, label: "Help" },

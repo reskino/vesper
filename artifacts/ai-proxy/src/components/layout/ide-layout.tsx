@@ -21,6 +21,7 @@ import { Sessions } from "@/pages/sessions";
 import { History } from "@/pages/history";
 import AgentPage from "@/pages/agent";
 import AgentsPage from "@/pages/agents";
+import GraphPage from "@/pages/graph";
 import HelpPage from "@/pages/help";
 import { VesperLogo } from "@/components/vesper-logo";
 import {
@@ -334,6 +335,7 @@ function SidebarContent({ activeFilePath }: { activeFilePath: string | null }) {
     case "files":    return <FileExplorer activePath={activeFilePath} />;
     case "agent":    return <div className="h-full overflow-y-auto bg-surface"><AgentPage /></div>;
     case "agents":   return <div className="h-full overflow-y-auto bg-surface"><AgentsPage /></div>;
+    case "graph":    return <div className="h-full flex flex-col bg-[#07070e]"><GraphPage /></div>;
     case "sessions": return <div className="h-full overflow-y-auto bg-surface"><Sessions /></div>;
     case "history":  return <div className="h-full overflow-y-auto bg-surface"><History /></div>;
     case "help":     return <div className="h-full overflow-y-auto bg-surface"><HelpPage /></div>;

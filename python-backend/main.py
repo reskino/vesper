@@ -1049,6 +1049,45 @@ def scraper_search():
 # ─── Multi-Agent Swarm ────────────────────────────────────────────────────────
 
 import multi_agent as _multi_agent
+import graph_analyzer as _graph
+
+# ─── Graph analysis (Graphify) ────────────────────────────────────────────────
+
+@app.route("/api/graph/jobs", methods=["GET"])
+def graph_jobs():
+    return jsonify({"jobs": _graph.list_jobs()})
+
+
+@app.route("/api/graph/analyze", methods=["POST"])
+def graph_analyze():
+    data = request.get_json() or {}
+    root = (data.get("root") or "").strip()
+    if not root:
+        root = "/home/runner/workspace"
+    ext_filter = data.get("extensions") or None
+    job_id = _graph.spawn(root=root, extensions_filter=ext_filter)
+    return jsonify({"jobId": job_id, "job": _graph.get_job(job_id)})
+
+
+@app.route("/api/graph/jobs/<job_id>", methods=["GET"])
+def graph_job_status(job_id):
+    job = _graph.get_job(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(job)
+
+
+@app.route("/api/graph/jobs/<job_id>", methods=["DELETE"])
+def graph_job_clear(job_id):
+    ok = _graph.clear_job(job_id)
+    return jsonify({"cleared": ok})
+
+
+@app.route("/api/graph/clear-done", methods=["POST"])
+def graph_clear_done():
+    count = _graph.clear_done_jobs()
+    return jsonify({"cleared": count})
+
 
 @app.route("/api/agents", methods=["GET"])
 def agents_list():

@@ -117,6 +117,13 @@ router.post("/agent/stop", proxyToPython);
 router.get("/agent/status", proxyToPython);
 router.get("/agent/screenshot/:filename", proxyToPython);
 
+// Graph analysis (Graphify) routes
+router.get("/graph/jobs", proxyToPython);
+router.post("/graph/analyze", proxyToPython);
+router.get("/graph/jobs/:jobId", proxyToPython);
+router.delete("/graph/jobs/:jobId", proxyToPython);
+router.post("/graph/clear-done", proxyToPython);
+
 // Multi-agent swarm routes
 router.get("/agents", proxyToPython);
 router.post("/agents/spawn", proxyToPython);

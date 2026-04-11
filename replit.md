@@ -40,6 +40,28 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Node: express, vite, react, react-query, codemirror, monaco-editor, xterm, tailwindcss
 - System: playwright-driver (chromium), postgresql, openssl
 
+## Graphify Code Graph (integrated)
+Interactive knowledge-graph view of any directory in the workspace.
+
+**How it works:**
+- Uses the `graphifyy` PyPI package (`pip install graphifyy`) which wraps tree-sitter AST for 20 languages
+- Pipeline: `collect_files(root)` → `extract(paths)` → `build(extractions)` → `cluster(G)` → `analyze(G)` → `to_json(G, communities, path)`
+- Runs in a background thread per job; frontend polls for live phase/progress updates
+
+**Flask API** (`python-backend/main.py` + `graph_analyzer.py`):
+- `GET  /api/graph/jobs`          — list all jobs
+- `POST /api/graph/analyze`       — start new job `{root?, extensions?}`
+- `GET  /api/graph/jobs/:id`      — poll job status + graph data + analysis
+- `DELETE /api/graph/jobs/:id`    — remove a job
+- `POST /api/graph/clear-done`    — remove all completed jobs
+
+**Frontend:** New "Code Graph" panel (⬡ Network icon) in the activity bar:
+- `artifacts/ai-proxy/src/pages/graph.tsx` — D3 force-directed graph visualization
+- Directory input + Analyze button → live progress bar with phase label
+- Interactive SVG: drag nodes, zoom/pan, click node to open source file in editor
+- Right sidebar: cluster colour legend, hub nodes, suggested questions, connection stats
+- Search box highlights matching nodes in gold
+
 ## Open Multi-Agent Swarm (integrated)
 Run multiple AI agents in parallel, each with their own AI provider, role, and task:
 

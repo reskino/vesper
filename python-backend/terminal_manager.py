@@ -5,6 +5,8 @@ import time
 import logging
 from pathlib import Path
 
+import token_reducer
+
 logger = logging.getLogger(__name__)
 
 WORKSPACE_ROOT = os.environ.get("WORKSPACE_ROOT", "/home/runner/workspace")
@@ -89,11 +91,17 @@ def exec_command(command: str, cwd: str | None = None, timeout: int = DEFAULT_TI
         stdout = result.stdout
         stderr = result.stderr
 
-        # Truncate if too large
+        # Hard cap before token reduction (avoid OOM on pathological output)
         if len(stdout.encode()) > MAX_OUTPUT_BYTES:
-            stdout = stdout[: MAX_OUTPUT_BYTES // 2] + "\n\n[Output truncated...]\n"
+            stdout = stdout[: MAX_OUTPUT_BYTES // 2] + "\n\n[Output hard-capped before reduction...]\n"
         if len(stderr.encode()) > MAX_OUTPUT_BYTES:
-            stderr = stderr[: MAX_OUTPUT_BYTES // 2] + "\n\n[Stderr truncated...]\n"
+            stderr = stderr[: MAX_OUTPUT_BYTES // 2] + "\n\n[Stderr hard-capped before reduction...]\n"
+
+        # RTK-style token reduction
+        try:
+            stdout, stderr = token_reducer.reduce(command, stdout, stderr, result.returncode)
+        except Exception as exc:
+            logger.warning("token_reducer.reduce failed: %s", exc)
 
         elapsed = int((time.time() - start) * 1000)
         return {

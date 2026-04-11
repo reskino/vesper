@@ -104,6 +104,7 @@ router.post("/files/rename", proxyToPython);
 // Terminal routes
 router.post("/terminal/exec", proxyToPython);
 router.get("/terminal/cwd", proxyToPython);
+router.get("/terminal/savings", proxyToPython);
 
 // Agent routes
 router.post("/agent/run", proxyToPython);

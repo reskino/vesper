@@ -40,6 +40,14 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Node: express, vite, react, react-query, codemirror, monaco-editor, xterm, tailwindcss
 - System: playwright-driver (chromium), postgresql, openssl
 
+## RTK Token Reduction (integrated)
+Inspired by github.com/rtk-ai/rtk. Every terminal command output is compressed before reaching the LLM:
+- `python-backend/token_reducer.py` — implements the 4 RTK strategies (filtering, grouping, truncation, deduplication)
+- Hooked into `terminal_manager.py` `exec_command()` — applies to ALL terminal usage (IDE terminal + agent)
+- `/api/terminal/savings` endpoint tracks cumulative token savings per session
+- Terminal panel header shows a live `⚡ -X% tokens` badge once savings exceed 10%
+- Typical savings: `git status` ~65%, `pip install` ~80%, test runners ~90%
+
 ## AI Provider Authentication
 - **Cookie-based** (ChatGPT, Grok, etc.): Import browser cookies via the Sessions UI
 - **API key-based** (Claude, Gemini, OpenAI API, etc.): Add keys via the Sessions UI

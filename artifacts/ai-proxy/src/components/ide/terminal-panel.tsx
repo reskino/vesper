@@ -20,9 +20,11 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { useTerminalExec, useGetTerminalCwd, getGetTerminalCwdQueryKey } from "@workspace/api-client-react";
-import { TerminalSquare, Trash2, X, Play } from "lucide-react";
+import { TerminalSquare, Trash2, X, Play, Zap } from "lucide-react";
 import { useIDE } from "@/contexts/ide-context";
 import { useTheme } from "@/contexts/theme-context";
+
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
 const ANSI = {
@@ -152,6 +154,13 @@ const LIGHT_THEME = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+interface RtkSavings {
+  savedChars: number;
+  savingsPct: number;
+  commandsTotal: number;
+  commandsReduced: number;
+}
+
 export function TerminalPanel() {
   const { setShowTerminal, activeFilePath } = useIDE();
   const { isDark } = useTheme();
@@ -169,6 +178,24 @@ export function TerminalPanel() {
   // Tab-complete candidates
   const tabCandidatesRef = useRef<string[]>([]);
   const tabPartialRef    = useRef<string>("");
+
+  // RTK savings badge
+  const [rtkSavings, setRtkSavings] = useState<RtkSavings | null>(null);
+
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/terminal/savings`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.commandsTotal > 0) setRtkSavings(data);
+        }
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 8000);
+    return () => clearInterval(id);
+  }, []);
 
   const execMutation = useTerminalExec();
   const { data: cwdInfo } = useGetTerminalCwd({
@@ -464,6 +491,16 @@ export function TerminalPanel() {
           {cwdInfo && (
             <span className="hidden lg:inline text-[10px] text-muted-foreground/60 font-mono shrink-0">
               {cwdInfo.python} · Node {cwdInfo.node}
+            </span>
+          )}
+          {/* RTK token savings badge */}
+          {rtkSavings && rtkSavings.savingsPct >= 10 && (
+            <span
+              title={`RTK token reduction: ${rtkSavings.commandsReduced}/${rtkSavings.commandsTotal} commands compressed. Saved ~${Math.round(rtkSavings.savedChars / 4).toLocaleString()} tokens this session.`}
+              className="hidden md:flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0.5 rounded-full font-mono shrink-0 cursor-default"
+            >
+              <Zap className="h-2.5 w-2.5" />
+              -{rtkSavings.savingsPct}% tokens
             </span>
           )}
         </div>

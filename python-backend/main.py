@@ -945,16 +945,56 @@ def file_rename():
 
 # ─── Terminal ─────────────────────────────────────────────────────────────────
 
+# RTK-style cumulative token savings tracker
+_rtk_stats: dict = {
+    "total_original_chars": 0,
+    "total_reduced_chars": 0,
+    "commands_reduced": 0,
+    "commands_total": 0,
+}
+
+
 @app.route("/api/terminal/exec", methods=["POST"])
 def terminal_exec():
+    from token_reducer import get_stats as _rtk_get_stats
     data = request.get_json()
     command = data.get("command", "").strip()
     if not command:
         return jsonify({"error": "command is required"}), 400
     try:
-        return jsonify(exec_command(command, cwd=data.get("cwd"), timeout=min(int(data.get("timeout", 60)), 300)))
+        result = exec_command(command, cwd=data.get("cwd"), timeout=min(int(data.get("timeout", 60)), 300))
+        # Update cumulative RTK savings stats (best-effort)
+        try:
+            raw_stdout = result.get("stdout", "")
+            raw_stderr = result.get("stderr", "")
+            stats = _rtk_get_stats(command, raw_stdout, raw_stderr)
+            _rtk_stats["commands_total"] += 1
+            _rtk_stats["total_original_chars"] += stats["original_chars"]
+            _rtk_stats["total_reduced_chars"] += stats["reduced_chars"]
+            if stats["savings_pct"] > 0:
+                _rtk_stats["commands_reduced"] += 1
+        except Exception:
+            pass
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/terminal/savings", methods=["GET"])
+def terminal_savings():
+    """Return cumulative RTK token savings stats for this session."""
+    orig = _rtk_stats["total_original_chars"]
+    reduced = _rtk_stats["total_reduced_chars"]
+    saved = max(0, orig - reduced)
+    pct = int((saved / orig) * 100) if orig > 0 else 0
+    return jsonify({
+        "originalChars": orig,
+        "reducedChars": reduced,
+        "savedChars": saved,
+        "savingsPct": pct,
+        "commandsTotal": _rtk_stats["commands_total"],
+        "commandsReduced": _rtk_stats["commands_reduced"],
+    })
 
 
 @app.route("/api/terminal/cwd", methods=["GET"])

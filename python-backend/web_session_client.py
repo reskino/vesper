@@ -1458,17 +1458,105 @@ def _send_deepseek_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str
         return False, "", f"DeepSeek error: {exc}"
 
 
+def _send_openai_compat_api(endpoint: str, api_key: str, model: str, prompt: str, provider_name: str, extra_headers: dict | None = None) -> Tuple[bool, str, str]:
+    """Generic OpenAI-compatible API sender."""
+    try:
+        import urllib.request, urllib.error
+        body = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        if extra_headers:
+            headers.update(extra_headers)
+        req = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        return True, text, ""
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 401:
+            return False, "", f"{provider_name} API key is invalid. Update it on the Sessions page."
+        if exc.code == 429:
+            return False, "", f"{provider_name} rate limit hit. Try again later."
+        if exc.code == 404:
+            return False, "", f"{provider_name} model '{model}' not found. Go to Sessions → Validate Models to refresh."
+        return False, "", f"{provider_name} API error {exc.code}: {body_text}"
+    except Exception as exc:
+        logger.error("%s send error: %s", provider_name, exc, exc_info=True)
+        return False, "", f"{provider_name} error: {exc}"
+
+
+def _send_nvidia_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via NVIDIA NIM. Free tier: 40 RPM, 189 models including Llama 4, Mistral, Qwen3."""
+    return _send_openai_compat_api(
+        "https://integrate.api.nvidia.com/v1/chat/completions",
+        api_key, model, prompt, "NVIDIA NIM"
+    )
+
+
+def _send_github_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via GitHub Models. Free with GitHub PAT: GPT-4o, Llama 3.3, DeepSeek-R1."""
+    return _send_openai_compat_api(
+        "https://models.inference.ai.azure.com/chat/completions",
+        api_key, model, prompt, "GitHub Models"
+    )
+
+
+def _send_huggingface_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via HuggingFace Inference Router. Free $0.10/mo credits, 120+ models."""
+    return _send_openai_compat_api(
+        "https://router.huggingface.co/v1/chat/completions",
+        api_key, model, prompt, "HuggingFace"
+    )
+
+
+def _send_kluster_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Kluster AI. Free tier: Llama 4 Maverick, DeepSeek-R1, Qwen3-235B."""
+    return _send_openai_compat_api(
+        "https://api.kluster.ai/v1/chat/completions",
+        api_key, model, prompt, "Kluster AI"
+    )
+
+
+def _send_siliconflow_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via SiliconFlow. 13 permanently free models, 1K RPM, 50K TPM."""
+    return _send_openai_compat_api(
+        "https://api.siliconflow.cn/v1/chat/completions",
+        api_key, model, prompt, "SiliconFlow"
+    )
+
+
+def _send_zhipu_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via Zhipu AI. GLM-4 Flash free tier."""
+    return _send_openai_compat_api(
+        "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        api_key, model, prompt, "Zhipu AI"
+    )
+
+
 _API_KEY_DISPATCH = {
-    "chatgpt":    _send_chatgpt_api,
-    "claude":     _send_claude_api,
-    "groq":       _send_groq_api,
-    "gemini":     _send_gemini_api,
-    "openrouter": _send_openrouter_api,
-    "mistral":    _send_mistral_api,
-    "cohere":     _send_cohere_api,
-    "together":   _send_together_api,
-    "cerebras":   _send_cerebras_api,
-    "deepseek":   _send_deepseek_api,
+    "chatgpt":     _send_chatgpt_api,
+    "claude":      _send_claude_api,
+    "groq":        _send_groq_api,
+    "gemini":      _send_gemini_api,
+    "openrouter":  _send_openrouter_api,
+    "mistral":     _send_mistral_api,
+    "cohere":      _send_cohere_api,
+    "together":    _send_together_api,
+    "cerebras":    _send_cerebras_api,
+    "deepseek":    _send_deepseek_api,
+    "nvidia":      _send_nvidia_api,
+    "github":      _send_github_api,
+    "huggingface": _send_huggingface_api,
+    "kluster":     _send_kluster_api,
+    "siliconflow": _send_siliconflow_api,
+    "zhipu":       _send_zhipu_api,
 }
 
 
@@ -1481,12 +1569,21 @@ def send_via_api_key(ai_id: str, api_key: str, model: str, prompt: str) -> Tuple
     return fn(api_key, model, prompt)
 
 
+def send_llm7(session_path: str, model: str, prompt: str) -> Tuple[bool, str, str]:
+    """Send via LLM7.io — completely free, no API key required. 30 RPM."""
+    return _send_openai_compat_api(
+        "https://api.llm7.io/v1/chat/completions",
+        "", model, prompt, "LLM7"
+    )
+
+
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 _DISPATCH = {
     "chatgpt": send_chatgpt,
     "claude":  send_claude,
     "grok":    send_grok,
+    "llm7":    send_llm7,
 }
 
 

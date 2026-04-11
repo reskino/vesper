@@ -622,14 +622,9 @@ def verify_session(ai_id):
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
                 elif ai_id == "claude":
-                    body = _json.dumps({"model": "claude-3-5-haiku-20241022", "max_tokens": 1,
-                                        "messages": [{"role": "user", "content": "hi"}]}).encode()
                     req = urllib.request.Request(
-                        "https://api.anthropic.com/v1/messages",
-                        data=body,
-                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
-                                 "Content-Type": "application/json"},
-                        method="POST",
+                        "https://api.anthropic.com/v1/models",
+                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
                     )
                     with urllib.request.urlopen(req, timeout=10) as r:
                         _json.loads(r.read())
@@ -843,6 +838,89 @@ def verify_session(ai_id):
     except Exception as exc:
         logger.error("verify_session error: %s", exc, exc_info=True)
         return jsonify({"success": False, "error": str(exc)})
+
+
+# ─── Model Validation ────────────────────────────────────────────────────────
+
+@app.route("/api/proxy/validate-models", methods=["POST"])
+def validate_models():
+    """
+    For each stored API key, call the provider's live /models endpoint and
+    compare against the model IDs declared in config.py.
+
+    Returns per-provider: valid (in both), stale (in config but not live),
+    live_only (in live but not config, i.e. new models available).
+    """
+    import urllib.request as _req_lib
+    import urllib.error as _ue
+
+    _PROVIDERS = {
+        "chatgpt":    ("openai_compat", "https://api.openai.com/v1/models",               {"Authorization": "Bearer {key}"}),
+        "groq":       ("openai_compat", "https://api.groq.com/openai/v1/models",          {"Authorization": "Bearer {key}", "User-Agent": "Vesper"}),
+        "gemini":     ("gemini",        "https://generativelanguage.googleapis.com/v1beta/models?key={key}&pageSize=200", {}),
+        "claude":     ("openai_compat", "https://api.anthropic.com/v1/models",            {"x-api-key": "{key}", "anthropic-version": "2023-06-01"}),
+        "openrouter": ("openai_compat", "https://openrouter.ai/api/v1/models",            {"Authorization": "Bearer {key}"}),
+        "mistral":    ("openai_compat", "https://api.mistral.ai/v1/models",               {"Authorization": "Bearer {key}"}),
+        "cerebras":   ("openai_compat", "https://api.cerebras.ai/v1/models",              {"Authorization": "Bearer {key}"}),
+        "together":   ("together",      "https://api.together.xyz/v1/models",              {"Authorization": "Bearer {key}"}),
+        "deepseek":   ("openai_compat", "https://api.deepseek.com/v1/models",             {"Authorization": "Bearer {key}"}),
+        "cohere":     ("cohere",        "https://api.cohere.com/v1/models",               {"Authorization": "Bearer {key}"}),
+    }
+
+    results = {}
+
+    for ai_id, (fmt, url_tpl, hdr_tpl) in _PROVIDERS.items():
+        cfg = AI_CONFIGS.get(ai_id)
+        if not cfg:
+            continue
+        api_key = get_api_key(ai_id)
+        if not api_key:
+            results[ai_id] = {"status": "no_key"}
+            continue
+
+        config_ids = {m["id"] for m in cfg.get("models", []) if m["id"] != "__auto__"}
+        url = url_tpl.replace("{key}", api_key)
+        headers = {k: v.replace("{key}", api_key) for k, v in hdr_tpl.items()}
+
+        try:
+            req = _req_lib.Request(url, headers=headers)
+            with _req_lib.urlopen(req, timeout=12) as resp:
+                data = _json.loads(resp.read())
+
+            # Parse live model IDs depending on response shape
+            live_ids: set[str] = set()
+            if fmt == "openai_compat":
+                live_ids = {m["id"] for m in data.get("data", []) if isinstance(m, dict)}
+            elif fmt == "gemini":
+                live_ids = {m["name"].split("/")[-1] for m in data.get("models", []) if isinstance(m, dict) and "name" in m}
+            elif fmt == "together":
+                if isinstance(data, list):
+                    live_ids = {m["id"] for m in data if isinstance(m, dict)}
+                else:
+                    live_ids = {m["id"] for m in data.get("data", []) if isinstance(m, dict)}
+            elif fmt == "cohere":
+                live_ids = {m.get("name", m.get("id", "")) for m in data.get("models", []) if isinstance(m, dict)}
+
+            stale    = sorted(config_ids - live_ids)
+            live_only = sorted(live_ids - config_ids)
+            valid    = sorted(config_ids & live_ids)
+
+            results[ai_id] = {
+                "status":    "ok",
+                "valid":     valid,
+                "stale":     stale,
+                "live_only": live_only[:20],  # cap to keep payload small
+            }
+
+        except _ue.HTTPError as exc:
+            body = ""
+            try: body = exc.read().decode(errors="replace")[:120]
+            except Exception: pass
+            results[ai_id] = {"status": "error", "error": f"HTTP {exc.code}: {body}"}
+        except Exception as exc:
+            results[ai_id] = {"status": "error", "error": str(exc)[:200]}
+
+    return jsonify({"results": results})
 
 
 # ─── History ─────────────────────────────────────────────────────────────────

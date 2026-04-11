@@ -11,7 +11,7 @@ import {
   ShieldCheck, ShieldAlert, Trash2, Loader2,
   RefreshCw, X, ExternalLink,
   CheckCircle2, LogIn, RotateCcw, Cookie, UserCircle2, Key,
-  AlertTriangle, Zap, Search,
+  AlertTriangle, Zap, Search, XCircle, Plus, FlaskConical,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -526,6 +526,9 @@ export function SessionsPage() {
   const [usernames, setUsernames]       = useState<Record<string, string>>({});
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
   const [search, setSearch]             = useState("");
+  const [validating, setValidating]     = useState(false);
+  const [validateResults, setValidateResults] = useState<Record<string, any> | null>(null);
+  const [showValidation, setShowValidation]   = useState(false);
 
   const verifySession = useCallback(async (aiId: string) => {
     setVerifyingIds(prev => new Set([...prev, aiId]));
@@ -549,6 +552,22 @@ export function SessionsPage() {
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+  };
+
+  const handleValidateModels = async () => {
+    setValidating(true);
+    setValidateResults(null);
+    setShowValidation(true);
+    try {
+      const res = await fetch("/api/proxy/validate-models", { method: "POST" });
+      const data = await res.json();
+      setValidateResults(data.results ?? {});
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Validation failed", description: e.message });
+      setShowValidation(false);
+    } finally {
+      setValidating(false);
+    }
   };
 
   const handleDelete = async (aiId: string, aiName: string) => {
@@ -622,6 +641,20 @@ export function SessionsPage() {
           {readyCount}/{ais.length} ready
         </span>
 
+        {/* Validate models button */}
+        <button
+          onClick={showValidation ? () => setShowValidation(false) : handleValidateModels}
+          disabled={validating}
+          className={`h-6 w-6 flex items-center justify-center rounded-lg transition-colors shrink-0
+            ${showValidation
+              ? "text-primary bg-primary/15 hover:bg-primary/25"
+              : "text-[#3a3a5c] hover:text-foreground hover:bg-[#141420]"
+            }`}
+          title="Validate model IDs against live provider APIs"
+        >
+          {validating ? <Loader2 size={12} className="animate-spin" /> : <FlaskConical size={12} />}
+        </button>
+
         <button
           onClick={refreshAll}
           className="h-6 w-6 flex items-center justify-center rounded-lg text-[#3a3a5c] hover:text-foreground hover:bg-[#141420] transition-colors shrink-0"
@@ -630,6 +663,99 @@ export function SessionsPage() {
           <RefreshCw size={12} />
         </button>
       </div>
+
+      {/* ── Model Validation Panel ───────────────────────────────────────── */}
+      {showValidation && (
+        <div className="shrink-0 border-b border-[#131318] bg-[#080810]">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[#0f0f1a]">
+            <div className="flex items-center gap-1.5">
+              <FlaskConical className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-bold text-[#a0a0c0] uppercase tracking-widest">Model Validation</span>
+            </div>
+            <button onClick={() => setShowValidation(false)} className="text-[#3a3a5c] hover:text-foreground transition-colors">
+              <X size={11} />
+            </button>
+          </div>
+
+          {validating && (
+            <div className="flex items-center gap-2 px-3 py-3 text-xs text-[#52526e]">
+              <Loader2 size={12} className="animate-spin text-primary" />
+              Checking live provider APIs…
+            </div>
+          )}
+
+          {validateResults && !validating && (
+            <ScrollArea className="max-h-52">
+              <div className="p-2 space-y-1">
+                {Object.entries(validateResults).map(([aiId, result]: [string, any]) => {
+                  if (result.status === "no_key") return null;
+                  const aiName = ais.find(a => a.id === aiId)?.name ?? aiId;
+                  const hasStale = result.stale?.length > 0;
+                  const hasNew = result.live_only?.length > 0;
+                  const isError = result.status === "error";
+                  const isSkipped = result.status === "skipped";
+
+                  return (
+                    <div key={aiId} className={`rounded-lg border px-2.5 py-2 text-[10px] ${
+                      isError ? "border-red-500/20 bg-red-500/5"
+                      : hasStale ? "border-amber-500/20 bg-amber-500/5"
+                      : "border-[#1a1a24] bg-[#111118]"
+                    }`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`font-semibold ${isError ? "text-red-400" : hasStale ? "text-amber-400" : "text-foreground"}`}>
+                          {aiName}
+                        </span>
+                        {isError && <XCircle className="h-2.5 w-2.5 text-red-400" />}
+                        {!isError && !hasStale && !isSkipped && <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />}
+                        {hasStale && <AlertTriangle className="h-2.5 w-2.5 text-amber-400" />}
+                      </div>
+
+                      {isError && (
+                        <p className="text-red-400/80">{result.error}</p>
+                      )}
+                      {isSkipped && (
+                        <p className="text-[#52526e]">No models endpoint available</p>
+                      )}
+                      {!isError && !isSkipped && (
+                        <div className="space-y-0.5">
+                          {hasStale && (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              <span className="text-amber-500 font-medium">Stale:</span>
+                              {result.stale.map((id: string) => (
+                                <span key={id} className="font-mono text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded">{id}</span>
+                              ))}
+                            </div>
+                          )}
+                          {hasNew && (
+                            <div className="flex flex-wrap gap-1 items-center mt-0.5">
+                              <span className="text-blue-400 font-medium">New available:</span>
+                              {result.live_only.slice(0, 5).map((id: string) => (
+                                <span key={id} className="font-mono text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1 py-0.5 rounded">{id}</span>
+                              ))}
+                              {result.live_only.length > 5 && (
+                                <span className="text-[#52526e]">+{result.live_only.length - 5} more</span>
+                              )}
+                            </div>
+                          )}
+                          {!hasStale && !hasNew && (
+                            <p className="text-emerald-400/70">All {result.valid?.length ?? 0} model IDs are current</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {Object.values(validateResults).every((r: any) => r.status === "no_key") && (
+                  <p className="text-center text-[#52526e] py-3 text-[10px]">
+                    No API keys stored yet — add a key to validate its models
+                  </p>
+                )}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      )}
 
       {/* ── Search ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 px-3 py-2 border-b border-[#131318]">

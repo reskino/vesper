@@ -1238,6 +1238,11 @@ def _send_gemini_api(api_key: str, model: str, prompt: str) -> Tuple[bool, str, 
         return True, text, ""
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode(errors="replace")[:300]
+        if exc.code == 404 or (exc.code == 400 and "not found" in body_text.lower()):
+            return False, "", (
+                f"Gemini model **{model}** was not found — the model ID may be stale.\n"
+                "Go to **Sessions → Validate Models** to check which models are still live."
+            )
         if exc.code in (400, 403):
             return False, "", f"Gemini API key invalid or quota exceeded: {body_text}"
         if exc.code == 429:

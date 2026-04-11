@@ -111,10 +111,18 @@ router.post("/scraper/scrape", proxyToPython);
 router.get("/scraper/search", proxyToPython);
 router.post("/scraper/search", proxyToPython);
 
-// Agent routes
+// Agent routes (single)
 router.post("/agent/run", proxyToPython);
 router.post("/agent/stop", proxyToPython);
 router.get("/agent/status", proxyToPython);
 router.get("/agent/screenshot/:filename", proxyToPython);
+
+// Multi-agent swarm routes
+router.get("/agents", proxyToPython);
+router.post("/agents/spawn", proxyToPython);
+router.post("/agents/clear-done", proxyToPython);
+router.get("/agents/:agentId", proxyToPython);
+router.post("/agents/:agentId/stop", proxyToPython);
+router.delete("/agents/:agentId", proxyToPython);
 
 export default router;

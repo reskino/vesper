@@ -40,6 +40,30 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Node: express, vite, react, react-query, codemirror, monaco-editor, xterm, tailwindcss
 - System: playwright-driver (chromium), postgresql, openssl
 
+## Open Multi-Agent Swarm (integrated)
+Run multiple AI agents in parallel, each with their own AI provider, role, and task:
+
+**Architecture:**
+- `python-backend/agent.py` — refactored to support per-agent state via threading.local + `_multi_states` dict. `run_agent()` now accepts `agent_id=""` and uses isolated state/stop closures when set.
+- `python-backend/multi_agent.py` — manager module: `spawn()`, `get()`, `list_all()`, `stop()`, `clear()`, `clear_all_done()`
+- Each agent runs in its own daemon thread with its own stop flag
+
+**Flask API** (`python-backend/main.py`):
+- `GET  /api/agents` — list all agents
+- `POST /api/agents/spawn` — spawn new agent `{aiId, task, role, maxSteps?, label?}`
+- `GET  /api/agents/:id` — get agent status (poll for live updates)
+- `POST /api/agents/:id/stop` — stop gracefully
+- `DELETE /api/agents/:id` — remove from registry
+- `POST /api/agents/clear-done` — remove all finished agents
+
+**Agent roles available:** `builder`, `scholar`, `search_master`, `orchestrator`
+
+**Frontend:** New "Swarm" panel (👥 icon) in the activity bar sidebar:
+- `artifacts/ai-proxy/src/pages/agents.tsx` — live swarm view with 2s polling
+- Shows running agents with live action + step log, and completed agents with summary
+- Spawn form: pick AI provider, role, max steps, and write a task
+- Stop/remove individual agents; "Clear done" button for batch cleanup
+
 ## Web Scraping (Scrapling — integrated)
 Powered by [Scrapling](https://github.com/D4Vinci/Scrapling) — adaptive scraping with 3 tiers:
 - **Tier 1 — Fast:** `Fetcher` (curl_cffi, browser fingerprinting, no Playwright, <1s)

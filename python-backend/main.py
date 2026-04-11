@@ -1046,6 +1046,60 @@ def scraper_search():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Multi-Agent Swarm ────────────────────────────────────────────────────────
+
+import multi_agent as _multi_agent
+
+@app.route("/api/agents", methods=["GET"])
+def agents_list():
+    return jsonify({"agents": _multi_agent.list_all()})
+
+
+@app.route("/api/agents/spawn", methods=["POST"])
+def agents_spawn():
+    data = request.get_json() or {}
+    ai_id = (data.get("aiId") or "").strip()
+    task = (data.get("task") or "").strip()
+    if not ai_id or not task:
+        return jsonify({"error": "aiId and task are required"}), 400
+    agent_id = _multi_agent.spawn(
+        ai_id=ai_id,
+        task=task,
+        role=data.get("role", "builder"),
+        working_dir=data.get("workingDir") or None,
+        max_steps=min(int(data.get("maxSteps", 20)), 50),
+        model_id=data.get("modelId") or None,
+        label=data.get("label") or None,
+    )
+    return jsonify({"agentId": agent_id, "status": _multi_agent.get(agent_id)})
+
+
+@app.route("/api/agents/<agent_id>", methods=["GET"])
+def agents_get(agent_id):
+    status = _multi_agent.get(agent_id)
+    if not status:
+        return jsonify({"error": "Agent not found"}), 404
+    return jsonify(status)
+
+
+@app.route("/api/agents/<agent_id>/stop", methods=["POST"])
+def agents_stop(agent_id):
+    ok = _multi_agent.stop(agent_id)
+    return jsonify({"stopped": ok})
+
+
+@app.route("/api/agents/<agent_id>", methods=["DELETE"])
+def agents_clear(agent_id):
+    ok = _multi_agent.clear(agent_id)
+    return jsonify({"cleared": ok})
+
+
+@app.route("/api/agents/clear-done", methods=["POST"])
+def agents_clear_done():
+    count = _multi_agent.clear_all_done()
+    return jsonify({"cleared": count})
+
+
 # ─── Agent ───────────────────────────────────────────────────────────────────
 
 @app.route("/api/agent/run", methods=["POST"])

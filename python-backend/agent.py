@@ -50,7 +50,8 @@ COMPLETE_PATTERN = re.compile(
 _TOOL_NAMES_RE = (
     "execute|background_exec|kill_process|write_file|read_file|"
     "create_dir|delete|list_dir|check_port|http_get|http_post|"
-    "screenshot_url|sleep|install_packages|patch_file"
+    "screenshot_url|sleep|install_packages|patch_file|"
+    "web_search|web_scrape"
 )
 ALT_TOOL_RE = re.compile(
     rf"<({_TOOL_NAMES_RE})>(.*?)(?:</(?:{_TOOL_NAMES_RE})>|(?=<(?:{_TOOL_NAMES_RE})>)|$)",
@@ -440,11 +441,19 @@ Begin: map the project with list_dir, read any relevant files, then state your n
 """
 
 
+import threading as _threading
+
 _agent_status: dict = {
     "running": False, "task": None, "steps": [],
     "result": None, "current_action": None, "files_written": [],
 }
 _stop_requested: bool = False
+
+# ── Per-agent state for multi-agent mode ──────────────────────────────────────
+_thread_local   = _threading.local()
+_multi_states:  dict[str, dict] = {}   # agent_id → status dict
+_multi_stops:   dict[str, bool] = {}   # agent_id → stop flag
+_multi_lock     = _threading.Lock()
 
 
 def get_status() -> dict:
@@ -459,6 +468,33 @@ def stop_agent() -> bool:
     return False
 
 
+def get_multi_status(agent_id: str) -> dict:
+    with _multi_lock:
+        return dict(_multi_states.get(agent_id, {}))
+
+
+def stop_multi_agent(agent_id: str) -> bool:
+    with _multi_lock:
+        if agent_id in _multi_states and _multi_states[agent_id].get("running"):
+            _multi_stops[agent_id] = True
+            return True
+    return False
+
+
+def list_multi_agents() -> list:
+    with _multi_lock:
+        return [dict(s) for s in _multi_states.values()]
+
+
+def clear_multi_agent(agent_id: str) -> bool:
+    with _multi_lock:
+        if agent_id in _multi_states and not _multi_states[agent_id].get("running"):
+            del _multi_states[agent_id]
+            _multi_stops.pop(agent_id, None)
+            return True
+    return False
+
+
 def _pick_ai(ai_id: str) -> Optional[str]:
     candidates = [ai_id] + [a for a in FALLBACK_ORDER if a != ai_id]
     for ai in candidates:
@@ -468,8 +504,14 @@ def _pick_ai(ai_id: str) -> Optional[str]:
 
 
 def _set_action(action: str) -> None:
-    """Update the current_action field that the UI polls."""
-    _agent_status["current_action"] = action
+    """Update the current_action field that the UI polls (single or multi-agent aware)."""
+    aid = getattr(_thread_local, "agent_id", "")
+    if aid:
+        with _multi_lock:
+            if aid in _multi_states:
+                _multi_states[aid]["current_action"] = action
+    else:
+        _agent_status["current_action"] = action
 
 
 # ─── Tool implementations ────────────────────────────────────────────────────
@@ -595,11 +637,20 @@ def _tool_write_file(params: dict, cwd: str) -> str:
     size = len(content.encode())
     lines = content.count("\n") + 1
     rel = params.get("path", path)
-    # Track written files in status
-    files = _agent_status.get("files_written", [])
-    if rel not in files:
-        files.append(rel)
-        _agent_status["files_written"] = files
+    # Track written files in status (single-agent or multi-agent aware)
+    aid = getattr(_thread_local, "agent_id", "")
+    if aid:
+        with _multi_lock:
+            if aid in _multi_states:
+                files = _multi_states[aid].get("files_written", [])
+                if rel not in files:
+                    files.append(rel)
+                    _multi_states[aid]["files_written"] = files
+    else:
+        files = _agent_status.get("files_written", [])
+        if rel not in files:
+            files.append(rel)
+            _agent_status["files_written"] = files
     return (
         f"✓ Written: {rel} ({lines} lines, {size} bytes)\n"
         f"→ Verify with read_file to confirm content is correct."
@@ -941,29 +992,64 @@ def run_agent(
     max_steps: int = MAX_STEPS,
     model_id: Optional[str] = None,
     agent_type: str = "builder",
+    agent_id: str = "",
 ) -> dict:
     global _agent_status, _stop_requested
+
+    # ── Thread-local agent ID (used by _set_action & _tool_write_file) ────────
+    _thread_local.agent_id = agent_id
 
     cwd = working_dir or get_cwd()
     if not os.path.isabs(cwd):
         cwd = os.path.join(WORKSPACE_ROOT, cwd)
 
-    _stop_requested = False
-    _agent_status = {
+    _initial = {
         "running": True,
         "task": task,
         "steps": [],
         "result": None,
         "current_action": "Starting up…",
         "files_written": [],
+        "agent_id": agent_id,
     }
+
+    if agent_id:
+        with _multi_lock:
+            _multi_states[agent_id] = dict(_initial)
+            _multi_stops[agent_id] = False
+
+        def _rst() -> dict:
+            with _multi_lock:
+                return dict(_multi_states.get(agent_id, {}))
+        def _wst(s: dict) -> None:
+            with _multi_lock:
+                _multi_states[agent_id] = s
+        def _upd_steps(s: list) -> None:
+            with _multi_lock:
+                if agent_id in _multi_states:
+                    _multi_states[agent_id]["steps"] = list(s)
+        def _is_stop() -> bool:
+            return _multi_stops.get(agent_id, False)
+    else:
+        _stop_requested = False
+        _agent_status = dict(_initial)
+
+        def _rst() -> dict:
+            return dict(_agent_status)
+        def _wst(s: dict) -> None:
+            global _agent_status
+            _agent_status = s
+        def _upd_steps(s: list) -> None:
+            _agent_status["steps"] = list(s)
+        def _is_stop() -> bool:
+            return _stop_requested
 
     if model_id:
         set_active_model(ai_id, model_id)
 
     actual_ai = _pick_ai(ai_id)
     if not actual_ai:
-        _agent_status = {
+        _wst({
             "running": False,
             "task": task,
             "steps": [],
@@ -977,8 +1063,9 @@ def run_agent(
             },
             "current_action": None,
             "files_written": [],
-        }
-        return _agent_status
+            "agent_id": agent_id,
+        })
+        return _rst()
 
     steps = []
     prompt_template = (
@@ -1008,8 +1095,8 @@ def run_agent(
     for step_num in range(max_steps):
         step_start = time.time()
 
-        if _stop_requested:
-            _agent_status = {
+        if _is_stop():
+            _wst({
                 "running": False,
                 "task": task,
                 "steps": steps,
@@ -1020,9 +1107,10 @@ def run_agent(
                     "totalElapsedMs": int((time.time() - start_time) * 1000),
                 },
                 "current_action": None,
-                "files_written": _agent_status.get("files_written", []),
-            }
-            return _agent_status
+                "files_written": _rst().get("files_written", []),
+                "agent_id": agent_id,
+            })
+            return _rst()
 
         conversation = _trim_conversation(conversation)
 
@@ -1036,7 +1124,7 @@ def run_agent(
                 "content": f"AI call failed: {error}",
                 "elapsedMs": int((time.time() - step_start) * 1000),
             })
-            _agent_status["steps"] = list(steps)
+            _upd_steps(steps)
             break
 
         # ── Repetition guard ──────────────────────────────────────────────────
@@ -1051,7 +1139,7 @@ def run_agent(
                 ),
                 "elapsedMs": int((time.time() - step_start) * 1000),
             })
-            _agent_status["steps"] = list(steps)
+            _upd_steps(steps)
             break
         last_response = ai_response
 
@@ -1061,14 +1149,14 @@ def run_agent(
             "content": ai_response,
             "elapsedMs": int((time.time() - step_start) * 1000),
         })
-        _agent_status["steps"] = list(steps)
+        _upd_steps(steps)
 
         # ── Check for task completion ─────────────────────────────────────────
         complete_match = COMPLETE_PATTERN.search(ai_response)
         if complete_match:
             summary_lines = complete_match.group(1).strip().splitlines()
             summary = next((l.strip() for l in summary_lines if l.strip()), "Task complete.")
-            _agent_status = {
+            _wst({
                 "running": False,
                 "task": task,
                 "steps": steps,
@@ -1079,9 +1167,10 @@ def run_agent(
                     "totalElapsedMs": int((time.time() - start_time) * 1000),
                 },
                 "current_action": None,
-                "files_written": _agent_status.get("files_written", []),
-            }
-            return _agent_status
+                "files_written": _rst().get("files_written", []),
+                "agent_id": agent_id,
+            })
+            return _rst()
 
         # ── Parse tool calls ─────────────────────────────────────────────────
         primary_tool_jsons = TOOL_PATTERN.findall(ai_response)
@@ -1105,7 +1194,7 @@ def run_agent(
                     ),
                     "elapsedMs": 0,
                 })
-                _agent_status["steps"] = list(steps)
+                _upd_steps(steps)
                 break
 
             # Nudge the model
@@ -1139,7 +1228,7 @@ def run_agent(
                 "result": tool_result,
                 "elapsedMs": elapsed,
             })
-            _agent_status["steps"] = list(steps)
+            _upd_steps(steps)
             tool_results_parts.append(f"[Tool: {tool_name}]\n{tool_result}")
 
         for tool_json in primary_tool_jsons:
@@ -1153,7 +1242,7 @@ def run_agent(
                     "content": err_msg,
                     "elapsedMs": 0,
                 })
-                _agent_status["steps"] = list(steps)
+                _upd_steps(steps)
                 tool_results_parts.append(f"[ERROR] {err_msg}")
                 continue
             _run_tool_call(tool_data.get("name", ""), tool_data.get("params", {}))
@@ -1178,7 +1267,7 @@ def run_agent(
         _set_action(f"Step {step_num + 2}/{max_steps} — Analyzing results…")
 
     # Ran out of steps
-    _agent_status = {
+    _wst({
         "running": False,
         "task": task,
         "steps": steps,
@@ -1189,9 +1278,10 @@ def run_agent(
             "totalElapsedMs": int((time.time() - start_time) * 1000),
         },
         "current_action": None,
-        "files_written": _agent_status.get("files_written", []),
-    }
-    return _agent_status
+        "files_written": _rst().get("files_written", []),
+        "agent_id": agent_id,
+    })
+    return _rst()
 
 
 def get_screenshot_path(filename: str) -> Optional[Path]:

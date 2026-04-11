@@ -465,7 +465,7 @@ AI_CONFIGS = {
         "icon": "llm7",
         "auth_mode": "none",
         "api_format": "openai_compat",
-        "api_base": "https://llm7.io/v1",
+        "api_base": "https://api.llm7.io/v1",
         "models": [
             {"id": "__auto__",                                          "name": "Auto — Best Available",    "tier": "free"},
             {"id": "gpt-oss-20b",                                       "name": "GPT-OSS 20B",              "tier": "free"},

@@ -223,21 +223,36 @@ const EXAMPLE_TASKS = [
 ];
 
 const AGENT_CAPABLE_AI_IDS = new Set([
-  "pollinations", "gemini", "groq", "openrouter",
+  // ── Always-free (no key needed) ─────────────────────────────────────────
+  "pollinations", "llm7",
+  // ── API-key providers (paid / free-tier) ────────────────────────────────
+  "gemini", "groq", "openrouter",
   "chatgpt", "claude", "mistral", "cerebras", "deepseek", "together",
+  // ── New providers ────────────────────────────────────────────────────────
+  "nvidia", "github", "huggingface", "kluster", "siliconflow", "zhipu",
 ]);
 
 const BEST_AGENT_MODELS: Record<string, string[]> = {
-  pollinations: ["openai", "openai-large", "claude-sonnet-3-7"],
+  // ── Always-free ─────────────────────────────────────────────────────────
+  pollinations: ["openai-large", "openai", "claude-sonnet-3-7"],
+  llm7:         ["codestral-latest", "gpt-oss-20b", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"],
+  // ── Core providers ──────────────────────────────────────────────────────
+  chatgpt:      ["gpt-4o", "gpt-4.1", "o3"],
+  claude:       ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"],
   gemini:       ["gemini-2.5-flash-preview-04-17", "gemini-2.0-flash", "gemini-1.5-pro"],
   groq:         ["llama-3.3-70b-versatile", "qwen-qwq-32b", "deepseek-r1-distill-llama-70b"],
-  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free"],
-  chatgpt:      ["gpt-4o", "gpt-4.1", "o3"],
-  claude:       ["claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"],
+  openrouter:   ["meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free", "deepseek/deepseek-r1:free"],
   mistral:      ["codestral-latest", "mistral-large-latest"],
   cerebras:     ["llama-3.3-70b", "qwen-3-32b"],
   deepseek:     ["deepseek-chat", "deepseek-reasoner"],
   together:     ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
+  // ── New providers ────────────────────────────────────────────────────────
+  nvidia:       ["meta/llama-3.3-70b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1", "meta/llama-4-maverick-17b-128e-instruct"],
+  github:       ["gpt-4o", "DeepSeek-R1", "Meta-Llama-3.3-70B-Instruct"],
+  huggingface:  ["moonshotai/Kimi-K2.5", "deepseek-ai/DeepSeek-R1", "openai/gpt-oss-120b"],
+  kluster:      ["deepseek-ai/DeepSeek-R1-0528", "klusterai/Meta-Llama-3.3-70B-Instruct-Turbo", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"],
+  siliconflow:  ["Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"],
+  zhipu:        ["glm-4", "glm-4-airx", "glm-4-air"],
 };
 
 // ─── Agent phase derived state ────────────────────────────────────────────────

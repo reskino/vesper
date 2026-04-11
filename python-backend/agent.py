@@ -285,6 +285,8 @@ TOOLS:
 <tool>{{"name": "http_get",         "params": {{"url": "http://localhost:5000/api/ping"}}}}</tool>
 <tool>{{"name": "http_post",        "params": {{"url": "http://localhost:5000/items", "body": {{"key": "val"}}}}}}</tool>
 <tool>{{"name": "screenshot_url",   "params": {{"url": "http://localhost:5000", "wait_ms": 1500}}}}</tool>
+<tool>{{"name": "web_search",      "params": {{"query": "Python async patterns", "num_results": 8}}}}</tool>
+<tool>{{"name": "web_scrape",      "params": {{"url": "https://docs.python.org/3/", "selector": "h2", "dynamic": false}}}}</tool>
 <tool>{{"name": "sleep",            "params": {{"seconds": 2}}}}</tool>
 
 ══════ STRICT EXECUTION RULES ══════
@@ -398,6 +400,8 @@ TOOLS:
 <tool>{{"name": "http_get",         "params": {{"url": "http://localhost:5000/api/ping"}}}}</tool>
 <tool>{{"name": "http_post",        "params": {{"url": "http://localhost:5000/items", "body": {{"key": "val"}}}}}}</tool>
 <tool>{{"name": "screenshot_url",   "params": {{"url": "http://localhost:5000", "wait_ms": 1500}}}}</tool>
+<tool>{{"name": "web_search",      "params": {{"query": "Python async patterns", "num_results": 8}}}}</tool>
+<tool>{{"name": "web_scrape",      "params": {{"url": "https://docs.python.org/3/", "selector": "h2", "dynamic": false}}}}</tool>
 <tool>{{"name": "sleep",            "params": {{"seconds": 2}}}}</tool>
 
 ══════ STRICT EXECUTION RULES ══════
@@ -820,6 +824,52 @@ def _tool_sleep(params: dict, cwd: str) -> str:
     return f"✓ Waited {seconds:.1f}s"
 
 
+def _tool_web_scrape(params: dict, cwd: str) -> str:
+    """
+    Scrape a URL and return its text content, links, and optionally selected elements.
+
+    Params:
+        url      (str, required)  - Full URL to scrape
+        selector (str, optional)  - CSS selector to extract specific elements
+        dynamic  (bool, optional) - Use headless browser for JS-heavy pages (default false)
+    """
+    url = params.get("url", "").strip()
+    if not url:
+        return "ERROR: 'url' parameter is required"
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    selector = params.get("selector") or None
+    dynamic = bool(params.get("dynamic", False))
+
+    try:
+        from web_scraper import scrape
+        return scrape(url, selector=selector, dynamic=dynamic)
+    except Exception as e:
+        return f"✗ ERROR scraping {url}: {e}"
+
+
+def _tool_web_search(params: dict, cwd: str) -> str:
+    """
+    Search the web via DuckDuckGo and return top results with titles, URLs, and snippets.
+
+    Params:
+        query       (str, required) - Search query
+        num_results (int, optional) - Number of results (default 8, max 10)
+    """
+    query = params.get("query", "").strip()
+    if not query:
+        return "ERROR: 'query' parameter is required"
+
+    num_results = int(params.get("num_results", 8))
+
+    try:
+        from web_scraper import search
+        return search(query, num_results=num_results)
+    except Exception as e:
+        return f"✗ ERROR searching '{query}': {e}"
+
+
 # ─── Tool dispatcher ─────────────────────────────────────────────────────────
 
 TOOL_MAP = {
@@ -837,6 +887,8 @@ TOOL_MAP = {
     "http_get":         _tool_http_get,
     "http_post":        _tool_http_post,
     "screenshot_url":   _tool_screenshot_url,
+    "web_scrape":       _tool_web_scrape,
+    "web_search":       _tool_web_search,
     "sleep":            _tool_sleep,
 }
 
@@ -864,8 +916,10 @@ def _describe_params(tool_name: str, params: dict) -> str:
         return str(params.get("path", ""))
     if tool_name in ("execute", "background_exec"):
         return str(params.get("command", ""))[:60]
-    if tool_name in ("http_get", "http_post", "screenshot_url"):
+    if tool_name in ("http_get", "http_post", "screenshot_url", "web_scrape"):
         return str(params.get("url", ""))
+    if tool_name == "web_search":
+        return str(params.get("query", ""))[:60]
     if tool_name == "install_packages":
         pkgs = params.get("packages", [])
         if isinstance(pkgs, list):

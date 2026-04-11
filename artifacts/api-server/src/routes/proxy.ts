@@ -106,6 +106,11 @@ router.post("/terminal/exec", proxyToPython);
 router.get("/terminal/cwd", proxyToPython);
 router.get("/terminal/savings", proxyToPython);
 
+// Web scraper routes
+router.post("/scraper/scrape", proxyToPython);
+router.get("/scraper/search", proxyToPython);
+router.post("/scraper/search", proxyToPython);
+
 // Agent routes
 router.post("/agent/run", proxyToPython);
 router.post("/agent/stop", proxyToPython);

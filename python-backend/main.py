@@ -1005,6 +1005,47 @@ def terminal_cwd():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Web Scraper ──────────────────────────────────────────────────────────────
+
+@app.route("/api/scraper/scrape", methods=["POST"])
+def scraper_scrape():
+    data = request.get_json() or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "'url' is required"}), 400
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    selector = data.get("selector") or None
+    dynamic = bool(data.get("dynamic", False))
+    try:
+        from web_scraper import scrape
+        result = scrape(url, selector=selector, dynamic=dynamic)
+        return jsonify({"result": result, "url": url})
+    except Exception as e:
+        logger.error(f"Scrape error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/scraper/search", methods=["GET", "POST"])
+def scraper_search():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        query = (data.get("query") or "").strip()
+        num_results = int(data.get("num_results", 8))
+    else:
+        query = (request.args.get("q") or "").strip()
+        num_results = int(request.args.get("n", 8))
+    if not query:
+        return jsonify({"error": "'query' (or 'q') is required"}), 400
+    try:
+        from web_scraper import search
+        result = search(query, num_results=min(num_results, 10))
+        return jsonify({"result": result, "query": query})
+    except Exception as e:
+        logger.error(f"Search error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Agent ───────────────────────────────────────────────────────────────────
 
 @app.route("/api/agent/run", methods=["POST"])

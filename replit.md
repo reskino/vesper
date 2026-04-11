@@ -40,6 +40,22 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Node: express, vite, react, react-query, codemirror, monaco-editor, xterm, tailwindcss
 - System: playwright-driver (chromium), postgresql, openssl
 
+## Web Scraping (Scrapling — integrated)
+Powered by [Scrapling](https://github.com/D4Vinci/Scrapling) — adaptive scraping with 3 tiers:
+- **Tier 1 — Fast:** `Fetcher` (curl_cffi, browser fingerprinting, no Playwright, <1s)
+- **Tier 2 — Dynamic:** `DynamicFetcher` (Playwright headless, JS-heavy pages)
+- **Tier 3 — Fallback:** raw Playwright with Vesper's existing Chromium install
+
+Agent tools added (`python-backend/agent.py`):
+- `web_search` — DuckDuckGo search, returns title + URL + snippet for top N results
+- `web_scrape` — scrape any URL, with optional CSS selector and `dynamic` flag
+
+Flask endpoints (`python-backend/main.py`):
+- `POST /api/scraper/scrape` — `{url, selector?, dynamic?}`
+- `GET|POST /api/scraper/search` — `?q=query&n=8` or `{query, num_results}`
+
+Both proxied through API server at port 8080.
+
 ## RTK Token Reduction (integrated)
 Inspired by github.com/rtk-ai/rtk. Every terminal command output is compressed before reaching the LLM:
 - `python-backend/token_reducer.py` — implements the 4 RTK strategies (filtering, grouping, truncation, deduplication)

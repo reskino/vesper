@@ -594,7 +594,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const { selectedAi, importedProject, setImportedProject, toggleChat,
     mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath } = useIDE();
   const { agentType } = useAgentMode();
-  const { currentWorkspace, deps, installDep } = useWorkspace();
+  const { currentWorkspace, deps, installDep, venvStatus } = useWorkspace();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
   });
@@ -737,6 +737,34 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       `Language: ${currentWorkspace.language ?? "unknown"}`,
       `Path: ${currentWorkspace.relPath}`,
     ];
+
+    // ── Python venv status ──────────────────────────────────────────────────
+    // Tell the AI exactly what Python environment is available so it gives
+    // correct advice (e.g. "use python" not "python -m venv ...").
+    if (currentWorkspace.language === "python" || (currentWorkspace.language === "unknown" && venvStatus)) {
+      if (venvStatus?.healthy) {
+        lines.push(
+          `\nPython virtual environment: ACTIVE`,
+          `  • Interpreter: ${venvStatus.python_version ?? "Python 3"}`,
+          `  • Packages: ${venvStatus.package_count} installed`,
+          `  • Tool: ${venvStatus.tool ?? "pip"}`,
+          `  NOTE: The terminal and all Python execution automatically use this .venv.`,
+          `  To run a script: python script.py  (no need to activate manually)`,
+          `  To install a package: call install_packages — it uses this venv automatically.`,
+        );
+      } else if (venvStatus?.exists && !venvStatus.healthy) {
+        lines.push(
+          `\nPython virtual environment: BROKEN (${venvStatus.error ?? "unknown error"})`,
+          `  → Suggest the user repairs it via the Explorer Dependencies panel.`,
+        );
+      } else {
+        lines.push(
+          `\nPython virtual environment: NOT CREATED`,
+          `  → Use the install_packages tool to install any package — it auto-creates the venv.`,
+          `  → Or the user can click "Create venv" in the Explorer Dependencies panel.`,
+        );
+      }
+    }
 
     if (deps.length > 0) {
       lines.push(`\nInstalled packages (${deps.length}):`);

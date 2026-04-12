@@ -1,0 +1,32 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site (April 2026):
+- Chat prominently shows "Builder · Full-stack autonomous Idle" (repeated), "Auto · 3 AIs ready", rich quick actions, and "Orchestrator – 8 specialist roles"
+- Explorer and Editor in placeholder/demo state
+- Features already implemented: Workspace isolation, multi-tab Editor, Agent Selector, intelligent chat intent routing, PDF/Word export, responsive layout with bottom nav, professional polish (toasts, Command Palette Ctrl+K)
+
+Task:
+Implement full **Autonomous Agent Mode** (inspired by 2026 Cursor Composer / Windsurf Cascade).
+- Add toggle in Chat header (next to Agent Selector or "Auto") or via Command Palette: "Enable Autonomous Mode" with safety levels (Conservative / Balanced / Aggressive).
+- When active: For complex requests, Orchestrator breaks task into visible numbered steps (planning → analysis → edits → testing → review).
+- Show progress stepper in Chat with real-time updates and skeletons.
+- Require user confirmation before major actions (multi-file edits, terminal commands, installs) — show diff previews where possible for Editor tabs.
+- Visual feedback: Step list, "Thinking..." with agent name, success/failure toasts.
+- Integration: Work with current Agent Selector (default to Orchestrator), respect active workspace + venv, target active Editor tab for changes.
+- Safety first: Never auto-apply destructive changes without explicit approval. Add "Pause / Stop" button.
+- Keep performant on mobile/slow networks.
+
+Follow exact response structure:
+1. Context Reference (mention live "Builder · Full-stack autonomous Idle" status)
+2. Implementation Plan (numbered steps – UI toggle, backend step executor, progress UI)
+3. Complete Code (full files only: AutonomousModeToggle.tsx, updated Chat component, backend autonomous handler — clean, well-commented TypeScript + Tailwind + Python)
+4. Exact file paths and integration instructions (placement in Chat header, hook into existing intent system)
+5. Testing steps (enable mode, give complex task like "Build a REST API endpoint for users", verify step-by-step flow with approvals, test on mobile + 3G throttle)
+6. Suggested next priority after this change
+
+Deliver only production-quality, clean, commented code. Use existing Zustand stores and toast system. Prioritize safety and transparency. Optimize for low-end devices.
+
+Begin.

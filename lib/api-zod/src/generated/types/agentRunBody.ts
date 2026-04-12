@@ -5,6 +5,7 @@
  * Universal AI Coding Proxy API
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentRunBodyAgentType } from "./agentRunBodyAgentType";
 
 export interface AgentRunBody {
   /** AI to use for the agent */
@@ -16,5 +17,7 @@ export interface AgentRunBody {
   /** Maximum number of tool calls */
   maxSteps?: number;
   /** Which agent persona to use — builder, orchestrator, scholar, or search_master */
-  agentType?: 'builder' | 'orchestrator' | 'scholar' | 'search_master';
+  agentType?: AgentRunBodyAgentType;
+  /** Specific model ID to use */
+  modelId?: string | null;
 }

@@ -219,6 +219,9 @@ export interface TerminalExecBody {
   cwd?: string | null;
   /** Timeout in seconds */
   timeout?: number;
+  /** Active workspace slug. When provided the terminal exec route auto-activates the workspace's .venv so python, pip, etc. resolve to the isolated virtual environment.
+   */
+  workspace_id?: string | null;
 }
 
 export interface TerminalExecResponse {
@@ -236,11 +239,22 @@ export interface TerminalCwdResponse {
   node: string;
 }
 
+/**
+ * Which agent persona to use — builder, orchestrator, scholar, or search_master
+ */
+export type AgentRunBodyAgentType =
+  (typeof AgentRunBodyAgentType)[keyof typeof AgentRunBodyAgentType];
+
+export const AgentRunBodyAgentType = {
+  builder: "builder",
+  orchestrator: "orchestrator",
+  scholar: "scholar",
+  search_master: "search_master",
+} as const;
+
 export interface AgentRunBody {
   /** AI to use for the agent */
   aiId: string;
-  /** Specific model to use (e.g. "gemini-2.5-flash-preview-05-20"). __auto__ resolves to provider default. */
-  modelId?: string | null;
   /** Task description — what to build or do */
   task: string;
   /** Working directory for the agent */
@@ -248,7 +262,9 @@ export interface AgentRunBody {
   /** Maximum number of tool calls */
   maxSteps?: number;
   /** Which agent persona to use — builder, orchestrator, scholar, or search_master */
-  agentType?: 'builder' | 'orchestrator' | 'scholar' | 'search_master';
+  agentType?: AgentRunBodyAgentType;
+  /** Specific model ID to use */
+  modelId?: string | null;
 }
 
 export type AgentStepType = (typeof AgentStepType)[keyof typeof AgentStepType];
@@ -290,7 +306,9 @@ export interface AgentStatusResponse {
   task?: string | null;
   steps: AgentStep[];
   result?: AgentResult | null;
+  /** Human-readable description of what the agent is currently doing */
   current_action?: string | null;
+  /** List of file paths written by the agent so far */
   files_written?: string[];
 }
 

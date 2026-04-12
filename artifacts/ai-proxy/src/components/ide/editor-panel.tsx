@@ -17,11 +17,12 @@ import {
   useWriteFile,
   useListAis, getListAisQueryKey,
   useAskAiWithContext,
+  useTerminalExec,
 } from "@workspace/api-client-react";
 import {
   FileIcon, FileCode, FileText, FileJson,
   Save, Loader2, MessageSquare, X, WrapText,
-  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search,
+  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -290,8 +291,13 @@ interface ContextMenu { x: number; y: number; tab: string }
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath, openCommandPalette } = useIDE();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, venvStatus } = useWorkspace();
   const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
+  // Run-file feature — executes the current file in the workspace venv (Python)
+  // or with node (JavaScript / TypeScript)
+  const execMutation = useTerminalExec();
+  const [isRunning, setIsRunning] = useState(false);
+  const [runOutput, setRunOutput] = useState<{ stdout: string; stderr: string; exitCode: number } | null>(null);
   // Workspace-scoped persistence key — tabs for workspace A never bleed into workspace B
   const wsKey = currentWorkspace?.slug ?? "__no_workspace__";
   const tabsKey = `vesper.editor.tabs.${wsKey}`;
@@ -505,6 +511,64 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       setIsSaving(false);
     }
   }, [activeTab, tabStates, writeFileMutation]);
+
+  // ── Run current file in the workspace venv / node ───────────────────────────
+  // Supports: .py (python via venv), .js/.mjs/.cjs (node), .sh (bash)
+  // Auto-saves first so the file on disk is always up-to-date before execution.
+  const RUNNABLE_EXT = new Set(["py", "js", "mjs", "cjs", "sh", "ts"]);
+  const runFile = useCallback(async () => {
+    if (!activeTab || activeTab.startsWith("__untitled_")) {
+      toast.error("Cannot run an unsaved file", { description: "Save the file first." });
+      return;
+    }
+    const filename = activeTab.split("/").pop() ?? activeTab;
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+    if (!RUNNABLE_EXT.has(ext)) {
+      toast.error("Cannot run this file type", { description: `No runner for .${ext} files.` });
+      return;
+    }
+    // Auto-save first so changes are on disk
+    await handleSave(activeTab);
+
+    // Build the shell command to run the file
+    let cmd: string;
+    if (ext === "py") {
+      // python auto-resolves to the workspace .venv via PATH override in the backend
+      cmd = `python "${activeTab}"`;
+    } else if (["js", "mjs", "cjs"].includes(ext)) {
+      cmd = `node "${activeTab}"`;
+    } else if (ext === "ts") {
+      cmd = `npx tsx "${activeTab}"`;
+    } else {
+      cmd = `bash "${activeTab}"`;
+    }
+
+    // Determine cwd: workspace directory if available, else repo root
+    const wsCwd = currentWorkspace
+      ? `/home/runner/workspace/${currentWorkspace.relPath}`
+      : `/home/runner/workspace`;
+
+    const wsId = currentWorkspace?.id ?? null;
+    const toastId = toast.loading(`Running ${filename}…`);
+    setIsRunning(true);
+    setRunOutput(null);
+    try {
+      const res = await execMutation.mutateAsync({
+        data: { command: cmd, cwd: wsCwd, workspace_id: wsId, timeout: 60 },
+      });
+      setRunOutput({ stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode });
+      if (res.exitCode === 0) {
+        toast.success(`${filename} finished`, { id: toastId, description: `Exit 0 · ${res.elapsedMs}ms` });
+      } else {
+        toast.error(`${filename} exited with code ${res.exitCode}`, { id: toastId });
+      }
+    } catch (err) {
+      toast.error("Run failed", { id: toastId, description: String(err) });
+    } finally {
+      setIsRunning(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentWorkspace, handleSave, execMutation]);
 
   // ── Handle Monaco editor change ─────────────────────────────────────────────
   const handleEditorChange: OnChange = useCallback((value) => {
@@ -785,6 +849,30 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : <Save className="h-3 w-3" />}
               </button>
+              {/* Run file button — only for runnable extensions */}
+              {activeTab && !activeTab.startsWith("__untitled_") && (() => {
+                const ext = activeTab.split(".").pop()?.toLowerCase() ?? "";
+                const runnable = ["py", "js", "mjs", "cjs", "sh", "ts"].includes(ext);
+                if (!runnable) return null;
+                // For Python files, show venv status in the tooltip
+                const pyVenvHint = ext === "py"
+                  ? venvStatus?.healthy
+                    ? ` · venv active (${venvStatus.python_version})`
+                    : " · no venv (will use system python)"
+                  : "";
+                return (
+                  <button
+                    onClick={runFile}
+                    disabled={isRunning}
+                    className="h-6 w-6 flex items-center justify-center rounded transition-colors text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+                    title={`Run file${pyVenvHint}`}
+                  >
+                    {isRunning
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Play className="h-3 w-3" />}
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => setShowAiPanel(a => !a)}
                 className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
@@ -915,6 +1003,42 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           </ResizablePanelGroup>
         )}
       </div>
+
+      {/* ── Run output panel — appears when a file has been executed ─────────── */}
+      {runOutput !== null && (
+        <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a10] max-h-48 overflow-y-auto">
+          <div className="flex items-center justify-between px-3 py-1 border-b border-[#1a1a24]">
+            <div className="flex items-center gap-2 text-[10px] font-mono">
+              <span className={`px-1.5 py-0.5 rounded font-mono ${
+                runOutput.exitCode === 0
+                  ? "bg-emerald-900/40 text-emerald-400"
+                  : "bg-red-900/40 text-red-400"
+              }`}>
+                {runOutput.exitCode === 0 ? "✓ Exit 0" : `✗ Exit ${runOutput.exitCode}`}
+              </span>
+              <span className="text-[#7878a8]">Output</span>
+            </div>
+            <button
+              className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
+              onClick={() => setRunOutput(null)}
+              title="Dismiss output"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="p-3 font-mono text-xs leading-relaxed space-y-1">
+            {runOutput.stdout && (
+              <pre className="text-emerald-300 whitespace-pre-wrap break-all">{runOutput.stdout}</pre>
+            )}
+            {runOutput.stderr && (
+              <pre className="text-red-400 whitespace-pre-wrap break-all">{runOutput.stderr}</pre>
+            )}
+            {!runOutput.stdout && !runOutput.stderr && (
+              <span className="text-[#7878a8]">(no output)</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Status bar ───────────────────────────────────────────────────────── */}
       <div className="shrink-0 flex items-center justify-between px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none">

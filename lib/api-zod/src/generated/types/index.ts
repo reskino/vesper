@@ -8,6 +8,7 @@
 
 export * from "./agentResult";
 export * from "./agentRunBody";
+export * from "./agentRunBodyAgentType";
 export * from "./agentRunResponse";
 export * from "./agentStatusResponse";
 export * from "./agentStep";

@@ -332,6 +332,12 @@ export const TerminalExecBody = zod.object({
     .number()
     .default(terminalExecBodyTimeoutDefault)
     .describe("Timeout in seconds"),
+  workspace_id: zod
+    .string()
+    .nullish()
+    .describe(
+      "Active workspace slug. When provided the terminal exec route auto-activates the workspace's .venv so python, pip, etc. resolve to the isolated virtual environment.\n",
+    ),
 });
 
 export const TerminalExecResponse = zod.object({
@@ -356,6 +362,7 @@ export const GetTerminalCwdResponse = zod.object({
  * @summary Run an autonomous coding agent task
  */
 export const runAgentBodyMaxStepsDefault = 20;
+export const runAgentBodyAgentTypeDefault = `builder`;
 
 export const RunAgentBody = zod.object({
   aiId: zod.string().describe("AI to use for the agent"),
@@ -370,8 +377,11 @@ export const RunAgentBody = zod.object({
     .describe("Maximum number of tool calls"),
   agentType: zod
     .enum(["builder", "orchestrator", "scholar", "search_master"])
-    .default("builder")
-    .describe("Which agent persona to use — builder, orchestrator, scholar, or search_master"),
+    .default(runAgentBodyAgentTypeDefault)
+    .describe(
+      "Which agent persona to use — builder, orchestrator, scholar, or search_master",
+    ),
+  modelId: zod.string().nullish().describe("Specific model ID to use"),
 });
 
 export const RunAgentResponse = zod.object({
@@ -423,6 +433,16 @@ export const GetAgentStatusResponse = zod.object({
       totalElapsedMs: zod.number().nullish(),
     })
     .nullish(),
+  current_action: zod
+    .string()
+    .nullish()
+    .describe(
+      "Human-readable description of what the agent is currently doing",
+    ),
+  files_written: zod
+    .array(zod.string())
+    .optional()
+    .describe("List of file paths written by the agent so far"),
 });
 
 /**

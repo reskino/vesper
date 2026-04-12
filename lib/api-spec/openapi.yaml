@@ -923,6 +923,13 @@ components:
           type: integer
           default: 60
           description: Timeout in seconds
+        workspace_id:
+          type: string
+          nullable: true
+          description: >
+            Active workspace slug. When provided the terminal exec route
+            auto-activates the workspace's .venv so python, pip, etc. resolve
+            to the isolated virtual environment.
       required:
         - command
 

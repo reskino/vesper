@@ -13,4 +13,7 @@ export interface TerminalExecBody {
   cwd?: string | null;
   /** Timeout in seconds */
   timeout?: number;
+  /** Active workspace slug. When provided the terminal exec route auto-activates the workspace's .venv so python, pip, etc. resolve to the isolated virtual environment.
+   */
+  workspace_id?: string | null;
 }

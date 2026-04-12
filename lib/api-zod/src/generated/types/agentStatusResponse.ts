@@ -13,4 +13,8 @@ export interface AgentStatusResponse {
   task?: string | null;
   steps: AgentStep[];
   result?: AgentResult | null;
+  /** Human-readable description of what the agent is currently doing */
+  current_action?: string | null;
+  /** List of file paths written by the agent so far */
+  files_written?: string[];
 }

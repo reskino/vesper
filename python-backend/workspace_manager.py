@@ -45,6 +45,13 @@ def _ws_path(slug: str) -> str:
     return os.path.join(WORKSPACES_DIR, slug)
 
 
+def get_workspace_path(workspace_id: str) -> Optional[str]:
+    """Return the absolute path to a workspace or None if it does not exist."""
+    slug = _SLUG_RE.sub("-", workspace_id.strip().lower()).strip("-")
+    path = _ws_path(slug)
+    return path if os.path.isdir(path) else None
+
+
 def _rel_path(slug: str) -> str:
     """Relative path (from WORKSPACE_ROOT) — used by the file-tree API."""
     return f"workspaces/{slug}"

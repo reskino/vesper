@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useTerminalExec, useGetTerminalCwd, getGetTerminalCwdQueryKey } from "@workspace/api-client-react";
-import { Loader2, TerminalSquare, Trash2, Copy, ChevronRight } from "lucide-react";
+import { Loader2, TerminalSquare, Trash2, Copy, ChevronRight, CircleDot } from "lucide-react";
 import { toast } from "sonner";
+import { useWorkspace } from "@/contexts/workspace-context";
 
 interface HistoryEntry {
   id: number;
@@ -24,6 +25,9 @@ export default function TerminalPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
 
+  // Workspace + venv context — used to auto-activate .venv in every command
+  const { currentWorkspace, venvStatus } = useWorkspace();
+
   const { data: cwdInfo } = useGetTerminalCwd({
     query: { queryKey: getGetTerminalCwdQueryKey(), refetchInterval: 5000 }
   });
@@ -43,8 +47,14 @@ export default function TerminalPage() {
     setHistoryIndex(-1);
     setCommand("");
     const id = ++idCounter.current;
+    // Pass workspace_id so the backend auto-activates its .venv before running.
+    // cwd defaults to the workspace directory when a workspace is active.
+    const wsId = currentWorkspace?.id ?? null;
+    const wsCwd = currentWorkspace
+      ? `/home/runner/workspace/${currentWorkspace.relPath}`
+      : undefined;
     execMutation.mutate(
-      { data: { command: c } },
+      { data: { command: c, workspace_id: wsId, cwd: wsCwd ?? null } },
       {
         onSuccess: data => setHistory(prev => [...prev, { id, command: c, stdout: data.stdout, stderr: data.stderr, exitCode: data.exitCode, elapsedMs: data.elapsedMs, cwd: data.cwd }]),
         onError: err => setHistory(prev => [...prev, { id, command: c, stdout: "", stderr: String(err), exitCode: 1, elapsedMs: 0, cwd }]),
@@ -83,13 +93,32 @@ export default function TerminalPage() {
         <div className="flex items-center gap-2 min-w-0">
           <TerminalSquare className="h-4 w-4 text-emerald-400 shrink-0" />
           <span className="text-emerald-400 font-semibold text-sm">Terminal</span>
-          <span className="bg-[#21262d] text-[#8b949e] text-xs px-2 py-0.5 rounded-full font-mono truncate max-w-[180px] sm:max-w-xs">
+          <span className="bg-[#21262d] text-[#8b949e] text-xs px-2 py-0.5 rounded-full font-mono truncate max-w-[120px] sm:max-w-xs">
             {cwd$}
           </span>
+          {/* Workspace venv badge — shown when a workspace with a healthy venv is active */}
+          {currentWorkspace && venvStatus?.healthy && (
+            <span
+              className="hidden sm:flex items-center gap-1 bg-emerald-900/30 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-mono border border-emerald-800/40"
+              title={`${currentWorkspace.name} .venv — ${venvStatus.python_version ?? "Python"} · ${venvStatus.package_count} pkgs`}
+            >
+              <CircleDot className="h-2.5 w-2.5" />
+              venv
+            </span>
+          )}
+          {currentWorkspace && venvStatus && !venvStatus.healthy && (
+            <span
+              className="hidden sm:flex items-center gap-1 bg-amber-900/30 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-mono border border-amber-800/40"
+              title="Workspace has no active .venv — run install_packages or create venv from Explorer"
+            >
+              <CircleDot className="h-2.5 w-2.5" />
+              no venv
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {cwdInfo && (
-            <span className="hidden sm:block text-xs text-[#8b949e]">
+            <span className="hidden md:block text-xs text-[#8b949e]">
               {cwdInfo.python} · Node {cwdInfo.node}
             </span>
           )}

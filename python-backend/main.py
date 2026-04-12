@@ -1316,7 +1316,24 @@ def terminal_exec():
     if not command:
         return jsonify({"error": "command is required"}), 400
     try:
-        result = exec_command(command, cwd=data.get("cwd"), timeout=min(int(data.get("timeout", 60)), 300))
+        # Auto-activate the workspace .venv when a workspace_id is provided.
+        # This lets the terminal inherit the isolated Python interpreter and
+        # all packages installed in that workspace without the user having to
+        # manually source .venv/bin/activate.
+        extra_env = None
+        workspace_id = data.get("workspace_id")
+        if workspace_id:
+            try:
+                from agent import _get_venv_extra_env as _gvee
+                ws_path = workspace_manager.get_workspace_path(workspace_id)
+                if ws_path:
+                    env = _gvee(ws_path)
+                    if env:
+                        extra_env = env
+            except Exception:
+                pass  # silently skip venv activation if anything fails
+
+        result = exec_command(command, cwd=data.get("cwd"), timeout=min(int(data.get("timeout", 60)), 300), extra_env=extra_env)
         # Update cumulative RTK savings stats (best-effort)
         try:
             raw_stdout = result.get("stdout", "")

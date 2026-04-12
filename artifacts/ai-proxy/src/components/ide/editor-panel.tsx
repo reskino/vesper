@@ -341,16 +341,30 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     return () => { theRef.current = null; };
   }, [openFile, theRef]);
 
+  // ── Open a new empty untitled tab ────────────────────────────────────────────
+  const untitledCount = useRef(0);
+  const openNewTab = useCallback(() => {
+    untitledCount.current += 1;
+    const path = `__untitled_${untitledCount.current}__`;
+    setOpenTabs(prev => [...prev, path]);
+    setActiveTab(path);
+    setTabStates(prev => ({
+      ...prev,
+      [path]: { content: "", savedContent: "", loaded: true },
+    }));
+  }, [setActiveTab]);
+
   // ── Close a tab ─────────────────────────────────────────────────────────────
   const closeTab = useCallback((path: string, e: React.MouseEvent | { stopPropagation: () => void }) => {
     e.stopPropagation();
-    setOpenTabs(prev => {
-      const idx = prev.indexOf(path);
-      const next = prev.filter(p => p !== path);
-      if (activeTab === path) setActiveTab(next[Math.max(0, idx - 1)] ?? null);
-      return next;
-    });
-  }, [activeTab]);
+    const next = openTabs.filter(p => p !== path);
+    const idx  = openTabs.indexOf(path);
+    // Switch to adjacent tab first, then remove (avoids stale closure inside updater)
+    if (activeTab === path) setActiveTab(next[Math.max(0, idx - 1)] ?? null);
+    setOpenTabs(next);
+    // Free the cached content to avoid memory accumulation
+    setTabStates(prev => { const s = { ...prev }; delete s[path]; return s; });
+  }, [activeTab, openTabs, setActiveTab]);
 
   // ── Derived state ───────────────────────────────────────────────────────────
   const currentState = activeTab ? tabStates[activeTab] : null;
@@ -359,6 +373,8 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   // ── Save the current file ────────────────────────────────────────────────────
   const handleSave = useCallback(async (path = activeTab) => {
     if (!path) return;
+    // Untitled tabs aren't backed by real files — skip silently (auto-save fires on them too)
+    if (path.startsWith("__untitled_")) return;
     const state = tabStates[path];
     if (!state?.loaded) return;
     setIsSaving(true);
@@ -430,20 +446,35 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         e.preventDefault();
         closeTab(activeTab, { stopPropagation: () => {} });
       }
+      // Ctrl+T — open new untitled tab
+      if (ctrl && e.key === "t") {
+        e.preventDefault();
+        openNewTab();
+      }
+      // Ctrl+Tab / Ctrl+Shift+Tab — cycle through open tabs
+      if (ctrl && e.key === "Tab" && openTabs.length > 1) {
+        e.preventDefault();
+        const idx  = activeTab ? openTabs.indexOf(activeTab) : 0;
+        const next = e.shiftKey
+          ? openTabs[(idx - 1 + openTabs.length) % openTabs.length]
+          : openTabs[(idx + 1) % openTabs.length];
+        setActiveTab(next);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave, activeTab, closeTab]);
+  }, [handleSave, activeTab, closeTab, openNewTab, openTabs, setActiveTab]);
 
   // ── Monaco editor options (memo to avoid full re-mount on every render) ────
   const monacoOptions = useMemo((): MonacoNS.editor.IStandaloneEditorConstructionOptions => ({
     theme: "vs-dark",
     fontSize,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
-    fontLigatures: true,
+    fontLigatures: !mobile, // ligatures hurt perf on low-end devices
     wordWrap,
     lineNumbers: "on",
-    minimap: { enabled: true, scale: 1 },
+    // Minimap wastes GPU on small/low-end screens; disable it on mobile
+    minimap: { enabled: !mobile, scale: 1 },
     scrollBeyondLastLine: false,
     renderWhitespace: "selection",
     bracketPairColorization: { enabled: true },
@@ -458,22 +489,22 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     scrollbar: {
       vertical: "auto",
       horizontal: "auto",
-      verticalScrollbarSize: 6,
-      horizontalScrollbarSize: 6,
+      verticalScrollbarSize: mobile ? 3 : 6,
+      horizontalScrollbarSize: mobile ? 3 : 6,
     },
-    overviewRulerLanes: 3,
-    cursorBlinking: "smooth",
-    cursorSmoothCaretAnimation: "on",
-    smoothScrolling: true,
+    overviewRulerLanes: mobile ? 0 : 3,
+    cursorBlinking: mobile ? "blink" : "smooth",
+    cursorSmoothCaretAnimation: mobile ? "off" : "on",
+    smoothScrolling: !mobile,
     padding: { top: 8, bottom: 8 },
     // Enable IntelliSense features
     suggest: { showKeywords: true, showSnippets: true, showClasses: true, showFunctions: true },
     parameterHints: { enabled: true },
-    hover: { enabled: true },
-    contextmenu: true,
+    hover: { enabled: !mobile }, // hover dialogs are frustrating on touch
+    contextmenu: !mobile,       // long-press context menu conflicts with native scroll
     multiCursorModifier: "alt",
     accessibilitySupport: "off", // improves perf in Replit
-  }), [fontSize, wordWrap]);
+  }), [fontSize, wordWrap, mobile]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -487,7 +518,10 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           </div>
         ) : (
           openTabs.map(tab => {
-            const name = tab.split("/").pop() ?? tab;
+            const isUntitled = tab.startsWith("__untitled_");
+            const name = isUntitled
+              ? `Untitled ${tab.replace("__untitled_", "").replace("__", "")}`
+              : (tab.split("/").pop() ?? tab);
             const isActive = tab === activeTab;
             const dirty = !!(tabStates[tab] && tabStates[tab].content !== tabStates[tab].savedContent);
             return (
@@ -511,10 +545,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 {dirty && isSaving && <Loader2 className="h-2.5 w-2.5 animate-spin text-[#9898b8] shrink-0" />}
                 <button
                   onClick={e => closeTab(tab, e)}
-                  className="h-4 w-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-[#9898b8] hover:text-foreground hover:bg-[#1e1e2e]"
-                  title="Close tab"
+                  className="h-5 w-5 flex items-center justify-center rounded
+                    opacity-60 md:opacity-0 md:group-hover:opacity-100
+                    transition-opacity text-[#9898b8] hover:text-foreground hover:bg-[#1e1e2e]
+                    active:bg-[#1e1e2e] touch-manipulation"
+                  title="Close tab (Ctrl+W)"
                 >
-                  <X className="h-2.5 w-2.5" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             );
@@ -523,6 +560,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
         {/* Right-side toolbar */}
         <div className="ml-auto flex items-center gap-1 px-2 shrink-0">
+          {/* New tab button always visible */}
+          <button
+            onClick={openNewTab}
+            className="h-6 w-6 flex items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors"
+            title="New untitled tab (Ctrl+T)"
+          >
+            <FilePlus className="h-3 w-3" />
+          </button>
           {activeTab && (
             <>
               <button
@@ -599,11 +644,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
             {/* Keyboard shortcut grid */}
             <div className="flex flex-col gap-1.5 w-full max-w-[280px]">
               {[
-                { keys: ["Ctrl", "S"],   label: "Save file" },
-                { keys: ["Ctrl", "W"],   label: "Close tab" },
-                { keys: ["Ctrl", "`"],   label: "Toggle terminal" },
-                { keys: ["Ctrl", "J"],   label: "Toggle chat" },
-                { keys: ["Ctrl", "N"],   label: "New chat" },
+                { keys: ["Ctrl", "S"],        label: "Save file" },
+                { keys: ["Ctrl", "W"],        label: "Close tab" },
+                { keys: ["Ctrl", "T"],        label: "New untitled tab" },
+                { keys: ["Ctrl", "Tab"],      label: "Next tab" },
+                { keys: ["Ctrl", "⇧", "Tab"], label: "Previous tab" },
+                { keys: ["Ctrl", "`"],        label: "Toggle terminal" },
+                { keys: ["Ctrl", "J"],        label: "Toggle chat" },
               ].map(({ keys, label }) => (
                 <div
                   key={label}

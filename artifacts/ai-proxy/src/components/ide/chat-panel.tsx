@@ -579,7 +579,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   mobile?: boolean;
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat,
-    mobileTab, showMobileChatSheet, incrementChatUnread } = useIDE();
+    mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath } = useIDE();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep } = useWorkspace();
   const { toast } = useToast();
@@ -651,6 +651,14 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const { data: attachedFileData } = useReadFile(
     { path: attachedFile || "" },
     { query: { enabled: !!attachedFile, queryKey: getReadFileQueryKey({ path: attachedFile || "" }) } }
+  );
+
+  // Auto-read the currently open editor file so AI can see it without manual attaching.
+  // Disabled when the user has manually attached a file or uploaded one.
+  const autoInjectPath = (!attachedFile && !uploadedFile && activeFilePath) ? activeFilePath : "";
+  const { data: activeFileData } = useReadFile(
+    { path: autoInjectPath },
+    { query: { enabled: !!autoInjectPath, queryKey: getReadFileQueryKey({ path: autoInjectPath }), staleTime: 10_000 } }
   );
 
   useEffect(() => {
@@ -805,6 +813,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       // 2. Explicitly attached file (from sidebar picker or upload)
       if (fileContent) {
         files.push({ path: filePath, content: fileContent });
+      } else if (activeFileData?.content && autoInjectPath) {
+        // 2a. Auto-inject: the file currently open in the editor — no user action needed.
+        //     This is what makes "refactor this", "fix this bug" etc work without attaching.
+        files.push({ path: autoInjectPath, content: activeFileData.content });
       }
 
       // 3. Imported folder project (full contents)
@@ -837,7 +849,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps, mobileTab, showMobileChatSheet, incrementChatUnread]);
+  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps, mobileTab, showMobileChatSheet, incrementChatUnread, activeFileData, autoInjectPath]);
 
   // ── Install-intent handler ────────────────────────────────────────────────
   const handleInstallConfirm = useCallback(async (packageName: string) => {
@@ -922,6 +934,17 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             >
               <span className="h-1 w-1 rounded-full bg-violet-400" />
               {currentWorkspace.name}
+            </span>
+          )}
+          {/* Auto-injected active editor file */}
+          {autoInjectPath && activeFileData?.content && (
+            <span
+              title={`${autoInjectPath} is auto-included as AI context from the editor`}
+              className="flex items-center gap-1 text-[10px] bg-sky-950/50 text-sky-400/80
+                border border-sky-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none"
+            >
+              <span className="h-1 w-1 rounded-full bg-sky-400" />
+              {autoInjectPath.split("/").pop()}
             </span>
           )}
           {hasImportedProject && (

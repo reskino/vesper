@@ -21,7 +21,7 @@ import {
 import {
   FileIcon, FileCode, FileText, FileJson,
   Save, Loader2, MessageSquare, X, WrapText,
-  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX,
+  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";

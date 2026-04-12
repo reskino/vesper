@@ -14,6 +14,7 @@ import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
 import { FileExplorer } from "@/components/ide/file-explorer";
 import { EditorPanel } from "@/components/ide/editor-panel";
+import { CommandPalette } from "@/components/ide/command-palette";
 import { ChatPanel } from "@/components/ide/chat-panel";
 import { TerminalPanel } from "@/components/ide/terminal-panel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -522,9 +523,12 @@ function MobileWorkspace() {
 // Root layout
 // ─────────────────────────────────────────────────────────────────────────────
 export function IDELayout({ children }: { children?: React.ReactNode }) {
-  const { sidebarPanel, toggleTerminal, toggleChat, triggerNewChat } = useIDE();
+  const {
+    sidebarPanel, toggleTerminal, toggleChat, triggerNewChat,
+    showCommandPalette, openCommandPalette, closeCommandPalette,
+  } = useIDE();
 
-  // Global keyboard shortcuts (desktop only)
+  // Global keyboard shortcuts (desktop + mobile)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -532,10 +536,12 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       if (ctrl && e.key === "`") { e.preventDefault(); toggleTerminal(); }
       if (ctrl && e.key === "j") { e.preventDefault(); toggleChat(); }
       if (ctrl && e.key === "n") { e.preventDefault(); triggerNewChat(); }
+      // Ctrl+P — command palette (catches focus when editor isn't active)
+      if (ctrl && e.key === "p") { e.preventDefault(); openCommandPalette(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleTerminal, toggleChat, triggerNewChat]);
+  }, [toggleTerminal, toggleChat, triggerNewChat, openCommandPalette]);
 
   return (
     <div className="flex flex-col h-dvh w-full bg-background overflow-hidden font-sans">
@@ -578,6 +584,9 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       <MobileChatSheet />
       <MobileSettingsSheet />
       <MobileNav />
+
+      {/* ── Command Palette (Ctrl+P, z-300, above everything) ───────────── */}
+      <CommandPalette open={showCommandPalette} onClose={closeCommandPalette} />
 
       {/* Spacer so content isn't hidden behind the fixed bottom nav (52px bar) */}
       <div

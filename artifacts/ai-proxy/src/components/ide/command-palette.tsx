@@ -132,10 +132,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const itemRefs  = useRef<(HTMLButtonElement | null)[]>([]);
 
   // ── Fetch workspace file tree ─────────────────────────────────────────────
-  const rootPath = currentWorkspace?.path ?? "";
+  // `relPath` is the workspace subdirectory relative to WORKSPACE_ROOT (e.g. "workspaces/my-project")
+  const relPath  = currentWorkspace?.relPath ?? "";
+  const rootPath = currentWorkspace?.path     ?? "";  // absolute, for stripping display prefixes
   const { data: treeData } = useGetFileTree(
-    { rootPath },
-    { query: { enabled: open && !!rootPath, staleTime: 10_000 } }
+    { path: relPath },
+    { query: { enabled: open && !!relPath, staleTime: 10_000 } }
   );
 
   // ── Flatten tree → file list ──────────────────────────────────────────────

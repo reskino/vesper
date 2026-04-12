@@ -1,0 +1,34 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (confirmed live April 2026):
+- Workspace isolation, Agent Selector with 8 specialist roles (Builder, Orchestrator, Scholar, Search Master, Docs Weaver, Code Surgeon), intelligent chat with quick actions, responsive layout with bottom navigation, multi-tab Monaco Editor, and PDF/Word export all implemented
+- Chat header rich with "Builder · Full-stack autonomous Idle", "Orchestrator (8 specialist roles)", quick actions
+- Explorer and Editor functional but UI polish (toasts, command palette, loading states) is limited
+
+Core Vision: Professional, polished UX like Cursor or modern IDEs — smooth feedback, accessible, delightful on desktop + mobile (especially low-end devices in Ghana).
+
+Task:
+Implement comprehensive professional polish and UX improvements.
+- Global toast notification system (success, error, warning, loading/progress) — lightweight, non-intrusive, auto-dismiss.
+- Command palette (Ctrl+K / Cmd+K) for quick access: switch agents, open files, run commands, export, workspace actions, show shortcuts.
+- Loading skeletons and states for chat responses, file opens, exports, agent actions.
+- Keyboard shortcut help modal (accessible via ? or button).
+- Subtle micro-animations and hover states (disable heavy ones on mobile).
+- Error boundaries with friendly messages.
+- Accessibility improvements (ARIA labels, focus management, contrast).
+- Consistent dark zinc theme refinements.
+
+Follow exact response structure:
+1. Context Reference (mention all completed features and live polish gaps)
+2. Implementation Plan (numbered steps – toast provider, command palette, skeletons, etc.)
+3. Complete Code (full files only: new components/ToastProvider.tsx, CommandPalette.tsx, updated layouts — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions (wrap root layout with providers)
+5. Testing steps (trigger toasts on export/install/chat, open command palette, test loading states on desktop + mobile with 3G throttle)
+6. Suggested next priority (e.g. safe venv enhancements, advanced agent orchestration, or final testing)
+
+Deliver only production-quality, clean, commented code. Use lightweight solutions (e.g. sonner or custom toast for low bundle). Optimize for performance and slow networks. No heavy libraries.
+
+Begin.

@@ -33,10 +33,12 @@ function proxyToPython(req: Request, res: Response) {
     const statusCode = proxyRes.statusCode ?? 200;
     const contentType = proxyRes.headers["content-type"] ?? "";
 
-    // For binary responses (images etc.) stream raw bytes through
-    if (contentType.startsWith("image/") || contentType === "application/octet-stream") {
+    // For binary responses (images, docx, octet-stream) stream raw bytes through
+    const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (contentType.startsWith("image/") || contentType === "application/octet-stream" || contentType.startsWith(DOCX_MIME)) {
       res.status(statusCode);
       res.setHeader("Content-Type", contentType);
+      if (proxyRes.headers["content-disposition"]) res.setHeader("Content-Disposition", proxyRes.headers["content-disposition"]);
       if (proxyRes.headers["cache-control"]) res.setHeader("Cache-Control", proxyRes.headers["cache-control"]);
       proxyRes.pipe(res);
       return;
@@ -130,6 +132,9 @@ router.get("/workspaces", proxyToPython);
 router.post("/workspaces/create", proxyToPython);
 router.get("/workspaces/:workspaceId/deps", proxyToPython);
 router.post("/workspaces/:workspaceId/install", proxyToPython);
+
+// Export routes
+router.post("/export/docx", proxyToPython);
 
 // Multi-agent swarm routes
 router.get("/agents", proxyToPython);

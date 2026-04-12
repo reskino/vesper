@@ -1078,6 +1078,225 @@ def file_rename():
         return jsonify({"error": str(e)}), 400
 
 
+# ─── Export ───────────────────────────────────────────────────────────────────
+
+@app.route("/api/export/docx", methods=["POST"])
+def export_docx():
+    """
+    Generate a richly styled Word (.docx) document from chat messages.
+
+    POST body:
+        {
+          "title":         str   (optional, default "Vesper Chat Export"),
+          "workspaceName": str   (optional),
+          "messages": [
+            { "role": "user"|"assistant", "content": str,
+              "aiId": str (optional), "timestamp": str ISO8601 (optional) }
+          ]
+        }
+
+    Returns: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    """
+    import io, re
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Inches, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    data          = request.get_json(force=True) or {}
+    title         = data.get("title", "Vesper Chat Export")
+    workspace     = data.get("workspaceName", "")
+    messages_raw  = data.get("messages", [])
+
+    AI_LABELS = {
+        "__auto__": "Auto", "pollinations": "Pollinations",
+        "llm7": "LLM7",     "chatgpt": "ChatGPT",
+    }
+
+    def agent_label(ai_id):
+        return AI_LABELS.get(ai_id, ai_id or "Assistant")
+
+    def fmt_ts(ts_str):
+        if not ts_str:
+            return ""
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            return dt.strftime("%b %d, %Y  %I:%M %p")
+        except Exception:
+            return ts_str
+
+    def add_shading(paragraph, hex_color="1A1A2E"):
+        """Fill paragraph background (code blocks)."""
+        pPr = paragraph._p.get_or_add_pPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), hex_color)
+        pPr.append(shd)
+
+    def add_border_bottom(paragraph, hex_color):
+        """Add a coloured bottom border to simulate a message header divider."""
+        pPr = paragraph._p.get_or_add_pPr()
+        pBdr = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "6")
+        bottom.set(qn("w:space"), "1")
+        bottom.set(qn("w:color"), hex_color)
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+
+    def strip_md_inline(text):
+        """Strip *bold* / _italic_ / `code` markers for plain paragraph runs."""
+        return re.sub(r"(\*\*|__)(.*?)\1", r"\2",
+               re.sub(r"(\*|_)(.*?)\1", r"\2",
+               re.sub(r"`([^`]+)`", r"\1", text)))
+
+    def add_text_paragraph(doc, line):
+        """Render one markdown line as a Word paragraph with inline formatting."""
+        h3 = re.match(r"^#{3}\s+(.*)", line)
+        h2 = re.match(r"^#{2}\s+(.*)", line)
+        h1 = re.match(r"^#{1}\s+(.*)", line)
+        if h1:
+            p = doc.add_heading(h1.group(1), level=1); return p
+        if h2:
+            p = doc.add_heading(h2.group(1), level=2); return p
+        if h3:
+            p = doc.add_heading(h3.group(1), level=3); return p
+
+        # Bullet
+        bullet = re.match(r"^[-*+]\s+(.*)", line)
+        is_bullet = bool(bullet)
+        text_src = bullet.group(1) if bullet else line
+
+        p = doc.add_paragraph(style="List Bullet" if is_bullet else "Normal")
+        # Inline tokenise: **bold** | *italic* | `code` | plain
+        tokens = re.split(r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)", text_src)
+        for tok in tokens:
+            if tok.startswith("**") and tok.endswith("**"):
+                run = p.add_run(tok[2:-2]); run.bold = True
+            elif tok.startswith("*") and tok.endswith("*"):
+                run = p.add_run(tok[1:-1]); run.italic = True
+            elif tok.startswith("`") and tok.endswith("`"):
+                run = p.add_run(tok[1:-1])
+                run.font.name = "Courier New"; run.font.size = Pt(10)
+            else:
+                p.add_run(tok)
+        return p
+
+    # ── Build the document ────────────────────────────────────────────────────
+    doc = Document()
+
+    # Page margins (narrow for more content space)
+    for section in doc.sections:
+        section.top_margin    = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin   = Cm(2.5)
+        section.right_margin  = Cm(2.5)
+
+    # ── Document title ─────────────────────────────────────────────────────────
+    title_para = doc.add_heading(title, level=0)
+    title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run = title_para.runs[0]
+    run.font.color.rgb = RGBColor(0x7C, 0x3A, 0xED)  # violet
+
+    meta_parts = []
+    if workspace:
+        meta_parts.append(f"Workspace: {workspace}")
+    meta_parts.append(f"{len(messages_raw)} message{'s' if len(messages_raw) != 1 else ''}")
+    from datetime import datetime
+    meta_parts.append(f"Exported {datetime.now().strftime('%b %d, %Y  %I:%M %p')}")
+
+    meta_p = doc.add_paragraph("  ·  ".join(meta_parts))
+    meta_p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    meta_p.runs[0].font.size = Pt(9)
+    doc.add_paragraph("")  # spacer
+
+    # ── Messages ───────────────────────────────────────────────────────────────
+    for msg in messages_raw:
+        role      = msg.get("role", "user")
+        content   = msg.get("content", "")
+        ai_id     = msg.get("aiId", "")
+        ts        = fmt_ts(msg.get("timestamp", ""))
+        is_user   = role == "user"
+        sender    = "You" if is_user else agent_label(ai_id)
+        hex_color = "7C3AED" if is_user else "0284C7"
+
+        # Header paragraph: "Sender  ·  timestamp"
+        header_p = doc.add_paragraph()
+        run_name = header_p.add_run(sender)
+        run_name.bold = True
+        run_name.font.color.rgb = RGBColor(
+            int(hex_color[:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:], 16),
+        )
+        run_name.font.size = Pt(11)
+        if ts:
+            run_ts = header_p.add_run(f"   {ts}")
+            run_ts.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+            run_ts.font.size = Pt(9)
+        add_border_bottom(header_p, hex_color)
+        header_p.paragraph_format.space_before = Pt(12)
+        header_p.paragraph_format.space_after  = Pt(4)
+
+        # Body — split into text / code segments
+        code_pattern = re.compile(r"```(\w*)\n?([\s\S]*?)```", re.DOTALL)
+        last = 0
+        for m in code_pattern.finditer(content):
+            # Text before code block
+            text_chunk = content[last:m.start()]
+            for line in text_chunk.split("\n"):
+                line = line.rstrip()
+                if line:
+                    add_text_paragraph(doc, line)
+
+            # Code block
+            lang = m.group(1).upper() or "CODE"
+            code_lines = m.group(2).rstrip().split("\n")
+            lang_p = doc.add_paragraph(lang)
+            lang_p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+            lang_p.runs[0].font.size = Pt(8)
+            lang_p.runs[0].font.name = "Courier New"
+
+            for cl in code_lines:
+                cp = doc.add_paragraph()
+                code_run = cp.add_run(cl if cl else " ")
+                code_run.font.name = "Courier New"
+                code_run.font.size = Pt(9)
+                code_run.font.color.rgb = RGBColor(0xD4, 0xD4, 0xE8)
+                add_shading(cp, "1A1A2E")
+                cp.paragraph_format.space_before = Pt(0)
+                cp.paragraph_format.space_after  = Pt(0)
+
+            last = m.end()
+
+        # Remaining text after last code block
+        trailing = content[last:]
+        for line in trailing.split("\n"):
+            line = line.rstrip()
+            if line:
+                add_text_paragraph(doc, line)
+
+    # ── Serialise to bytes and return ─────────────────────────────────────────
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    slug = re.sub(r"[^a-z0-9-]", "", title.lower().replace(" ", "-"))[:48]
+    filename = f"{slug}-{datetime.now().strftime('%Y-%m-%d')}.docx"
+
+    from flask import send_file
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
 # ─── Terminal ─────────────────────────────────────────────────────────────────
 
 # RTK-style cumulative token savings tracker

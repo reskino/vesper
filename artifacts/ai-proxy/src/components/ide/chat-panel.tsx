@@ -1398,124 +1398,205 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   return (
     <div className={`flex flex-col h-full bg-[#0d0d12] ${!compact ? "border-l border-[#1a1a24]" : ""}`}>
 
-      {/* ── Desktop header ─────────────────────────────────────────────── */}
-      <div className="hidden md:flex shrink-0 items-center justify-between px-3 h-9
-        border-b border-[#131318] bg-[#080809]">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3 text-primary/70" />
-            <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Chat</span>
-          </div>
-          <AgentSelector isPending={isPending} />
-          {/* Workspace context indicator */}
-          {currentWorkspace && wsTreeData?.tree && (
-            <span
-              title={`Workspace "${currentWorkspace.name}" is included as AI context`}
-              className="flex items-center gap-1 text-[10px] bg-violet-950/50 text-violet-400/80
-                border border-violet-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none"
-            >
-              <span className="h-1 w-1 rounded-full bg-violet-400" />
-              {currentWorkspace.name}
-            </span>
-          )}
-          {/* Auto-injected active editor file */}
-          {autoInjectPath && activeFileData?.content && (
-            <span
-              title={`${autoInjectPath} is auto-included as AI context from the editor`}
-              className="flex items-center gap-1 text-[10px] bg-sky-950/50 text-sky-400/80
-                border border-sky-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none"
-            >
-              <span className="h-1 w-1 rounded-full bg-sky-400" />
-              {autoInjectPath.split("/").pop()}
-            </span>
-          )}
-          {hasImportedProject && (
-            <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
-              <FolderOpen className="h-2.5 w-2.5" />
-              {importedProject!.name}
-            </span>
-          )}
-          {isAuto && connectedAis.length > 0 && (
-            <span className="flex items-center gap-1 text-[10px] bg-emerald-950/60 text-emerald-400/80 border border-emerald-900/60 px-1.5 py-0.5 rounded-md font-semibold">
-              <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" />
-              {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""}
-            </span>
-          )}
+      {/* ── Desktop header — 2-row layout ─────────────────────────────── */}
+      <div className="hidden md:flex flex-col shrink-0 border-b border-[#0f0f14]">
 
-          {/* ── Autonomous mode toggle ────────────────────────────────── */}
-          <div className="relative flex items-center gap-0.5" onBlur={(e) => {
+        {/* ── Row 1: Agent selector + right action controls ─────────────── */}
+        <div className="flex items-center justify-between px-3 h-10 bg-[#08080b]">
+
+          {/* Left: CHAT label + AgentSelector */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Sparkles className="h-3 w-3 text-primary/60" />
+              <span className="text-[10px] font-bold text-[#5a5a7a] uppercase tracking-widest">Chat</span>
+            </div>
+
+            {/* Agent selector — the prominent UI for switching builder/orchestrator/etc */}
+            <AgentSelector isPending={isPending} isAutonomousActive={autoEnabled} />
+
+            {/* Context context badges — workspace, imported file, imported project, AI count */}
+            {currentWorkspace && wsTreeData?.tree && (
+              <span
+                title={`Workspace "${currentWorkspace.name}" included as AI context`}
+                className="flex items-center gap-1 text-[10px] bg-violet-950/50 text-violet-400/80
+                  border border-violet-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none shrink-0"
+              >
+                <span className="h-1 w-1 rounded-full bg-violet-400 shrink-0" />
+                <span className="max-w-[80px] truncate">{currentWorkspace.name}</span>
+              </span>
+            )}
+            {autoInjectPath && activeFileData?.content && (
+              <span
+                title={`${autoInjectPath} is auto-injected from the active editor tab`}
+                className="flex items-center gap-1 text-[10px] bg-sky-950/50 text-sky-400/80
+                  border border-sky-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none shrink-0"
+              >
+                <span className="h-1 w-1 rounded-full bg-sky-400 shrink-0" />
+                <span className="max-w-[80px] truncate">{autoInjectPath.split("/").pop()}</span>
+              </span>
+            )}
+            {hasImportedProject && (
+              <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold shrink-0">
+                <FolderOpen className="h-2.5 w-2.5 shrink-0" />
+                <span className="max-w-[72px] truncate">{importedProject!.name}</span>
+              </span>
+            )}
+            {isAuto && connectedAis.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] bg-emerald-950/60 text-emerald-400/80 border border-emerald-900/60 px-1.5 py-0.5 rounded-md font-semibold shrink-0">
+                <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""} ready
+              </span>
+            )}
+          </div>
+
+          {/* Right: Export, Regen, Collapse */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            {messages.length > 0 && (
+              <>
+                <ExportMenu messages={messages} workspaceName={currentWorkspace?.name} />
+                <button
+                  onClick={handleRegen}
+                  disabled={isPending}
+                  className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8]
+                    hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all"
+                  title="Regenerate last response"
+                >
+                  <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
+                </button>
+              </>
+            )}
+            <button
+              onClick={toggleChat}
+              className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8]
+                hover:text-foreground hover:bg-[#111118] transition-all"
+              title="Collapse chat panel (Ctrl+J)"
+            >
+              <ChevronsRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Row 2: Autonomous Mode toggle strip ───────────────────────── */}
+        <div className={`flex items-center px-3 h-8 gap-3 border-t transition-colors duration-300 ${
+          autoEnabled
+            ? "border-violet-500/20 bg-violet-950/15"
+            : "border-[#0f0f14] bg-[#060609]"
+        }`}>
+
+          {/* Prominent toggle — label + visual switch + ON/OFF text */}
+          <button
+            onClick={toggleAuto}
+            className="flex items-center gap-2 group select-none"
+            title={autoEnabled
+              ? "Autonomous Mode is ON — click to disable"
+              : "Enable Autonomous Mode — the agent will plan and execute tasks step-by-step"}
+          >
+            {/* Robot icon */}
+            <Bot className={`h-3.5 w-3.5 shrink-0 transition-colors ${autoEnabled ? "text-violet-400" : "text-[#5a5a7a]"}`} />
+
+            {/* Label */}
+            <span className={`text-[11px] font-semibold transition-colors ${autoEnabled ? "text-violet-300" : "text-[#7878a8] group-hover:text-[#9898b8]"}`}>
+              Autonomous Mode
+            </span>
+
+            {/* Visual toggle track */}
+            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border-2 transition-all duration-250 ${
+              autoEnabled
+                ? "bg-violet-600 border-violet-500"
+                : "bg-[#1a1a2e] border-[#2a2a3c] group-hover:border-[#3a3a5a]"
+            }`}>
+              {/* Toggle thumb */}
+              <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full shadow-md transition-transform duration-250 ${
+                autoEnabled ? "translate-x-3 bg-white" : "translate-x-0.5 bg-[#5a5a7a]"
+              }`} />
+            </span>
+
+            {/* ON / OFF text label */}
+            <span className={`text-[10px] font-bold tracking-wider transition-colors ${
+              autoEnabled ? "text-violet-400" : "text-[#4a4a6a]"
+            }`}>
+              {autoEnabled ? "ON" : "OFF"}
+            </span>
+          </button>
+
+          {/* Divider */}
+          <span className="h-4 w-px bg-[#1a1a2e] shrink-0" />
+
+          {/* Safety level — shown always, interactive when mode is on */}
+          <div className="relative flex items-center" onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) setShowSafetyMenu(false);
           }}>
             <button
-              onClick={toggleAuto}
-              title={autoEnabled ? "Autonomous Mode: ON — click to disable" : "Enable Autonomous Agent Mode"}
-              className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-semibold border transition-all duration-200 ${
+              onClick={() => { if (autoEnabled) setShowSafetyMenu(v => !v); }}
+              title={autoEnabled
+                ? `Safety: ${SAFETY_META[safetyLevel].label} — ${SAFETY_META[safetyLevel].description}`
+                : "Enable Autonomous Mode to configure safety level"}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all ${
                 autoEnabled
-                  ? "bg-violet-500/20 border-violet-500/30 text-violet-400 hover:bg-violet-500/30"
-                  : "bg-[#0e0e18] border-[#2a2a3c] text-[#6868a8] hover:text-[#9898c8] hover:border-[#3a3a5a]"
+                  ? "border-violet-500/30 bg-violet-500/10 text-violet-300/90 hover:bg-violet-500/20 cursor-pointer"
+                  : "border-[#1a1a2e] bg-transparent text-[#3a3a5a] cursor-not-allowed"
               }`}
             >
-              <Bot className="h-2.5 w-2.5" />
-              <span>Auto</span>
-              {autoEnabled && <span className="h-1 w-1 rounded-full bg-violet-400 animate-pulse" />}
+              <span className="text-[11px] leading-none">{SAFETY_META[safetyLevel].icon}</span>
+              <span>{SAFETY_META[safetyLevel].label}</span>
+              {autoEnabled && <ChevronDown className={`h-2.5 w-2.5 transition-transform ${showSafetyMenu ? "rotate-180" : ""}`} />}
             </button>
-            {autoEnabled && (
-              <button
-                onClick={() => setShowSafetyMenu(v => !v)}
-                className="flex items-center text-[9px] px-1 py-0.5 rounded-md font-bold border border-violet-500/20 bg-violet-500/10 text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20 transition-colors"
-                title="Safety level"
-              >
-                {SAFETY_META[safetyLevel].icon}
-              </button>
-            )}
+
+            {/* Safety level dropdown */}
             {showSafetyMenu && (
-              <div className="absolute top-full left-0 mt-1.5 z-50 min-w-[210px] rounded-xl border border-[#2a2a3c] bg-[#0d0d18] shadow-2xl p-1.5 space-y-0.5">
-                <p className="text-[9px] font-bold text-[#5a5a8a] uppercase tracking-widest px-2 pt-1 pb-0.5">Safety Level</p>
-                {SAFETY_LEVELS.map(level => (
-                  <button
-                    key={level}
-                    onClick={() => { setSafetyLevel(level); setShowSafetyMenu(false); }}
-                    className={`flex items-start gap-2 w-full px-2 py-1.5 rounded-lg text-left transition-colors ${
-                      safetyLevel === level
-                        ? "bg-violet-500/15 text-violet-300"
-                        : "hover:bg-[#141420] text-[#9898b8] hover:text-foreground"
-                    }`}
-                  >
-                    <span className="text-sm leading-none mt-0.5">{SAFETY_META[level].icon}</span>
-                    <div>
-                      <p className="text-[11px] font-semibold leading-tight">{SAFETY_META[level].label}</p>
-                      <p className="text-[10px] text-[#6060a0] mt-0.5 leading-tight">{SAFETY_META[level].description}</p>
-                    </div>
-                  </button>
-                ))}
+              <div className="absolute top-full left-0 mt-2 z-50 min-w-[220px] rounded-2xl border border-[#2a2a3c] bg-[#0b0b14] shadow-2xl overflow-hidden">
+                <div className="px-3 pt-3 pb-1.5">
+                  <p className="text-[9px] font-bold text-[#5a5a8a] uppercase tracking-widest">Safety Gate Level</p>
+                  <p className="text-[10px] text-[#5a5a7a] mt-0.5">Controls which actions require your approval</p>
+                </div>
+                <div className="p-1.5 space-y-0.5">
+                  {SAFETY_LEVELS.map(level => (
+                    <button
+                      key={level}
+                      onClick={() => { setSafetyLevel(level); setShowSafetyMenu(false); }}
+                      className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-xl text-left transition-all ${
+                        safetyLevel === level
+                          ? "bg-violet-500/15 text-violet-200"
+                          : "hover:bg-[#12121e] text-[#9898b8] hover:text-foreground"
+                      }`}
+                    >
+                      <span className="text-base leading-none mt-0.5 shrink-0">{SAFETY_META[level].icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold">{SAFETY_META[level].label}</p>
+                        <p className="text-[10px] text-[#6060a0] mt-0.5 leading-tight">{SAFETY_META[level].description}</p>
+                      </div>
+                      {safetyLevel === level && (
+                        <Check className="h-3 w-3 text-violet-400 shrink-0 mt-0.5 ml-auto" />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-0.5">
-          {messages.length > 0 && (
+
+          {/* When autonomous mode is on and a session is running, show a live pill */}
+          {autoEnabled && autoSession?.isRunning && (
             <>
-              <ExportMenu
-                messages={messages}
-                workspaceName={currentWorkspace?.name}
-              />
-              <button
-                onClick={handleRegen}
-                disabled={isPending}
-                className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
-                title="Regenerate last response"
-              >
-                <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
-              </button>
+              <span className="h-4 w-px bg-[#1a1a2e] shrink-0" />
+              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-violet-300 bg-violet-500/15 border border-violet-500/25 px-2 py-0.5 rounded-md animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                Running
+                {autoSession.steps.length > 0 && (
+                  <span className="opacity-70">
+                    · step {autoSession.steps.filter(s => s.status === "done").length + 1}/{autoSession.steps.length}
+                  </span>
+                )}
+              </span>
             </>
           )}
-          <button
-            onClick={toggleChat}
-            className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] transition-all duration-150"
-            title="Collapse chat panel (Ctrl+J)"
-          >
-            <ChevronsRight className="h-3 w-3" />
-          </button>
+
+          {/* Hint text on far right when autonomous mode is OFF */}
+          {!autoEnabled && (
+            <span className="ml-auto text-[10px] text-[#3a3a5a] italic hidden lg:block">
+              Enable to run multi-step AI tasks automatically
+            </span>
+          )}
         </div>
       </div>
 

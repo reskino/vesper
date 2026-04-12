@@ -30,9 +30,14 @@ const AGENT_ICONS: Record<AgentType, React.ElementType> = {
 interface AgentSelectorProps {
   /** Pass chat-panel's isPending so the status dot pulses during inference */
   isPending?: boolean;
+  /**
+   * Set to true when Autonomous Agent Mode is enabled so the trigger
+   * shows "Active" even when no single inference is in flight.
+   */
+  isAutonomousActive?: boolean;
 }
 
-export function AgentSelector({ isPending = false }: AgentSelectorProps) {
+export function AgentSelector({ isPending = false, isAutonomousActive = false }: AgentSelectorProps) {
   const { agentType, setAgentType, currentAgent } = useAgentMode();
   const [open, setOpen] = useState(false);
 
@@ -133,10 +138,14 @@ export function AgentSelector({ isPending = false }: AgentSelectorProps) {
   // ── Derived values ──────────────────────────────────────────────────────────
   const CurrentIcon   = AGENT_ICONS[agentType];
   const activeOptId   = activeIndex >= 0 ? getOptionId(activeIndex) : undefined;
-  // Dot: pulses amber when pending, pulses with agent color otherwise (subtle)
+  // isActive = running an inference OR autonomous session is live
+  const isActive = isPending || isAutonomousActive;
+  // Dot: amber + pulse when actively inferring, violet pulse when autonomous-only, subtle otherwise
   const dotClass = isPending
     ? "bg-amber-400 animate-pulse"
-    : `${currentAgent.dotColor} opacity-80`;
+    : isAutonomousActive
+      ? "bg-violet-400 animate-pulse"
+      : `${currentAgent.dotColor} opacity-80`;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -178,15 +187,17 @@ export function AgentSelector({ isPending = false }: AgentSelectorProps) {
           </span>
         </span>
 
-        {/* Status label */}
+        {/* Status label — "Active" when inferring or autonomous is on */}
         <span className={`
           hidden lg:inline text-[9px] font-bold uppercase tracking-wide
-          ml-0.5 px-1 py-0.5 rounded border
+          ml-0.5 px-1 py-0.5 rounded border transition-all duration-300
           ${isPending
             ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
-            : "opacity-40 border-current/20"}
+            : isAutonomousActive
+              ? "text-violet-400 border-violet-500/30 bg-violet-500/10"
+              : "opacity-40 border-current/20"}
         `}>
-          {isPending ? "Active" : "Idle"}
+          {isActive ? "Active" : "Idle"}
         </span>
 
         <ChevronDown

@@ -604,7 +604,7 @@ export default function Editor() {
       )}
 
       {/* Editor area */}
-      <div className="flex-1 overflow-auto bg-[#1a1b26]" style={{ fontSize: `${fontSize}px` }}>
+      <div className="flex-1 overflow-auto bg-[#0d0d12]" style={{ fontSize: `${fontSize}px` }}>
         {fileLoading && activeTab && !tabStates[activeTab]?.loaded ? (
           <div className="h-full flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/70" />
@@ -642,8 +642,8 @@ export default function Editor() {
             }}
           />
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center gap-4 px-6">
-            <div className="rounded-2xl bg-white/5 p-6 border border-white/10">
+          <div className="h-full flex flex-col items-center justify-center text-center gap-4 px-6 bg-[#0d0d12]">
+            <div className="rounded-2xl bg-[#111118] p-6 border border-[#1e1e2a]">
               <TerminalSquare className="h-10 w-10 text-muted-foreground/85 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Select a file to start editing</p>
               <p className="text-[11px] text-muted-foreground/80 mt-1">Ctrl+F to search · Ctrl+S to save</p>

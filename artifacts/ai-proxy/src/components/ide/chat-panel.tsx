@@ -19,6 +19,7 @@
  *   compact     — true inside the mobile bottom-sheet (no outer border)
  */
 import { useState, useRef, useEffect, useCallback, type ElementType } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAis, getListAisQueryKey,
   useAskAi, useAskAiWithContext,
@@ -736,7 +737,9 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   mobile?: boolean;
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat,
-    mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath } = useIDE();
+    mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath,
+    openFileInEditor } = useIDE();
+  const queryClient = useQueryClient();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep, venvStatus } = useWorkspace();
   const { isEnabled: autoEnabled, safetyLevel, toggleEnabled: toggleAuto, setSafetyLevel } = useAutonomous();
@@ -1098,6 +1101,13 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({ path: fullPath, content: newContent }),
           });
+
+          // Sync Explorer + Editor: invalidate the tree so new files appear,
+          // drop the stale read-cache for this path, then open it in the editor.
+          queryClient.invalidateQueries({ queryKey: ["/api/files/tree"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/files/read", { path: fullPath }] });
+          openFileInEditor(fullPath);
+
           patchStep(step.id, {
             status:     "done",
             newContent,

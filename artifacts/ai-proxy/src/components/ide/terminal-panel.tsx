@@ -23,6 +23,7 @@ import { useTerminalExec, useGetTerminalCwd, getGetTerminalCwdQueryKey } from "@
 import { TerminalSquare, Trash2, X, Play, Zap } from "lucide-react";
 import { useIDE } from "@/contexts/ide-context";
 import { useTheme } from "@/contexts/theme-context";
+import { useWorkspace } from "@/contexts/workspace-context";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -164,6 +165,7 @@ interface RtkSavings {
 export function TerminalPanel() {
   const { setShowTerminal, activeFilePath } = useIDE();
   const { isDark } = useTheme();
+  const { currentWorkspace } = useWorkspace();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef      = useRef<Terminal | null>(null);
@@ -470,7 +472,26 @@ export function TerminalPanel() {
   // ── Smart run button ────────────────────────────────────────────────────────
   // Use an absolute path so the workspace cwd doesn't duplicate the relative prefix
   const activeFileAbsPath = activeFilePath ? `/home/runner/workspace/${activeFilePath}` : null;
-  const runCmd = activeFileAbsPath ? getRunCommand(activeFileAbsPath) : null;
+  const baseRunCmd = activeFileAbsPath ? getRunCommand(activeFileAbsPath) : null;
+
+  // Prepend auto-install if a manifest exists in the workspace root
+  const runCmd = (() => {
+    if (!baseRunCmd || !activeFileAbsPath) return null;
+    const wsCwd = currentWorkspace
+      ? `/home/runner/workspace/${currentWorkspace.relPath}`
+      : `/home/runner/workspace`;
+    const ext = (activeFilePath?.split(".").pop() ?? "").toLowerCase();
+    if (["py", "pyw"].includes(ext)) {
+      const req = `${wsCwd}/requirements.txt`;
+      return `[ -f "${req}" ] && pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; ${baseRunCmd}`;
+    }
+    if (["js", "mjs", "cjs", "ts", "tsx"].includes(ext)) {
+      const pkg = `${wsCwd}/package.json`;
+      return `[ -f "${pkg}" ] && npm install --silent 2>/dev/null ; ${baseRunCmd}`;
+    }
+    return baseRunCmd;
+  })();
+
   const runFile = useCallback(() => {
     if (!runCmd || !termRef.current) return;
     termRef.current.writeln(runCmd);

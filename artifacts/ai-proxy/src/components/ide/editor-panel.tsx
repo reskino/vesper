@@ -552,22 +552,29 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     // Build the shell command to run the file.
     // Always use the absolute path so the cwd (workspace root) doesn't duplicate it.
     const absPath = `/home/runner/workspace/${activeTab}`;
-    let cmd: string;
-    if (ext === "py") {
-      // python auto-resolves to the workspace .venv via PATH override in the backend
-      cmd = `python "${absPath}"`;
-    } else if (["js", "mjs", "cjs"].includes(ext)) {
-      cmd = `node "${absPath}"`;
-    } else if (ext === "ts") {
-      cmd = `npx tsx "${absPath}"`;
-    } else {
-      cmd = `bash "${absPath}"`;
-    }
 
     // Determine cwd: workspace directory if available, else repo root
     const wsCwd = currentWorkspace
       ? `/home/runner/workspace/${currentWorkspace.relPath}`
       : `/home/runner/workspace`;
+
+    // Auto-install helpers — run silently only if the manifest exists
+    const reqTxt  = `${wsCwd}/requirements.txt`;
+    const pkgJson = `${wsCwd}/package.json`;
+    const pipInstall  = `[ -f "${reqTxt}" ]  && pip install -q -r "${reqTxt}"  --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
+    const npmInstall  = `[ -f "${pkgJson}" ] && npm install --silent 2>/dev/null ; `;
+
+    let cmd: string;
+    if (ext === "py") {
+      // Auto-install from requirements.txt if present, then run
+      cmd = `${pipInstall}python "${absPath}"`;
+    } else if (["js", "mjs", "cjs"].includes(ext)) {
+      cmd = `${npmInstall}node "${absPath}"`;
+    } else if (ext === "ts") {
+      cmd = `${npmInstall}npx tsx "${absPath}"`;
+    } else {
+      cmd = `bash "${absPath}"`;
+    }
 
     const wsId = currentWorkspace?.id ?? null;
     const toastId = toast.loading(`Running ${filename}…`);

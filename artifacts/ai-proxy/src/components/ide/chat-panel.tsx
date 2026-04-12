@@ -734,6 +734,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     setUploadedFile(null);
     setPrompt("");
     setProjectDetached(false);
+    setRunIntent(null);
+    setRunDismissed(false);
+    setInstallIntent(null);
+    setInstallDismissed(false);
   }, [newChatKey]);
 
   // File picker tree (only loaded when picker is open)
@@ -1295,9 +1299,26 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           }}
         />
 
-        {/* Agent-routing strip — hidden while install strip is active */}
+        {/* Run-intent confirmation — shown instead of agent routing strip */}
+        <RunConfirmStrip
+          intent={runIntent}
+          dismissed={runDismissed}
+          hasWorkspace={!!currentWorkspace}
+          workspaceName={currentWorkspace?.name}
+          isRunning={isExecutingScript}
+          onConfirm={(script) => handleRunConfirm(script)}
+          onDismiss={() => setRunDismissed(true)}
+          onAskAI={() => {
+            setRunDismissed(true);
+            send(prompt);
+            setPrompt("");
+            clearAttachment();
+          }}
+        />
+
+        {/* Agent-routing strip — hidden while install / run strip is active */}
         <IntentStrip
-          intent={installIntent && !installDismissed ? null : detectedIntent}
+          intent={(installIntent && !installDismissed) || (runIntent && !runDismissed) ? null : detectedIntent}
           dismissed={intentDismissed}
           onDismiss={() => setIntentDismissed(true)}
           onChip={(chip) => {

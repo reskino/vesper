@@ -292,7 +292,7 @@ interface ContextMenu { x: number; y: number; tab: string }
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, onReloadFileRef, onReloadMobileFileRef,
     setActiveFilePath, openCommandPalette } = useIDE();
-  const { currentWorkspace, venvStatus } = useWorkspace();
+  const { currentWorkspace, venvStatus, ensureVenv } = useWorkspace();
   const theRef       = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const theReloadRef = mobile ? onReloadMobileFileRef : onReloadFileRef;
   // Run-file feature — executes the current file in the workspace venv (Python)
@@ -558,13 +558,18 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       ? `/home/runner/workspace/${currentWorkspace.relPath}`
       : `/home/runner/workspace`;
 
+    // For Python: guarantee the venv exists before we try to install into it.
+    // ensureVenv creates it if missing and repairs it if broken — no-op if healthy.
+    if (ext === "py" && currentWorkspace) {
+      await ensureVenv().catch(() => { /* non-fatal — we'll try to run anyway */ });
+    }
+
     // Auto-install helpers — use the venv's own Python to avoid the Nix
     // system-pip "externally-managed-environment" error.
     const reqTxt   = `${wsCwd}/requirements.txt`;
     const pkgJson  = `${wsCwd}/package.json`;
     const venvPy   = `${wsCwd}/.venv/bin/python`;
-    // Only attempt install when both the venv python AND the manifest exist
-    const pipInstall = `[ -f "${venvPy}" ] && [ -f "${reqTxt}" ] && "${venvPy}" -m pip install -q -r "${reqTxt}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
+    const pipInstall = `[ -f "${reqTxt}" ] && "${venvPy}" -m pip install -q -r "${reqTxt}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
     const npmInstall = `[ -f "${pkgJson}" ] && npm install --silent 2>/dev/null ; `;
 
     let cmd: string;
@@ -599,7 +604,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       setIsRunning(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentWorkspace, handleSave, execMutation]);
+  }, [activeTab, currentWorkspace, ensureVenv, handleSave, execMutation]);
 
   // ── Handle Monaco editor change ─────────────────────────────────────────────
   const handleEditorChange: OnChange = useCallback((value) => {

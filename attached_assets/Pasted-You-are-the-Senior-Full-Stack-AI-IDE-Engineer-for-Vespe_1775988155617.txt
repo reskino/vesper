@@ -1,0 +1,33 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site:
+- Chat input at bottom with placeholder "How can I help you?" (Enter to send, Shift+Enter new line)
+- Quick action buttons present (Explain code, Fix bug, Refactor, etc.)
+- "Agent Idle" status, "Orchestrator – 8 specialist roles", "3 AIs connected"
+- Ctrl+Enter to run; multi-turn chat exists but requires file open for context
+- Gap: Chat does not intelligently understand user intent or automatically perform actions (e.g., route to specialist agent, edit files, run commands)
+
+Task:
+Upgrade the chat box to intelligently understand user messages and perform the right actions. 
+- On frontend: Add intent detection (simple keyword + regex) before sending message.
+- Parse common intents: fix/refactor/debug (Code Surgeon), research/explain (Research Scholar), search (Search Master), document (Docs Weaver), coordinate (Orchestrator).
+- If Agent Selector is implemented, use currentAgent from Zustand; otherwise default to Orchestrator.
+- Show temporary "Detecting intent as [Agent]..." + suggested action chips.
+- On backend (Python side): Enhance message handler to accept intent/agent flag and route accordingly.
+- Keep natural conversation flow; do not force understanding on every message.
+- Optimize for mobile and slow networks; large touch targets.
+
+Follow exact structure:
+1. Context Reference (include live chat observations)
+2. Implementation Plan (numbered steps, frontend + backend)
+3. Complete Code (full files: updated ChatInput.tsx or equivalent, any new intent utils, backend handler updates)
+4. Exact file paths and integration instructions
+5. Testing steps (test natural commands like "fix the bug in main.py", "research React best practices", mobile view, 3G throttle)
+6. Suggested next priority
+
+Deliver production-quality, clean, commented TypeScript + Tailwind + Python code. Use existing dependencies where possible. Ensure security (no auto-execution of dangerous commands without confirmation).
+
+Begin.

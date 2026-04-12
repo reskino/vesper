@@ -482,8 +482,10 @@ export function TerminalPanel() {
       : `/home/runner/workspace`;
     const ext = (activeFilePath?.split(".").pop() ?? "").toLowerCase();
     if (["py", "pyw"].includes(ext)) {
-      const req = `${wsCwd}/requirements.txt`;
-      return `[ -f "${req}" ] && pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; ${baseRunCmd}`;
+      const req    = `${wsCwd}/requirements.txt`;
+      const venvPy = `${wsCwd}/.venv/bin/python`;
+      // Use the venv's own Python for pip to avoid the Nix system-pip block
+      return `[ -f "${venvPy}" ] && [ -f "${req}" ] && "${venvPy}" -m pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; ${baseRunCmd}`;
     }
     if (["js", "mjs", "cjs", "ts", "tsx"].includes(ext)) {
       const pkg = `${wsCwd}/package.json`;

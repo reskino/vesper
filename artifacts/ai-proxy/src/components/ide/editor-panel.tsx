@@ -558,11 +558,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       ? `/home/runner/workspace/${currentWorkspace.relPath}`
       : `/home/runner/workspace`;
 
-    // Auto-install helpers — run silently only if the manifest exists
-    const reqTxt  = `${wsCwd}/requirements.txt`;
-    const pkgJson = `${wsCwd}/package.json`;
-    const pipInstall  = `[ -f "${reqTxt}" ]  && pip install -q -r "${reqTxt}"  --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
-    const npmInstall  = `[ -f "${pkgJson}" ] && npm install --silent 2>/dev/null ; `;
+    // Auto-install helpers — use the venv's own Python to avoid the Nix
+    // system-pip "externally-managed-environment" error.
+    const reqTxt   = `${wsCwd}/requirements.txt`;
+    const pkgJson  = `${wsCwd}/package.json`;
+    const venvPy   = `${wsCwd}/.venv/bin/python`;
+    // Only attempt install when both the venv python AND the manifest exist
+    const pipInstall = `[ -f "${venvPy}" ] && [ -f "${reqTxt}" ] && "${venvPy}" -m pip install -q -r "${reqTxt}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
+    const npmInstall = `[ -f "${pkgJson}" ] && npm install --silent 2>/dev/null ; `;
 
     let cmd: string;
     if (ext === "py") {

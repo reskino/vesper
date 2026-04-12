@@ -47,6 +47,9 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Custom Vesper Monaco theme (zinc/violet palette): violet keywords, emerald strings, amber numbers, cyan types
 - Tab bar active-tab auto-scroll: `scrollIntoView` fires whenever `activeTab` changes; scrollbar hidden for clean look
 - `artifacts/ai-proxy/src/components/ide/command-palette.tsx` — standalone command palette component
+- `artifacts/ai-proxy/src/lib/export-chat.ts` — PDF (print-window) + Word (.docx via `docx` package) export utilities
+- `artifacts/ai-proxy/src/components/chat/export-menu.tsx` — Export dropdown (PDF / Word) in chat header + mobile compact icon
+- Chat messages now carry `timestamp: Date` for accurate timestamps in exports
 - `artifacts/ai-proxy/src/components/layout/ide-layout.tsx` — Root IDE shell: desktop 3-panel + mobile single-panel with lazy tab mounting + bottom nav with chat unread badge
 
 ## Per-Project Workspace System

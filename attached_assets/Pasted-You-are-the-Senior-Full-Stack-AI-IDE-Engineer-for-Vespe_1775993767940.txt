@@ -1,0 +1,35 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site (April 2026):
+- Workspace with file structure, multi-tab Editor (with shortcuts Ctrl+S save, Ctrl+W close), responsive layout, Agent Selector hints, intelligent chat with quick actions ("Explain this code", "Fix the bug", "Write documentation", etc.), "Builder · Full-stack autonomous Idle", "Orchestrator – 8 specialist roles"
+- Gap: No PDF or Word export for chat, research, or generated docs
+
+Core Vision: Enable exporting agent outputs, chat history, and documentation as professional PDF or Word files, integrated with Docs Weaver and Research Scholar agents.
+
+Task:
+Implement PDF and Word export functionality.
+- Add export menu/button in Chat header or quick actions ("Export as PDF", "Export as Word", "Export Research Summary").
+- Options: Full conversation, selected messages, or agent-formatted summary.
+- Frontend PDF: Use jsPDF (lightweight) with proper formatting — markdown support, code blocks (monospace + highlighting if possible), headers, agent colors/timestamps.
+- Word (.docx): Prefer Python backend with python-docx for better styling; fallback to client-side if needed.
+- Features:
+  - Preserve formatting and structure from chat.
+  - Progress toast/loading indicator.
+  - Download directly or save file to current workspace (via existing file API).
+  - Integrate with Agent Selector (e.g., Docs Weaver can auto-suggest export).
+- Mobile: Large buttons, no heavy processing on low-end devices.
+
+Follow exact response structure:
+1. Context Reference (mention completed multi-tab editor and live chat/export gap)
+2. Implementation Plan (numbered steps – UI component, export utils, backend if needed)
+3. Complete Code (full files only: new ExportMenu.tsx or buttons in Chat, export utilities, backend endpoint if used — clean, well-commented TypeScript + Tailwind + Python)
+4. Exact file paths and integration instructions (placement near quick actions or header)
+5. Testing steps (run a research/chat session, export PDF and Word, check formatting/downloads on desktop + mobile, 3G throttle, verify workspace save option)
+6. Suggested next priority after this change (e.g. command palette Ctrl+K, toasts/polish, or advanced venv safety)
+
+Deliver only production-quality, clean, commented code. Install jsPDF (npm install jspdf) and note python-docx on backend if used. Keep bundle light for slow networks. Ensure exports are secure and performant.
+
+Begin.

@@ -43,6 +43,7 @@ import { useAgentMode, type AgentType } from "@/contexts/agent-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
+import { ExportMenu } from "@/components/chat/export-menu";
 import {
   detectIntent, detectInstallIntent,
   AGENT_PREFIXES,
@@ -594,7 +595,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   type RoutingInfo = { aiId: string; reason: string; signals: string[]; confidence: number };
   const [messages, setMessages] = useState<Array<{
     role: "user" | "assistant"; content: string; aiId?: string; error?: boolean;
-    routingInfo?: RoutingInfo;
+    routingInfo?: RoutingInfo; timestamp?: Date;
   }>>([]);
   const [conversationId, setConversationId]       = useState<string | null>(null);
   const [executionResult, setExecutionResult]     = useState<any>(null);
@@ -774,7 +775,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       setTimeout(() => setRoutingLabel(null), 2200);
     }
 
-    setMessages(prev => [...prev, { role: "user", content: text }]);
+    setMessages(prev => [...prev, { role: "user", content: text, timestamp: new Date() }]);
     setDetectedIntent(null);
     setIntentDismissed(false);
 
@@ -836,6 +837,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           content: result.response,
           aiId: result.aiId,
           routingInfo: (result as any).routingDecision ?? undefined,
+          timestamp: new Date(),
         }]);
         // Signal the bottom nav badge when the user is viewing another tab or
         // the chat is closed (so they notice the reply without checking)
@@ -843,10 +845,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           incrementChatUnread();
         }
       } else {
-        setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed", error: true }]);
+        setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed", error: true, timestamp: new Date() }]);
       }
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true, timestamp: new Date() }]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps, mobileTab, showMobileChatSheet, incrementChatUnread, activeFileData, autoInjectPath]);
@@ -866,6 +868,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     setMessages(prev => [...prev, {
       role: "user",
       content: `Install \`${packageName}\` in workspace **${currentWorkspace.name}**`,
+      timestamp: new Date(),
     }]);
 
     try {
@@ -873,6 +876,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       setMessages(prev => [...prev, {
         role: "assistant",
         content: `**\`${packageName}\` installed successfully** in \`${currentWorkspace.name}\`.\n\nYou can now import it in your code.`,
+        timestamp: new Date(),
       }]);
       toast({ title: "Package installed", description: `${packageName} is ready to use.` });
     } catch (err: any) {
@@ -880,6 +884,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         role: "assistant",
         content: `**Installation failed** for \`${packageName}\`.\n\n${err?.message ?? "Unknown error — check the terminal for details."}`,
         error: true,
+        timestamp: new Date(),
       }]);
       toast({ title: "Install failed", description: err?.message ?? "Unknown error", variant: "destructive" });
     } finally {
@@ -962,14 +967,20 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         </div>
         <div className="flex items-center gap-0.5">
           {messages.length > 0 && (
-            <button
-              onClick={handleRegen}
-              disabled={isPending}
-              className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
-              title="Regenerate last response"
-            >
-              <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
-            </button>
+            <>
+              <ExportMenu
+                messages={messages}
+                workspaceName={currentWorkspace?.name}
+              />
+              <button
+                onClick={handleRegen}
+                disabled={isPending}
+                className="h-6 w-6 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-foreground hover:bg-[#111118] disabled:opacity-30 transition-all duration-150"
+                title="Regenerate last response"
+              >
+                <RotateCcw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
+              </button>
+            </>
           )}
           <button
             onClick={toggleChat}
@@ -988,7 +999,12 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         ) : (
           <div className="py-3 space-y-0.5">
             {messages.length > 0 && (
-              <div className="flex justify-end px-4 pb-2 md:hidden">
+              <div className="flex justify-end items-center gap-2 px-4 pb-2 md:hidden">
+                <ExportMenu
+                  messages={messages}
+                  workspaceName={currentWorkspace?.name}
+                  compact
+                />
                 <button
                   onClick={handleRegen}
                   disabled={isPending}

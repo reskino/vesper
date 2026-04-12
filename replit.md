@@ -34,6 +34,8 @@ The project uses three parallel workflows (started via the "Project" run button)
 - `artifacts/api-server/src/index.ts` — API gateway bootstrapper
 - `artifacts/ai-proxy/src/App.tsx` — Frontend entry point
 - `artifacts/ai-proxy/src/contexts/ide-context.tsx` — Global IDE state
+- `artifacts/ai-proxy/src/contexts/agent-context.tsx` — Shared agent type state (persisted via localStorage); exposes `useAgentMode()`
+- `artifacts/ai-proxy/src/components/chat/agent-selector.tsx` — Dropdown in chat panel header for switching agent personas
 
 ## Dependencies
 - Python: flask, flask-cors, flask-sqlalchemy, playwright, openai, anthropic, gunicorn

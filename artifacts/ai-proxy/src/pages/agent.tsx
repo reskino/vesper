@@ -12,11 +12,12 @@ import {
   FileEdit, Trash2, List, Loader2, Sparkles, AlertCircle,
   Globe, Camera, Wifi, Clock, Server, Zap, WifiOff,
   Square, Package, FileDiff, FileText, RefreshCw, Activity,
-  ChevronUp, Key, Badge as BadgeIcon, ChevronLeft,
+  ChevronUp, Key, Badge as BadgeIcon, ChevronLeft, BookOpen, Scissors,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAgentMode } from "@/contexts/agent-context";
 
 // ─── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -318,7 +319,7 @@ function MaxStepsControl({ value, onChange, disabled }: { value: number; onChang
 
 export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   const [task, setTask]               = useState("");
-  const [agentType, setAgentType]     = useState<"builder" | "orchestrator" | "scholar" | "search_master">("builder");
+  const { agentType, setAgentType } = useAgentMode();
   const [selectedAi, setSelectedAi]   = useState("__auto__");
   const [selectedModel, setSelectedModel] = useState("");
   const [maxSteps, setMaxSteps]       = useState(20);
@@ -596,6 +597,22 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
                     icon: <Globe className="h-3.5 w-3.5" />,
                     desc: "Deep web research",
                     active: "border-sky-500/40 bg-sky-500/10 text-sky-400",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
+                  },
+                  {
+                    id: "docs_weaver",
+                    label: "Docs Weaver",
+                    icon: <BookOpen className="h-3.5 w-3.5" />,
+                    desc: "Technical documentation",
+                    active: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+                    inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
+                  },
+                  {
+                    id: "code_surgeon",
+                    label: "Code Surgeon",
+                    icon: <Scissors className="h-3.5 w-3.5" />,
+                    desc: "Surgical refactoring",
+                    active: "border-rose-500/40 bg-rose-500/10 text-rose-400",
                     inactive: "border-[#1a1a24] text-[#9898b8] hover:border-[#2a2a3c] hover:text-foreground",
                   },
                 ] as const).map(({ id, label, icon, desc, active, inactive }) => (

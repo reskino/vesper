@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IDELayout } from "@/components/layout/ide-layout";
 import { IDEProvider } from "@/contexts/ide-context";
+import { AgentProvider } from "@/contexts/agent-context";
 
 const queryClient = new QueryClient();
 
@@ -12,9 +13,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <IDEProvider>
-            <IDELayout />
-          </IDEProvider>
+          <AgentProvider>
+            <IDEProvider>
+              <IDELayout />
+            </IDEProvider>
+          </AgentProvider>
           <Toaster />
         </WouterRouter>
       </TooltipProvider>

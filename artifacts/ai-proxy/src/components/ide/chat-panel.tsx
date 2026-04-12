@@ -37,7 +37,9 @@ import {
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
+import { AgentSelector } from "@/components/chat/agent-selector";
 import { useIDE } from "@/contexts/ide-context";
+import { useAgentMode } from "@/contexts/agent-context";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 
@@ -408,6 +410,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   mobile?: boolean;
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
+  const { agentType } = useAgentMode();
   const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
@@ -486,9 +489,19 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       // pick the best connected AI. The response will include routingDecision.
       const effectiveAiId = isAuto ? "__auto__" : selectedAi;
 
+      const AGENT_PREFIXES: Record<string, string> = {
+        orchestrator:  "[Vesper Orchestrator — all-in-one expert AI]\n\n",
+        scholar:       "[Vesper Research Scholar — academic rigour, citations, export-ready]\n\n",
+        search_master: "[Vesper Search Master — deep research, source-verified]\n\n",
+        docs_weaver:   "[Vesper Docs Weaver — technical documentation specialist]\n\n",
+        code_surgeon:  "[Vesper Code Surgeon — surgical refactoring & optimisation]\n\n",
+      };
+      const rolePrefix = AGENT_PREFIXES[agentType] ?? "";
+      const promptWithRole = rolePrefix ? rolePrefix + text : text;
+
       const payload = {
         aiId: effectiveAiId,
-        prompt: text,
+        prompt: promptWithRole,
         conversationId: conversationId ?? undefined,
         fallback: isAuto,
       };
@@ -525,7 +538,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
-  }, [isPending, isAuto, selectedAi, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
+  }, [isPending, isAuto, selectedAi, agentType, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
@@ -564,6 +577,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             <Sparkles className="h-3 w-3 text-primary/70" />
             <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Chat</span>
           </div>
+          <AgentSelector />
           {hasImportedProject && (
             <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
               <FolderOpen className="h-2.5 w-2.5" />

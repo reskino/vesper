@@ -1,0 +1,37 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site review (April 2026):
+- Functional three-panel layout (Explorer left | Editor center | Chat right) with dark modern theme
+- Explorer: file tree, New File/Folder, Import Zip, multi-select
+- Editor: placeholder when empty, supports Ctrl+S save, Ctrl+W close tabs (Monaco implied)
+- Chat: strong with quick actions, "3 AIs" connected, "Agent Idle", "Orchestrator – 8 specialist roles", GPT-4o usage, Ctrl+J toggle
+- Terminal toggleable with Python 3.11 / Node info
+- Strengths: clean shortcuts, quick actions, multi-AI hint
+- Gaps: No visible Agent Selector dropdown/tabs for switching specialist agents (Orchestrator, Research Scholar, Search Master, Docs Weaver, Code Surgeon, etc.), limited tab bar visibility, poor mobile responsiveness
+
+Core Vision: Fast, beautiful, reliable multi-agent AI IDE optimized for desktop + mobile (especially low-end devices and slower networks in Ghana). Dark zinc/neutral palette with violet accents.
+
+Task:
+Implement a production-ready Agent Selector UI component. It should be a clean dropdown (with optional tab-style on wide screens) placed in the Chat panel header or top bar next to the "Auto · 3 AIs" area. Include:
+- Typed Agent interface with id, name, icon (use Lucide React names or emoji fallback), description, capabilities array, color
+- Predefined agents: Orchestrator, Research Scholar, Search Master, Docs Weaver, Code Surgeon
+- Zustand store for currentAgent with persistence
+- Beautiful dark theme cards in dropdown showing icon, name, short description, capability tags
+- Click to switch agent instantly (update "Agent Idle" status if possible)
+- Keyboard accessible, large touch targets for mobile
+- Optimize for performance on slow networks
+
+Follow this exact response structure:
+1. Context Reference (mention live site observations)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files only, TypeScript + Tailwind, dark theme, well-commented)
+4. Exact file paths and integration instructions (e.g., where to place in Chat header)
+5. Testing steps (desktop + mobile view in DevTools with 3G throttle)
+6. Suggested next priority after this change
+
+Deliver only production-quality, clean, commented code. Prefer existing dependencies (add zustand and lucide-react only if truly needed and note it). Optimize for mobile and low-end devices. Never add unapproved heavy libraries.
+
+Begin.

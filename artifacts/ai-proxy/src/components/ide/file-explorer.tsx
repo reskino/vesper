@@ -28,13 +28,14 @@ import {
   Trash2, Upload, Download, Check, X, Loader2, Pencil, Search,
   ChevronsLeft, ChevronsUpDown, FolderX, Package, PackagePlus, Plus, Layers,
   ChevronUp, AlertCircle, CheckCircle2, ShieldCheck, ShieldAlert, Wrench,
-  Terminal, RotateCcw,
+  Terminal, RotateCcw, Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace, type Workspace, type VenvStatus } from "@/contexts/workspace-context";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { ImportedTree, FolderImportButton, FolderImportLargeButton } from "@/components/ide/imported-tree";
+import { DEMO_PROJECT_FILES, DEMO_SEEDED_KEY } from "@/lib/demo-project";
 
 // ── File-type icon ────────────────────────────────────────────────────────────
 function FileIcon2({ name }: { name: string }) {
@@ -413,7 +414,10 @@ function WorkspaceSwitcher() {
 }
 
 // ── No-Workspace Onboarding Panel ────────────────────────────────────────────
-function NoWorkspacePanel() {
+function NoWorkspacePanel({ onCreateDemo, isCreatingDemo }: {
+  onCreateDemo?: () => void;
+  isCreatingDemo?: boolean;
+}) {
   const {
     workspaces, isLoading, createWorkspace, switchWorkspace,
   } = useWorkspace();
@@ -449,6 +453,37 @@ function NoWorkspacePanel() {
           Each project lives in its own isolated folder with separate files and dependencies.
         </p>
       </div>
+
+      {/* Demo project CTA */}
+      {onCreateDemo && (
+        <div className="w-full">
+          <button
+            onClick={onCreateDemo}
+            disabled={isCreatingDemo}
+            className="w-full flex items-center justify-center gap-2.5 h-10 px-4 rounded-xl
+              bg-gradient-to-r from-violet-600/90 to-indigo-600/90 hover:from-violet-600 hover:to-indigo-600
+              text-white text-[12px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed
+              border border-violet-500/40 shadow-lg shadow-violet-900/30"
+          >
+            {isCreatingDemo
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Rocket className="h-4 w-4" />}
+            {isCreatingDemo ? "Creating demo…" : "🚀 New Demo Project"}
+          </button>
+          <p className="text-center text-[10px] text-[#555570] mt-1.5">
+            React + FastAPI starter — files open instantly
+          </p>
+        </div>
+      )}
+
+      {/* Divider */}
+      {onCreateDemo && (
+        <div className="w-full flex items-center gap-3">
+          <div className="flex-1 h-px bg-[#1a1a2e]" />
+          <span className="text-[9px] text-[#3a3a5a] font-semibold uppercase tracking-widest">or create blank</span>
+          <div className="flex-1 h-px bg-[#1a1a2e]" />
+        </div>
+      )}
 
       {/* Create new workspace */}
       <div className="w-full space-y-2">
@@ -866,8 +901,8 @@ function findMatchingFiles(node: FileNode, query: string): FileNode[] {
 interface NewItemState { type: "file" | "folder"; parentPath: string; }
 
 export function FileExplorer({ activePath }: { activePath: string | null }) {
-  const { openFileInEditor, importedProject, toggleSidebarPanel } = useIDE();
-  const { currentWorkspace, refreshWorkspaces }                   = useWorkspace();
+  const { openFileInEditor, reloadFileInEditor, importedProject, toggleSidebarPanel } = useIDE();
+  const { currentWorkspace, refreshWorkspaces, createWorkspace, switchWorkspace }     = useWorkspace();
   const [showImported, setShowImported]   = useState(true);
   const [showInstallDep, setShowInstallDep] = useState(false);
   const queryClient                         = useQueryClient();
@@ -880,6 +915,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
   const [searchQuery, setSearchQuery]   = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [collapseAllKey, setCollapseAllKey] = useState(0);
+  const [isCreatingDemo, setIsCreatingDemo] = useState(false);
 
   // ── Workspace-scoped tree path ───────────────────────────────────────────
   // Only query the file tree when a workspace is actually selected.
@@ -911,6 +947,62 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     setShowInstallDep(false);
     setCollapseAllKey(0); // reset collapse state so the new tree opens fully
   }, [treePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ref guard — prevents the first-visit auto-seed from firing twice
+  const autoSeedAttempted = useRef(false);
+
+  // ── Demo project creation ─────────────────────────────────────────────────
+  const createDemoProject = useCallback(async () => {
+    if (isCreatingDemo) return;
+    setIsCreatingDemo(true);
+    try {
+      const ws = await createWorkspace("demo-project");
+      if (!ws) throw new Error("Failed to create workspace");
+
+      const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+      const writtenPaths: string[] = [];
+
+      for (const { path: relPath, content } of DEMO_PROJECT_FILES) {
+        const fullPath = `${ws.relPath}/${relPath}`;
+        const res = await fetch(`${BASE}/api/files/write`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: fullPath, content }),
+        });
+        if (!res.ok) throw new Error(`Write failed: ${relPath}`);
+        writtenPaths.push(fullPath);
+      }
+
+      switchWorkspace(ws);
+      queryClient.invalidateQueries({ queryKey: ["/api/files/tree"] });
+      refreshWorkspaces();
+
+      setTimeout(() => {
+        for (const p of writtenPaths) reloadFileInEditor(p);
+        openFileInEditor(writtenPaths[0]);
+      }, 350);
+
+      localStorage.setItem(DEMO_SEEDED_KEY, "1");
+      toast.success("Demo project created!", {
+        description: "React + FastAPI starter · files are open in the editor",
+      });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to create demo project");
+    } finally {
+      setIsCreatingDemo(false);
+    }
+  }, [isCreatingDemo, createWorkspace, switchWorkspace, queryClient, refreshWorkspaces, reloadFileInEditor, openFileInEditor]);
+
+  // First-visit auto-seed (only once, only when no workspaces exist yet)
+  const { workspaces: allWorkspaces, isLoading: wsLoading } = useWorkspace();
+  useEffect(() => {
+    if (wsLoading) return;
+    if (allWorkspaces.length > 0) return;
+    if (localStorage.getItem(DEMO_SEEDED_KEY)) return;
+    if (autoSeedAttempted.current) return;
+    autoSeedAttempted.current = true;
+    createDemoProject();
+  }, [wsLoading, allWorkspaces.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createFileMutation = useCreateFile();
   const deleteFileMutation = useDeleteFile();
@@ -1089,6 +1181,16 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             >
               <PackagePlus className="h-3 w-3" />
             </button>
+            <button
+              onClick={createDemoProject}
+              disabled={isCreatingDemo}
+              className={`${iconBtn} hover:text-violet-400 disabled:opacity-40`}
+              title="New Demo Project — React + FastAPI starter"
+            >
+              {isCreatingDemo
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Rocket className="h-3 w-3" />}
+            </button>
             <FolderImportButton />
           </div>
         </div>
@@ -1183,7 +1285,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
 
       {/* ── No workspace selected: show onboarding ───────────────────────── */}
       {!currentWorkspace ? (
-        <NoWorkspacePanel />
+        <NoWorkspacePanel onCreateDemo={createDemoProject} isCreatingDemo={isCreatingDemo} />
       ) : (
         <>
           {/* ── New-item creation input ─────────────────────────────────── */}
@@ -1219,19 +1321,32 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             <div className="px-3 py-6 text-center shrink-0">
               <FolderOpen className="h-8 w-8 mx-auto mb-2 text-[#7878a8] opacity-40" />
               <p className="text-[11px] text-[#7878a8] mb-3">"{currentWorkspace.name}" is empty</p>
-              <div className="flex gap-2 justify-center">
+              <div className="flex flex-col gap-2 items-center">
                 <button
-                  onClick={() => { setNewItem({ type: "file", parentPath: wsRootPath }); setNewItemName(""); }}
-                  className="h-7 px-3 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/25 rounded-lg hover:bg-primary/20 transition-colors"
+                  onClick={createDemoProject}
+                  disabled={isCreatingDemo}
+                  className="w-full max-w-[200px] flex items-center justify-center gap-1.5 h-8 px-3
+                    text-[11px] font-bold bg-gradient-to-r from-violet-600/80 to-indigo-600/80
+                    hover:from-violet-600 hover:to-indigo-600 text-white border border-violet-500/30
+                    rounded-lg transition-all disabled:opacity-50"
                 >
-                  + New file
+                  {isCreatingDemo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
+                  {isCreatingDemo ? "Creating…" : "Seed demo project"}
                 </button>
-                <button
-                  onClick={() => setShowInstallDep(true)}
-                  className="h-7 px-3 text-[11px] font-semibold bg-[#141420] text-[#9898b8] border border-[#1e1e2e] rounded-lg hover:bg-[#1e1e2e] hover:text-foreground transition-colors"
-                >
-                  Install dep
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setNewItem({ type: "file", parentPath: wsRootPath }); setNewItemName(""); }}
+                    className="h-7 px-3 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/25 rounded-lg hover:bg-primary/20 transition-colors"
+                  >
+                    + New file
+                  </button>
+                  <button
+                    onClick={() => setShowInstallDep(true)}
+                    className="h-7 px-3 text-[11px] font-semibold bg-[#141420] text-[#9898b8] border border-[#1e1e2e] rounded-lg hover:bg-[#1e1e2e] hover:text-foreground transition-colors"
+                  >
+                    Install dep
+                  </button>
+                </div>
               </div>
             </div>
           )}

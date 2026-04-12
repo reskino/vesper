@@ -1411,10 +1411,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     <div className={`flex flex-col h-full bg-[#0d0d12] ${!compact ? "border-l border-[#1a1a24]" : ""}`}>
 
       {/* ── Desktop header — 2-row layout ─────────────────────────────── */}
-      <div className="hidden md:flex flex-col shrink-0 border-b border-[#0f0f14]">
+      <div className="hidden md:flex flex-col shrink-0 border-b border-[#1c1c2a]">
 
         {/* ── Row 1: Agent selector + right action controls ─────────────── */}
-        <div className="flex items-center justify-between px-3 h-10 bg-[#08080b]">
+        <div className="flex items-center justify-between px-3 h-11 bg-[#0f0f18]">
 
           {/* Left: CHAT label + AgentSelector */}
           <div className="flex items-center gap-2.5">
@@ -1489,10 +1489,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         </div>
 
         {/* ── Row 2: Autonomous Mode toggle strip ───────────────────────── */}
-        <div className={`flex items-center px-3 h-8 gap-3 border-t transition-colors duration-300 ${
+        <div className={`flex items-center px-3 h-9 gap-3 border-t transition-colors duration-300 ${
           autoEnabled
-            ? "border-violet-500/20 bg-violet-950/15"
-            : "border-[#0f0f14] bg-[#060609]"
+            ? "border-violet-500/25 bg-violet-950/20"
+            : "border-[#171724] bg-[#0a0a12]"
         }`}>
 
           {/* Prominent toggle — label + visual switch + ON/OFF text */}
@@ -1512,14 +1512,14 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             </span>
 
             {/* Visual toggle track */}
-            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border-2 transition-all duration-250 ${
+            <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 transition-all duration-250 ${
               autoEnabled
                 ? "bg-violet-600 border-violet-500"
                 : "bg-[#1a1a2e] border-[#2a2a3c] group-hover:border-[#3a3a5a]"
             }`}>
               {/* Toggle thumb */}
-              <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full shadow-md transition-transform duration-250 ${
-                autoEnabled ? "translate-x-3 bg-white" : "translate-x-0.5 bg-[#5a5a7a]"
+              <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full shadow-md transition-transform duration-250 ${
+                autoEnabled ? "translate-x-[18px] bg-white" : "translate-x-0.5 bg-[#5a5a7a]"
               }`} />
             </span>
 

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vesper Demo</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement, useState, useEffect } from "https://esm.sh/react@18";
+      import { createRoot } from "https://esm.sh/react-dom@18/client";
+
+      /* Inline App for zero-build preview */
+      function App() {
+        const [count, setCount] = useState(0);
+        return createElement("div", {
+          style: { fontFamily: "system-ui", maxWidth: 500, margin: "60px auto", padding: "0 20px" }
+        },
+          createElement("h1", { style: { color: "#7c3aed" } }, "🚀 Vesper Demo"),
+          createElement("p", null, "Edit App.jsx and rebuild, or serve with Vite."),
+          createElement("button", {
+            onClick: () => setCount(c => c + 1),
+            style: { background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer" }
+          }, `Clicked ${count} time${count !== 1 ? "s" : ""}`)
+        );
+      }
+
+      createRoot(document.getElementById("root")).render(createElement(App));
+    </script>
+  </body>
+</html>

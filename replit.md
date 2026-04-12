@@ -157,6 +157,36 @@ Inspired by github.com/rtk-ai/rtk. Every terminal command output is compressed b
 - Terminal panel header shows a live `⚡ -X% tokens` badge once savings exceed 10%
 - Typical savings: `git status` ~65%, `pip install` ~80%, test runners ~90%
 
+## Python Virtual Environment Management (Safe Execution)
+
+Every Python workspace gets an isolated `.venv` managed automatically by Vesper.
+
+**Backend API** (`python-backend/workspace_manager.py` + `main.py`):
+- `GET  /api/workspaces/:id/venv`         — detailed venv health (exists, healthy, python_version, package_count, tool, path, error)
+- `POST /api/workspaces/:id/venv/ensure`  — create venv if missing, heal if broken (uv preferred, pip fallback)
+- `POST /api/workspaces/:id/venv/repair`  — delete and fully recreate the venv
+
+**Agent safe execution** (`python-backend/agent.py`):
+- `install_packages` tool now auto-creates `.venv` before every pip install (uv venv → venv pip as fallbacks)
+- `execute` tool prepends `.venv/bin` to PATH so `python`, `pip`, and all installed modules resolve to the venv
+- `_get_venv_extra_env(cwd)` — helper that builds `VIRTUAL_ENV + PATH` overrides for any command
+- `_ensure_workspace_venv(cwd)` — helper that creates venv if python binary missing
+- `exec_command` now accepts optional `extra_env` parameter for venv activation
+
+**Terminal Manager** (`python-backend/terminal_manager.py`):
+- `exec_command` signature extended with `extra_env: dict | None` — merged into os.environ before subprocess
+
+**Frontend** (`workspace-context.tsx`, `file-explorer.tsx`):
+- `VenvStatus` interface tracks: exists, healthy, python_version, package_count, tool, path, error
+- `venvStatus`, `venvState`, `refreshVenv()`, `ensureVenv()`, `repairVenv()` exposed via WorkspaceContext
+- `InstallDepPanel` shows:
+  - `VenvBadge` — live status (no venv / broken / venv active) with colour coding
+  - Python version, package count, tool (uv/pip), path
+  - "Create venv" button (amber, when missing)
+  - "Repair venv" button (red when broken, grey when healthy)
+  - Refresh button for venv section + packages section
+  - Venv operation busy states with live progress messages
+
 ## UI & UX Components
 - **Toast notifications:** Fully migrated from Radix `useToast` to [Sonner](https://sonner.emilkowal.ski/) across all pages and components. `components/ui/sonner.tsx` provides a custom Vesper dark theme (`!bg-[#0f0f16]`, `rounded-xl`, `duration: 3500`, `position: bottom-right`). All call sites use `toast.success()`, `toast.error()`, or `toast()` from `"sonner"`.
 - **ThinkingDots:** Animated AI-thinking indicator with avatar badge, staggered bouncing dots, "Thinking…" label, and skeleton preview lines — shown in chat panel while AI is streaming.

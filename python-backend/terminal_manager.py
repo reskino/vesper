@@ -45,7 +45,12 @@ def get_env_info() -> dict:
     }
 
 
-def exec_command(command: str, cwd: str | None = None, timeout: int = DEFAULT_TIMEOUT) -> dict:
+def exec_command(
+    command: str,
+    cwd: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT,
+    extra_env: dict | None = None,
+) -> dict:
     """Execute a shell command and return stdout, stderr, exit code."""
     working_dir = cwd or _cwd
     start = time.time()
@@ -77,6 +82,8 @@ def exec_command(command: str, cwd: str | None = None, timeout: int = DEFAULT_TI
     try:
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
+        if extra_env:
+            env.update(extra_env)
 
         result = subprocess.run(
             command,

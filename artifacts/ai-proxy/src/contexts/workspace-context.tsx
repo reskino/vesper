@@ -42,40 +42,77 @@ export interface WorkspaceDepsInfo {
   lockfile: string | null;
 }
 
+export interface VenvStatus {
+  /** Does the .venv directory exist? */
+  exists:         boolean;
+  /** Is the venv functional (python binary executable)? */
+  healthy:        boolean;
+  /** e.g. "Python 3.11.8" */
+  python_version: string | null;
+  /** Number of installed packages */
+  package_count:  number;
+  /** "uv" | "pip" | null */
+  tool:           string | null;
+  /** Absolute path to .venv */
+  path:           string;
+  /** Human-readable error if not healthy */
+  error:          string | null;
+}
+
 interface InstallState {
   status:  "idle" | "running" | "done" | "error";
   message: string;
 }
 
+interface VenvState {
+  status:  "idle" | "loading" | "ensuring" | "repairing" | "done" | "error";
+  message: string;
+}
+
 interface WorkspaceContextValue {
   /** All known workspaces */
-  workspaces:      Workspace[];
+  workspaces:       Workspace[];
   /** The currently active workspace (null = no workspace selected) */
   currentWorkspace: Workspace | null;
   /** True while the workspace list is loading */
   isLoading:        boolean;
 
   /** Switch to an existing workspace (persisted) */
-  switchWorkspace: (ws: Workspace | null) => void;
-
+  switchWorkspace:  (ws: Workspace | null) => void;
   /** Create a new workspace by name and switch to it */
-  createWorkspace: (name: string) => Promise<Workspace | null>;
-
+  createWorkspace:  (name: string) => Promise<Workspace | null>;
   /** Re-fetch the workspace list */
   refreshWorkspaces: () => Promise<void>;
 
   /** Install a package into the current workspace */
-  installDep: (pkg: string, version?: string) => Promise<void>;
-
+  installDep:       (pkg: string, version?: string) => Promise<void>;
   /** Installed packages in the current workspace */
-  deps:        InstalledDep[];
+  deps:             InstalledDep[];
   /** Lockfile name if present (e.g. "uv.lock", "package-lock.json") */
-  lockfile:    string | null;
-  installState: InstallState;
+  lockfile:         string | null;
+  installState:     InstallState;
   /** Tool used for last install (e.g. "uv add", "npm install") */
-  lastInstallTool: string | null;
+  lastInstallTool:  string | null;
   /** Refresh the deps list */
-  refreshDeps: () => Promise<void>;
+  refreshDeps:      () => Promise<void>;
+
+  // ── Venv ─────────────────────────────────────────────────────────────────
+  /** Current venv health details (null = not yet fetched) */
+  venvStatus:     VenvStatus | null;
+  /** Async state of the last venv operation */
+  venvState:      VenvState;
+  /** Fetch/refresh venv health from the backend */
+  refreshVenv:    () => Promise<void>;
+  /**
+   * Create the venv if missing, heal if broken.
+   * Resolves with the updated VenvStatus.
+   */
+  ensureVenv:     () => Promise<VenvStatus | null>;
+  /**
+   * Delete and recreate the venv from scratch.
+   * Resolves with the updated VenvStatus.
+   */
+  repairVenv:     () => Promise<VenvStatus | null>;
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -117,17 +154,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [workspaces, setWorkspaces]         = useState<Workspace[]>([]);
-  const [currentWorkspace, setCurrentWs]    = useState<Workspace | null>(readStored);
-  const [isLoading, setIsLoading]           = useState(false);
-  const [deps, setDeps]                     = useState<InstalledDep[]>([]);
-  const [lockfile, setLockfile]             = useState<string | null>(null);
+  const [workspaces, setWorkspaces]           = useState<Workspace[]>([]);
+  const [currentWorkspace, setCurrentWs]      = useState<Workspace | null>(readStored);
+  const [isLoading, setIsLoading]             = useState(false);
+  const [deps, setDeps]                       = useState<InstalledDep[]>([]);
+  const [lockfile, setLockfile]               = useState<string | null>(null);
   const [lastInstallTool, setLastInstallTool] = useState<string | null>(null);
-  const [installState, setInstallState]     = useState<InstallState>({
-    status: "idle", message: "",
-  });
+  const [installState, setInstallState]       = useState<InstallState>({ status: "idle", message: "" });
+  const [venvStatus, setVenvStatus]           = useState<VenvStatus | null>(null);
+  const [venvState, setVenvState]             = useState<VenvState>({ status: "idle", message: "" });
 
-  // Track fetch to avoid state updates after unmount
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -148,7 +184,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Fetch on mount
   useEffect(() => { refreshWorkspaces(); }, [refreshWorkspaces]);
 
   // Sync currentWorkspace with the freshly-fetched list (in case slug changed)
@@ -178,6 +213,66 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refreshDeps(); }, [refreshDeps]);
 
+  // ── Venv status ──────────────────────────────────────────────────────────
+  const refreshVenv = useCallback(async () => {
+    if (!currentWorkspace) { setVenvStatus(null); return; }
+    setVenvState({ status: "loading", message: "Checking venv…" });
+    try {
+      const data = await apiFetch<{ status: VenvStatus; language: string }>(
+        `/workspaces/${currentWorkspace.id}/venv`,
+      );
+      if (!mountedRef.current) return;
+      setVenvStatus(data.status);
+      setVenvState({ status: "idle", message: "" });
+    } catch (err: any) {
+      if (!mountedRef.current) return;
+      setVenvStatus(null);
+      setVenvState({ status: "error", message: err?.message ?? "Failed to check venv" });
+    }
+  }, [currentWorkspace]);
+
+  useEffect(() => { refreshVenv(); }, [refreshVenv]);
+
+  const ensureVenv = useCallback(async (): Promise<VenvStatus | null> => {
+    if (!currentWorkspace) throw new Error("No workspace selected");
+    setVenvState({ status: "ensuring", message: "Creating virtual environment…" });
+    try {
+      const data = await apiFetch<{ status: VenvStatus; message: string }>(
+        `/workspaces/${currentWorkspace.id}/venv/ensure`,
+        { method: "POST" },
+      );
+      if (!mountedRef.current) return null;
+      setVenvStatus(data.status);
+      setVenvState({ status: "done", message: data.message ?? "Venv ready" });
+      await refreshDeps();
+      return data.status;
+    } catch (err: any) {
+      const msg = err?.message ?? "Failed to create venv";
+      if (mountedRef.current) setVenvState({ status: "error", message: msg });
+      throw new Error(msg);
+    }
+  }, [currentWorkspace, refreshDeps]);
+
+  const repairVenv = useCallback(async (): Promise<VenvStatus | null> => {
+    if (!currentWorkspace) throw new Error("No workspace selected");
+    setVenvState({ status: "repairing", message: "Repairing virtual environment…" });
+    try {
+      const data = await apiFetch<{ status: VenvStatus; message: string }>(
+        `/workspaces/${currentWorkspace.id}/venv/repair`,
+        { method: "POST" },
+      );
+      if (!mountedRef.current) return null;
+      setVenvStatus(data.status);
+      setVenvState({ status: "done", message: data.message ?? "Venv repaired" });
+      await refreshDeps();
+      return data.status;
+    } catch (err: any) {
+      const msg = err?.message ?? "Failed to repair venv";
+      if (mountedRef.current) setVenvState({ status: "error", message: msg });
+      throw new Error(msg);
+    }
+  }, [currentWorkspace, refreshDeps]);
+
   // ── Switch workspace ─────────────────────────────────────────────────────
   const switchWorkspace = useCallback((ws: Workspace | null) => {
     setCurrentWs(ws);
@@ -186,6 +281,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setLockfile(null);
     setLastInstallTool(null);
     setInstallState({ status: "idle", message: "" });
+    setVenvStatus(null);
+    setVenvState({ status: "idle", message: "" });
   }, []);
 
   // ── Create workspace ─────────────────────────────────────────────────────
@@ -224,11 +321,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
       await refreshDeps();
       await refreshWorkspaces();
+      // Refresh venv status after install (may have created .venv)
+      await refreshVenv();
     } catch (err: any) {
       setInstallState({ status: "error", message: err?.message ?? "Install failed" });
       throw err;
     }
-  }, [currentWorkspace, refreshDeps, refreshWorkspaces]);
+  }, [currentWorkspace, refreshDeps, refreshWorkspaces, refreshVenv]);
 
   return (
     <WorkspaceContext.Provider value={{
@@ -244,6 +343,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       lastInstallTool,
       installState,
       refreshDeps,
+      venvStatus,
+      venvState,
+      refreshVenv,
+      ensureVenv,
+      repairVenv,
     }}>
       {children}
     </WorkspaceContext.Provider>

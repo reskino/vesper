@@ -132,6 +132,10 @@ router.get("/workspaces", proxyToPython);
 router.post("/workspaces/create", proxyToPython);
 router.get("/workspaces/:workspaceId/deps", proxyToPython);
 router.post("/workspaces/:workspaceId/install", proxyToPython);
+// Venv management
+router.get("/workspaces/:workspaceId/venv", proxyToPython);
+router.post("/workspaces/:workspaceId/venv/ensure", proxyToPython);
+router.post("/workspaces/:workspaceId/venv/repair", proxyToPython);
 
 // Export routes
 router.post("/export/docx", proxyToPython);

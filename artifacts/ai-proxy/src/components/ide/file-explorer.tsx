@@ -27,11 +27,12 @@ import {
   ChevronRight, ChevronDown, RefreshCw, FilePlus, FolderPlus,
   Trash2, Upload, Download, Check, X, Loader2, Pencil, Search,
   ChevronsLeft, ChevronsUpDown, FolderX, Package, PackagePlus, Plus, Layers,
-  ChevronUp, AlertCircle, CheckCircle2,
+  ChevronUp, AlertCircle, CheckCircle2, ShieldCheck, ShieldAlert, Wrench,
+  Terminal, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useIDE } from "@/contexts/ide-context";
-import { useWorkspace, type Workspace } from "@/contexts/workspace-context";
+import { useWorkspace, type Workspace, type VenvStatus } from "@/contexts/workspace-context";
 import { ImportExportModal } from "@/components/import-export-modal";
 import { ImportedTree, FolderImportButton, FolderImportLargeButton } from "@/components/ide/imported-tree";
 
@@ -518,24 +519,58 @@ function NoWorkspacePanel() {
   );
 }
 
+// ── Venv Status Badge ─────────────────────────────────────────────────────────
+function VenvBadge({ status }: { status: VenvStatus | null }) {
+  if (!status) return null;
+  if (!status.exists) {
+    return (
+      <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 font-bold uppercase tracking-wide">
+        <Terminal className="h-2.5 w-2.5" />no venv
+      </span>
+    );
+  }
+  if (!status.healthy) {
+    return (
+      <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-bold uppercase tracking-wide">
+        <ShieldAlert className="h-2.5 w-2.5" />broken
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-wide">
+      <ShieldCheck className="h-2.5 w-2.5" />venv active
+    </span>
+  );
+}
+
 // ── Install Dependency Panel ──────────────────────────────────────────────────
 function InstallDepPanel({ onClose }: { onClose: () => void }) {
-  const { currentWorkspace, installDep, installState, deps, lockfile, lastInstallTool, refreshDeps } = useWorkspace();
-  const [pkg, setPkg]         = useState("");
-  const [ver, setVer]         = useState("");
+  const {
+    currentWorkspace,
+    installDep, installState,
+    deps, lockfile, lastInstallTool, refreshDeps,
+    venvStatus, venvState, refreshVenv, ensureVenv, repairVenv,
+  } = useWorkspace();
+
+  const [pkg, setPkg]           = useState("");
+  const [ver, setVer]           = useState("");
   const [showDeps, setShowDeps] = useState(true);
-  const inputRef              = useRef<HTMLInputElement>(null);
+  const [showVenv, setShowVenv] = useState(true);
+  const inputRef                = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
     refreshDeps();
+    refreshVenv();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleInstall = async () => {
     if (!pkg.trim()) return;
     try {
       await installDep(pkg.trim(), ver.trim() || undefined);
-      toast.success(`${pkg.trim()} installed`, { description: `Ready to use in "${currentWorkspace?.name}"` });
+      toast.success(`${pkg.trim()} installed`, {
+        description: `Ready to use in "${currentWorkspace?.name}"`,
+      });
       setPkg("");
       setVer("");
     } catch (err: any) {
@@ -543,29 +578,47 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const isRunning  = installState.status === "running";
-  const lang       = currentWorkspace?.language ?? "unknown";
+  const handleEnsureVenv = async () => {
+    try {
+      const s = await ensureVenv();
+      if (s?.healthy) toast.success("Virtual environment ready", { description: s.python_version ?? undefined });
+      else toast.error("Could not create venv", { description: s?.error ?? undefined });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Venv operation failed");
+    }
+  };
+
+  const handleRepairVenv = async () => {
+    try {
+      const s = await repairVenv();
+      if (s?.healthy) toast.success("Venv repaired", { description: s.python_version ?? undefined });
+      else toast.error("Venv repair failed", { description: s?.error ?? undefined });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Venv repair failed");
+    }
+  };
+
+  const isInstalling  = installState.status === "running";
+  const isVenvBusy    = venvState.status === "loading" || venvState.status === "ensuring" || venvState.status === "repairing";
+  const lang          = currentWorkspace?.language ?? "unknown";
 
   const lockfileColor = lockfile === "uv.lock"
     ? "text-green-400 border-green-500/30 bg-green-500/10"
-    : lockfile === "package-lock.json"
-      ? "text-blue-400 border-blue-500/30 bg-blue-500/10"
-      : "";
+    : "text-blue-400 border-blue-500/30 bg-blue-500/10";
 
   return (
     <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a0c]">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#1a1a24]">
         <div className="flex items-center gap-1.5 flex-wrap">
           <PackagePlus className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-          <span className="text-[11px] font-bold text-[#9898b8] uppercase tracking-wider">Install</span>
+          <span className="text-[11px] font-bold text-[#9898b8] uppercase tracking-wider">Dependencies</span>
           {lang !== "unknown" && (
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border
               ${lang === "python"
                 ? "text-green-400 border-green-500/30 bg-green-500/10"
-                : "text-blue-400 border-blue-500/30 bg-blue-500/10"
-              }`}>
-              {lang === "python" ? "uv add" : "npm"}
+                : "text-blue-400 border-blue-500/30 bg-blue-500/10"}`}>
+              {lang === "python" ? "uv / pip" : "npm"}
             </span>
           )}
           {lockfile && (
@@ -586,7 +639,120 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {/* Input row */}
+      {/* ── Python venv status section (Python workspaces only) ── */}
+      {lang === "python" && (
+        <div className="border-b border-[#111118]">
+          <button
+            onClick={() => setShowVenv(v => !v)}
+            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#141420] transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              {showVenv
+                ? <ChevronDown className="h-3 w-3 text-[#9898b8]" />
+                : <ChevronRight className="h-3 w-3 text-[#9898b8]" />}
+              <Terminal className="h-3 w-3 text-[#9898b8]" />
+              <span className="text-[10px] font-bold text-[#9898b8] uppercase tracking-wider">Virtual Env</span>
+              {isVenvBusy
+                ? <Loader2 className="h-2.5 w-2.5 animate-spin text-primary/60" />
+                : <VenvBadge status={venvStatus} />}
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); refreshVenv(); }}
+              className="h-4 w-4 flex items-center justify-center rounded text-[#7878a8] hover:text-foreground hover:bg-[#1a1a24] transition-colors"
+              title="Refresh venv status"
+            >
+              <RefreshCw className="h-2.5 w-2.5" />
+            </button>
+          </button>
+
+          {showVenv && (
+            <div className="px-3 pb-2.5 space-y-2">
+              {/* Venv details */}
+              {venvStatus && (
+                <div className="rounded-lg border border-[#1e1e2e] bg-[#0d0d14] p-2 space-y-1.5">
+                  {/* Python version row */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] text-[#7878a8] uppercase tracking-wide">Python</span>
+                    <span className="text-[10px] font-mono text-foreground/80">
+                      {venvStatus.python_version ?? (venvStatus.exists ? "—" : "not created")}
+                    </span>
+                  </div>
+                  {/* Package count */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] text-[#7878a8] uppercase tracking-wide">Packages</span>
+                    <span className="text-[10px] font-mono text-foreground/80">
+                      {venvStatus.exists ? venvStatus.package_count : "—"}
+                    </span>
+                  </div>
+                  {/* Tool */}
+                  {venvStatus.tool && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-[#7878a8] uppercase tracking-wide">Tool</span>
+                      <span className="text-[10px] font-mono text-emerald-400/80">{venvStatus.tool}</span>
+                    </div>
+                  )}
+                  {/* Error message */}
+                  {venvStatus.error && (
+                    <p className="text-[9px] text-red-400/80 font-mono leading-snug break-all pt-0.5">
+                      {venvStatus.error}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-1.5">
+                {(!venvStatus?.exists || !venvStatus?.healthy) && (
+                  <button
+                    onClick={handleEnsureVenv}
+                    disabled={isVenvBusy}
+                    className="flex-1 h-6 text-[10px] font-bold bg-primary/90 text-primary-foreground rounded-lg
+                      hover:bg-primary disabled:opacity-40 transition-colors flex items-center justify-center gap-1"
+                  >
+                    {isVenvBusy && (venvState.status === "ensuring")
+                      ? <><Loader2 className="h-3 w-3 animate-spin" />Creating…</>
+                      : <><Terminal className="h-3 w-3" />Create venv</>
+                    }
+                  </button>
+                )}
+                {venvStatus?.exists && (
+                  <button
+                    onClick={handleRepairVenv}
+                    disabled={isVenvBusy}
+                    className={`h-6 text-[10px] font-bold rounded-lg transition-colors
+                      flex items-center justify-center gap-1 disabled:opacity-40
+                      ${venvStatus.healthy
+                        ? "px-2 bg-[#141420] text-[#9898b8] hover:text-foreground hover:bg-[#1a1a24] border border-[#1e1e2e]"
+                        : "flex-1 px-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/20"
+                      }`}
+                    title="Delete and recreate the venv"
+                  >
+                    {isVenvBusy && venvState.status === "repairing"
+                      ? <><Loader2 className="h-3 w-3 animate-spin" />Repairing…</>
+                      : <><Wrench className="h-3 w-3" />{venvStatus.healthy ? "Repair" : "Repair venv"}</>
+                    }
+                  </button>
+                )}
+              </div>
+
+              {/* Venv op status message */}
+              {(venvState.status === "ensuring" || venvState.status === "repairing" || venvState.status === "error") && (
+                <div className={`flex items-start gap-2 p-2 rounded-lg text-[10px] leading-relaxed
+                  ${venvState.status === "error"
+                    ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                    : "bg-primary/10 border border-primary/20 text-primary/80"}`}>
+                  {venvState.status !== "error"
+                    ? <Loader2 className="h-3 w-3 animate-spin shrink-0 mt-px" />
+                    : <AlertCircle className="h-3 w-3 shrink-0 mt-px" />}
+                  <span className="font-mono break-all">{venvState.message}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Package install input ── */}
       <div className="px-3 py-2.5 space-y-2">
         <div className="flex gap-1.5">
           <input
@@ -598,42 +764,40 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
             value={pkg}
             onChange={e => setPkg(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleInstall(); }}
-            disabled={isRunning}
+            disabled={isInstalling}
           />
           <input
-            className="w-20 h-7 px-2 text-xs bg-[#141420] border border-[#1e1e2e]
+            className="w-16 h-7 px-2 text-xs bg-[#141420] border border-[#1e1e2e]
               focus:border-primary/50 rounded-lg outline-none text-foreground
               placeholder:text-[#7878a8] disabled:opacity-50"
-            placeholder="version"
+            placeholder="ver"
             value={ver}
             onChange={e => setVer(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleInstall(); }}
-            disabled={isRunning}
+            disabled={isInstalling}
           />
           <button
             onClick={handleInstall}
-            disabled={!pkg.trim() || isRunning}
+            disabled={!pkg.trim() || isInstalling}
             className="h-7 px-2.5 text-[11px] font-bold bg-primary text-primary-foreground
               rounded-lg hover:bg-primary/80 disabled:opacity-40 transition-colors
               flex items-center gap-1 shrink-0"
           >
-            {isRunning
+            {isInstalling
               ? <Loader2 className="h-3 w-3 animate-spin" />
-              : <PackagePlus className="h-3 w-3" />
-            }
-            {isRunning ? "…" : "Install"}
+              : <PackagePlus className="h-3 w-3" />}
+            {isInstalling ? "…" : "Install"}
           </button>
         </div>
 
-        {/* Status output */}
+        {/* Install status */}
         {installState.status !== "idle" && (
           <div className={`flex items-start gap-2 p-2 rounded-lg text-[10px] leading-relaxed
             ${installState.status === "error"
               ? "bg-red-500/10 border border-red-500/20 text-red-400"
               : installState.status === "done"
                 ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                : "bg-primary/10 border border-primary/20 text-primary/80"
-            }`}>
+                : "bg-primary/10 border border-primary/20 text-primary/80"}`}>
             {installState.status === "running" && <Loader2 className="h-3 w-3 animate-spin shrink-0 mt-px" />}
             {installState.status === "done" && <CheckCircle2 className="h-3 w-3 shrink-0 mt-px" />}
             {installState.status === "error" && <AlertCircle className="h-3 w-3 shrink-0 mt-px" />}
@@ -642,22 +806,31 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
-      {/* Installed packages */}
+      {/* ── Installed packages list ── */}
       <div className="border-t border-[#111118]">
         <button
           onClick={() => setShowDeps(v => !v)}
           className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#141420] transition-colors"
         >
           <div className="flex items-center gap-1.5">
-            {showDeps ? <ChevronDown className="h-3 w-3 text-[#9898b8]" /> : <ChevronRight className="h-3 w-3 text-[#9898b8]" />}
+            {showDeps
+              ? <ChevronDown className="h-3 w-3 text-[#9898b8]" />
+              : <ChevronRight className="h-3 w-3 text-[#9898b8]" />}
             <Package className="h-3 w-3 text-[#9898b8]" />
             <span className="text-[10px] font-bold text-[#9898b8] uppercase tracking-wider">Installed</span>
             <span className="text-[9px] bg-[#1a1a24] text-[#7878a8] rounded px-1">{deps.length}</span>
           </div>
+          <button
+            onClick={e => { e.stopPropagation(); refreshDeps(); }}
+            className="h-4 w-4 flex items-center justify-center rounded text-[#7878a8] hover:text-foreground hover:bg-[#1a1a24] transition-colors"
+            title="Refresh package list"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+          </button>
         </button>
 
         {showDeps && (
-          <div className="max-h-28 overflow-y-auto">
+          <div className="max-h-32 overflow-y-auto">
             {deps.length === 0 ? (
               <p className="text-center py-3 text-[10px] text-[#7878a8]">No packages installed yet</p>
             ) : (

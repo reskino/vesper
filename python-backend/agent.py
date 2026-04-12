@@ -18,6 +18,7 @@ TASK_COMPLETE: <one-line summary of what was built and verified>
 import json
 import re
 import os
+import shutil
 import socket
 import signal
 import subprocess
@@ -255,10 +256,16 @@ Checking virtual environment status before any package installation...
 Running inside Vesper on Replit (Nix-based). NEVER cause "error: externally-managed-environment" or modify /nix/store.
 
 RULES:
-✦ ALWAYS use a virtual environment — check for .venv first, create if missing:
+✦ Virtual environments are managed AUTOMATICALLY — the install_packages tool
+  creates and activates a .venv for you before every pip install. You do NOT
+  need to manually run python -m venv or source activate. Just call:
+    install_packages({{"packages": ["flask"]}})
+  and the venv will be created if missing, then pip will install inside it.
+✦ If you run Python code via execute, the .venv is also auto-activated so
+  `python` resolves to the venv interpreter (packages are importable).
+✦ You may still manually inspect or create the venv if needed:
     python -m venv .venv && source .venv/bin/activate
-  Preferred modern approach: uv venv → uv pip install <package>
-✦ NEVER run pip install without an active venv.
+  But this is rarely necessary — install_packages handles it for you.
 ✦ NEVER use --break-system-packages, --user, or sudo.
 ✦ After installing, update pyproject.toml or requirements.txt automatically.
 ✦ Verify with: python -c "import package_name"
@@ -451,10 +458,13 @@ You are running inside Vesper on Replit (Nix-based). NEVER cause:
   "error: externally-managed-environment" or modify /nix/store.
 
 RULES — follow strictly:
-✦ ALWAYS use a virtual environment. Check for .venv first, create if missing:
-    python -m venv .venv && source .venv/bin/activate
-  Preferred modern approach: uv venv → uv pip install <package>
-✦ NEVER run pip install without an active venv.
+✦ Virtual environments are managed AUTOMATICALLY — the install_packages tool
+  creates and activates a .venv for you before every pip install. You do NOT
+  need to manually run python -m venv or source activate. Just call:
+    install_packages({{"packages": ["flask"]}})
+  and the venv will be created if missing, then pip will install inside it.
+✦ If you run Python code via execute, the .venv is also auto-activated so
+  `python` resolves to the venv interpreter (packages are importable).
 ✦ NEVER use --break-system-packages, --user, or sudo.
 ✦ NEVER touch /nix/store or run nix-env directly.
 ✦ After installing, update pyproject.toml or requirements.txt automatically.
@@ -605,6 +615,54 @@ def _set_action(action: str) -> None:
         _agent_status["current_action"] = action
 
 
+# ─── Venv helpers ────────────────────────────────────────────────────────────
+
+def _find_workspace_venv(cwd: str) -> Optional[str]:
+    """Return the .venv/bin/python path if a venv exists at cwd, else None."""
+    venv_py = Path(cwd) / ".venv" / "bin" / "python"
+    return str(venv_py) if venv_py.exists() else None
+
+
+def _get_venv_extra_env(cwd: str) -> dict:
+    """
+    Build env overrides that activate the workspace .venv.
+    Sets VIRTUAL_ENV, prepends .venv/bin to PATH, and removes PYTHONHOME
+    so `python` and `pip` inside shell commands resolve to venv binaries.
+    """
+    venv_bin = Path(cwd) / ".venv" / "bin"
+    if not venv_bin.exists():
+        return {}
+    venv_path = str(Path(cwd) / ".venv")
+    current_path = os.environ.get("PATH", "")
+    return {
+        "VIRTUAL_ENV": venv_path,
+        "PATH": f"{venv_bin}:{current_path}",
+        "PYTHONHOME": "",   # suppress any system PYTHONHOME
+    }
+
+
+def _ensure_workspace_venv(cwd: str, uv_path: Optional[str] = None) -> str:
+    """
+    Create a .venv at cwd if it does not exist (or is broken).
+    Returns a human-readable status line.
+    """
+    venv_py = Path(cwd) / ".venv" / "bin" / "python"
+    if venv_py.exists():
+        return ".venv already exists"
+
+    uv = uv_path or shutil.which("uv")
+    venv_dir = str(Path(cwd) / ".venv")
+
+    if uv:
+        r = exec_command(f'"{uv}" venv "{venv_dir}"', cwd=cwd, timeout=90)
+    else:
+        r = exec_command(f'python3 -m venv "{venv_dir}"', cwd=cwd, timeout=120)
+
+    if r["exitCode"] == 0:
+        return f"Created .venv at {venv_dir}"
+    return f"Warning: could not create .venv (exit {r['exitCode']}): {(r['stderr'] or '')[:200]}"
+
+
 # ─── Tool implementations ────────────────────────────────────────────────────
 
 def _tool_install_packages(params: dict, cwd: str) -> str:
@@ -614,26 +672,50 @@ def _tool_install_packages(params: dict, cwd: str) -> str:
     if isinstance(packages, str):
         packages = [p.strip() for p in packages.replace(",", " ").split() if p.strip()]
     if not packages:
-        return "ERROR: No packages specified. Provide a list: {\"packages\": [\"flask\", \"requests\"]}"
+        return 'ERROR: No packages specified. Provide a list: {"packages": ["flask", "requests"]}'
 
     pkg_str = " ".join(f'"{p}"' if " " in p else p for p in packages)
 
     if manager in ("pip", "pip3"):
-        cmd = f"pip install {pkg_str} --quiet --no-warn-script-location"
+        # ── Ensure a safe .venv exists before installing ──────────────────────
+        uv = shutil.which("uv")
+        venv_status = _ensure_workspace_venv(cwd, uv)
+        logger.info("venv ensure: %s", venv_status)
+
+        venv_pip = Path(cwd) / ".venv" / "bin" / "pip"
+        venv_py  = Path(cwd) / ".venv" / "bin" / "python"
+
+        if venv_pip.exists():
+            # Direct venv pip — most reliable, no activation needed
+            cmd = f'"{venv_pip}" install {pkg_str} --quiet --no-warn-script-location'
+        elif uv and venv_py.exists():
+            # uv pip install targeting the venv python
+            cmd = f'"{uv}" pip install {pkg_str} --python "{venv_py}"'
+        else:
+            # Last resort: bare pip with venv env activated via PATH override
+            cmd = f"pip install {pkg_str} --quiet --no-warn-script-location"
+
+        extra_env = _get_venv_extra_env(cwd)
+        res = exec_command(cmd, cwd=cwd, timeout=180, extra_env=extra_env)
+
     elif manager == "npm":
         cmd = f"npm install {pkg_str}"
+        res = exec_command(cmd, cwd=cwd, timeout=180)
+
     elif manager in ("pnpm",):
         cmd = f"pnpm add {pkg_str}"
+        res = exec_command(cmd, cwd=cwd, timeout=180)
+
     else:
         cmd = f"pip install {pkg_str} --quiet --no-warn-script-location"
+        res = exec_command(cmd, cwd=cwd, timeout=180)
 
-    res = exec_command(cmd, cwd=cwd, timeout=180)
     out = (res["stdout"] or "").strip()
     err = (res["stderr"] or "").strip()
     combined = "\n".join(filter(None, [out, err]))[:600]
 
     if res["exitCode"] == 0:
-        return f"✓ Installed: {', '.join(packages)}\n{combined}".strip()
+        return f"✓ Installed: {', '.join(packages)} (in workspace .venv)\n{combined}".strip()
     else:
         return f"✗ Install failed (exit {res['exitCode']}):\n{combined}\nTry fixing the package names and retry."
 
@@ -644,7 +726,12 @@ def _tool_execute(params: dict, cwd: str) -> str:
     timeout = int(params.get("timeout", 60))
     if work_dir and not os.path.isabs(work_dir):
         work_dir = os.path.join(WORKSPACE_ROOT, work_dir)
-    res = exec_command(command, cwd=work_dir or cwd, timeout=timeout)
+    effective_cwd = work_dir or cwd
+
+    # Activate workspace .venv if present so `python` resolves to venv python
+    extra_env = _get_venv_extra_env(effective_cwd)
+
+    res = exec_command(command, cwd=effective_cwd, timeout=timeout, extra_env=extra_env or None)
     parts = []
     if res["stdout"]:
         parts.append(f"STDOUT:\n{res['stdout']}")

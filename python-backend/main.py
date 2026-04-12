@@ -1408,6 +1408,36 @@ def workspaces_install(workspace_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/workspaces/<workspace_id>/venv", methods=["GET"])
+def workspaces_venv_status(workspace_id):
+    from workspace_manager import get_venv_status
+    try:
+        body, status = get_venv_status(workspace_id)
+        return jsonify(body), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/workspaces/<workspace_id>/venv/ensure", methods=["POST"])
+def workspaces_venv_ensure(workspace_id):
+    from workspace_manager import ensure_venv
+    try:
+        body, status = ensure_venv(workspace_id)
+        return jsonify(body), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/workspaces/<workspace_id>/venv/repair", methods=["POST"])
+def workspaces_venv_repair(workspace_id):
+    from workspace_manager import repair_venv
+    try:
+        body, status = repair_venv(workspace_id)
+        return jsonify(body), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Web Scraper ──────────────────────────────────────────────────────────────
 
 @app.route("/api/scraper/scrape", methods=["POST"])

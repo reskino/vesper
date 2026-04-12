@@ -1,0 +1,30 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (April 2026):
+- Explorer with workspace isolation and Dependencies
+- Multi-tab Editor, Agent Selector with 8 specialist roles, intelligent chat, responsive layout with bottom navigation, PDF/Word export, and full professional polish (toasts, Command Palette Ctrl+K) all implemented
+
+Task:
+Optimize Vesper for production deployment and performance on Replit.
+- Vite build optimizations: code splitting, lazy loading for panels/components, smaller bundle size.
+- Secure environment variable handling (API keys for models should use Replit Secrets, never hardcoded).
+- Configure Replit deployment settings: recommend Autoscale or Reserved VM, always-on behavior, custom domain readiness.
+- Performance improvements for slow networks/low-end devices: skeleton loading already present, further reduce JS payload, optimize images/icons if any.
+- Add basic production safeguards: error logging, rate limiting notes for chat/backend, prevent sensitive data exposure.
+- Update README.md with deployment instructions, tech stack, and how to run locally vs deployed.
+- Ensure Python backend (uv/venv) works reliably in deployed environment.
+
+Follow exact response structure:
+1. Context Reference (mention current feature completeness)
+2. Implementation Plan (numbered steps – build config, secrets, deployment settings, optimizations)
+3. Complete Code (full files only: vite.config.ts updates if needed, .replit config, updated README.md, any env handling — clean, well-commented)
+4. Exact file paths and integration instructions
+5. Testing steps (build production version, deploy, test load time on 3G, verify features on live URL, check no secret leaks)
+6. Suggested next step (Full Testing Round)
+
+Deliver only production-quality, clean code. Focus on making the app fast, secure, and reliable on Replit in 2026. Use Replit best practices for deployments (Autoscale where appropriate).
+
+Begin.

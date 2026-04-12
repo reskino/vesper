@@ -364,6 +364,168 @@ def _install_python_pip(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
     }
 
 
+# ── Venv management ───────────────────────────────────────────────────────────
+
+def _venv_tool_used(ws_abs: str) -> str:
+    """Guess which tool created/manages the venv."""
+    if (Path(ws_abs) / "uv.lock").exists() or (Path(ws_abs) / "pyproject.toml").exists():
+        if _find_uv():
+            return "uv"
+    return "pip"
+
+
+def _check_venv_health(ws_abs: str) -> Dict[str, Any]:
+    """Return a dict describing the health and details of the .venv."""
+    venv = Path(ws_abs) / ".venv"
+    if not venv.exists():
+        return {
+            "exists": False,
+            "healthy": False,
+            "python_version": None,
+            "package_count": 0,
+            "tool": None,
+            "path": str(venv),
+            "error": "Virtual environment not found",
+        }
+
+    python_bin = venv / "bin" / "python"
+    if not python_bin.exists():
+        return {
+            "exists": True,
+            "healthy": False,
+            "python_version": None,
+            "package_count": 0,
+            "tool": _venv_tool_used(ws_abs),
+            "path": str(venv),
+            "error": "Python binary missing — venv may be broken",
+        }
+
+    # Get Python version
+    try:
+        r = subprocess.run(
+            [str(python_bin), "--version"],
+            capture_output=True, text=True, timeout=8,
+        )
+        python_version = (r.stdout + r.stderr).strip() or "Unknown"
+    except Exception as exc:
+        return {
+            "exists": True,
+            "healthy": False,
+            "python_version": None,
+            "package_count": 0,
+            "tool": _venv_tool_used(ws_abs),
+            "path": str(venv),
+            "error": f"Python binary not executable: {exc}",
+        }
+
+    # Count installed packages
+    package_count = 0
+    try:
+        r2 = subprocess.run(
+            [str(python_bin), "-m", "pip", "list", "--format=json"],
+            capture_output=True, text=True, timeout=12,
+        )
+        if r2.returncode == 0:
+            package_count = len(json.loads(r2.stdout))
+    except Exception:
+        pass
+
+    return {
+        "exists": True,
+        "healthy": True,
+        "python_version": python_version,
+        "package_count": package_count,
+        "tool": _venv_tool_used(ws_abs),
+        "path": str(venv),
+        "error": None,
+    }
+
+
+def _do_create_venv(ws_abs: str, uv: Optional[str]) -> Tuple[Dict[str, Any], int]:
+    """Create .venv using uv venv or python3 -m venv."""
+    venv = Path(ws_abs) / ".venv"
+    if uv:
+        r = subprocess.run(
+            [uv, "venv", str(venv)],
+            capture_output=True, text=True, timeout=90, cwd=ws_abs,
+        )
+        if r.returncode == 0:
+            status = _check_venv_health(ws_abs)
+            return {
+                "success": True, "created": True, "tool": "uv",
+                "status": status, "message": "Created .venv using uv",
+                "output": (r.stdout + r.stderr)[-400:].strip(),
+            }, 200
+        logger.warning("uv venv failed, falling back to python3 -m venv: %s", r.stderr[:200])
+
+    # Fallback: python3 -m venv
+    r = subprocess.run(
+        ["python3", "-m", "venv", str(venv)],
+        capture_output=True, text=True, timeout=120, cwd=ws_abs,
+    )
+    if r.returncode != 0:
+        return {"error": f"Failed to create venv:\n{(r.stdout + r.stderr)[:600]}"}, 500
+    status = _check_venv_health(ws_abs)
+    return {
+        "success": True, "created": True, "tool": "pip",
+        "status": status, "message": "Created .venv using python3 -m venv",
+        "output": (r.stdout + r.stderr)[-400:].strip(),
+    }, 200
+
+
+def _do_repair_venv(ws_abs: str, uv: Optional[str]) -> Tuple[Dict[str, Any], int]:
+    """Remove and recreate .venv."""
+    venv = Path(ws_abs) / ".venv"
+    if venv.exists():
+        try:
+            shutil.rmtree(str(venv))
+        except Exception as exc:
+            return {"error": f"Failed to remove existing venv: {exc}"}, 500
+    body, http_status = _do_create_venv(ws_abs, uv)
+    if "success" in body:
+        body["repaired"] = True
+        body["message"] = body.get("message", "") + " (repaired)"
+    return body, http_status
+
+
+def get_venv_status(workspace_id: str) -> Tuple[Dict[str, Any], int]:
+    """Return detailed venv health for a workspace."""
+    slug = _slugify(workspace_id)
+    ws_abs = _ws_path(slug)
+    if not Path(ws_abs).exists():
+        return {"error": f"Workspace '{slug}' not found"}, 404
+    lang = _detect_language(ws_abs)
+    status = _check_venv_health(ws_abs)
+    return {"success": True, "status": status, "language": lang}, 200
+
+
+def ensure_venv(workspace_id: str) -> Tuple[Dict[str, Any], int]:
+    """Create the venv if missing, repair if broken, return status."""
+    slug = _slugify(workspace_id)
+    ws_abs = _ws_path(slug)
+    if not Path(ws_abs).exists():
+        return {"error": f"Workspace '{slug}' not found"}, 404
+    uv = _find_uv()
+    venv = Path(ws_abs) / ".venv"
+    if venv.exists():
+        health = _check_venv_health(ws_abs)
+        if health["healthy"]:
+            return {"success": True, "created": False, "status": health,
+                    "message": "Venv is healthy"}, 200
+        # Broken — repair
+        return _do_repair_venv(ws_abs, uv)
+    return _do_create_venv(ws_abs, uv)
+
+
+def repair_venv(workspace_id: str) -> Tuple[Dict[str, Any], int]:
+    """Delete and recreate the workspace venv."""
+    slug = _slugify(workspace_id)
+    ws_abs = _ws_path(slug)
+    if not Path(ws_abs).exists():
+        return {"error": f"Workspace '{slug}' not found"}, 404
+    return _do_repair_venv(ws_abs, _find_uv())
+
+
 def _install_js(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
     pkg_file = Path(ws_abs) / "package.json"
 

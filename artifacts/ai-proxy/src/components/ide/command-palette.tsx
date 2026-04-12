@@ -20,7 +20,7 @@ import {
   FileCode, FileText, FileJson, FileIcon,
   Search, X, CornerDownLeft, Terminal, MessageSquare,
   Printer, FileDown, FolderInput, RotateCcw, Keyboard,
-  ChevronRight, Zap, Bot,
+  ChevronRight, Zap, Bot, Sparkles, FolderOpen,
 } from "lucide-react";
 import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace } from "@/contexts/workspace-context";
@@ -119,11 +119,12 @@ function buildCommands(deps: {
   triggerNewChat:     () => void;
   openShortcutsModal: () => void;
   setMobileTab:       (t: any) => void;
+  openWelcomeModal:   () => void;
 }): Command[] {
   const {
     setAgentType, currentAgentId,
     toggleChat, toggleTerminal, triggerNewChat,
-    openShortcutsModal, setMobileTab,
+    openShortcutsModal, setMobileTab, openWelcomeModal,
   } = deps;
 
   const ICON = { size: "h-3.5 w-3.5 shrink-0" };
@@ -179,7 +180,20 @@ function buildCommands(deps: {
     },
   ];
 
-  return [...agentCmds, ...actionCmds];
+  const projectCmds: Command[] = [
+    {
+      id: "welcome-modal",    group: "Project", label: "Welcome / Getting Started",
+      icon: <Sparkles className={`${ICON.size} text-violet-400`} />,
+      onRun: openWelcomeModal,
+    },
+    {
+      id: "new-from-template", group: "Project", label: "New Project from Template",
+      icon: <FolderOpen className={`${ICON.size} text-sky-400`} />,
+      onRun: openWelcomeModal,
+    },
+  ];
+
+  return [...agentCmds, ...actionCmds, ...projectCmds];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,7 +208,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPaletteProps) {
-  const { openFileInEditor, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab } = useIDE();
+  const { openFileInEditor, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab, openWelcomeModal } = useIDE();
   const { currentWorkspace } = useWorkspace();
   const { setAgentType, agentType } = useAgentMode();
   const [query, setQuery]   = useState(initialQuery);
@@ -230,8 +244,8 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
 
   // ── Commands ───────────────────────────────────────────────────────────────
   const allCommands = useMemo(() =>
-    buildCommands({ setAgentType, currentAgentId: agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab }),
-    [setAgentType, agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab]
+    buildCommands({ setAgentType, currentAgentId: agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab, openWelcomeModal }),
+    [setAgentType, agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab, openWelcomeModal]
   );
   const commandResults = useMemo(() => {
     if (!isCommandMode) return allCommands;

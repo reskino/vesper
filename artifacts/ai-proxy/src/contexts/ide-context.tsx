@@ -85,6 +85,11 @@ interface IDEContextValue {
   showShortcutsModal: boolean;
   openShortcutsModal:  () => void;
   closeShortcutsModal: () => void;
+
+  // ── Welcome / onboarding modal ────────────────────────────────────────────
+  showWelcomeModal: boolean;
+  openWelcomeModal:  () => void;
+  closeWelcomeModal: () => void;
 }
 
 const IDEContext = createContext<IDEContextValue | null>(null);
@@ -137,6 +142,16 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const openShortcutsModal  = useCallback(() => setShowShortcutsModal(true),  []);
   const closeShortcutsModal = useCallback(() => setShowShortcutsModal(false), []);
 
+  // ── Welcome modal ─────────────────────────────────────────────────────────
+  const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(() => {
+    try { return !localStorage.getItem("vesper.welcomed"); } catch { return false; }
+  });
+  const openWelcomeModal  = useCallback(() => setShowWelcomeModal(true),  []);
+  const closeWelcomeModal = useCallback(() => {
+    try { localStorage.setItem("vesper.welcomed", "1"); } catch { /* ignore */ }
+    setShowWelcomeModal(false);
+  }, []);
+
   const onOpenFileRef       = useRef<((path: string) => void) | null>(null);
   const onOpenMobileFileRef = useRef<((path: string) => void) | null>(null);
 
@@ -177,6 +192,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       showCommandPalette, paletteInitialQuery,
       openCommandPalette, openCommandMode, closeCommandPalette,
       showShortcutsModal, openShortcutsModal, closeShortcutsModal,
+      showWelcomeModal, openWelcomeModal, closeWelcomeModal,
     }}>
       {children}
     </IDEContext.Provider>

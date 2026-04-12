@@ -10,6 +10,7 @@
  */
 import { useEffect, useCallback, useState, lazy, Suspense, type ElementType } from "react";
 import { useIDE, type MobileTab, type MobileSettingsTab } from "@/contexts/ide-context";
+import { WelcomeModal } from "@/components/welcome-modal";
 import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
 import { FileExplorer } from "@/components/ide/file-explorer";
@@ -559,6 +560,7 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
     showCommandPalette, paletteInitialQuery,
     openCommandPalette, openCommandMode, closeCommandPalette,
     showShortcutsModal, openShortcutsModal, closeShortcutsModal,
+    showWelcomeModal, closeWelcomeModal,
   } = useIDE();
 
   // Wire the "?" key globally to open shortcuts modal
@@ -632,6 +634,9 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
 
       {/* ── Keyboard Shortcut Reference (? key, z-310) ──────────────────── */}
       <ShortcutsModal open={showShortcutsModal} onClose={closeShortcutsModal} />
+
+      {/* ── Welcome / onboarding modal (z-500, first launch) ──────────── */}
+      <WelcomeModal open={showWelcomeModal} onClose={closeWelcomeModal} />
 
       {/* Spacer so content isn't hidden behind the fixed bottom nav (52px bar) */}
       <div

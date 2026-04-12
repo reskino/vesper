@@ -254,7 +254,7 @@ export function TopBar() {
         shadow-[0_1px_0_rgba(255,255,255,0.02)]"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-    <div className="h-14 md:h-11 flex items-center px-3 gap-2.5">
+    <div className="h-12 md:h-11 flex items-center px-3 gap-2.5">
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10

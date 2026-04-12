@@ -36,6 +36,12 @@ interface IDEContextValue {
   showMobileChatSheet: boolean;
   setShowMobileChatSheet: (v: boolean) => void;
 
+  // ── Chat unread counter (mobile bottom-nav badge) ─────────────────────────
+  /** Number of new AI messages received while the user is not on the Chat tab */
+  chatUnreadCount: number;
+  incrementChatUnread: () => void;
+  clearChatUnread: () => void;
+
   // ── Mobile settings sheet ──────────────────────────────────────────────────
   showMobileSettings: boolean;
   setShowMobileSettings: (v: boolean) => void;
@@ -78,6 +84,10 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [showMobileChatSheet, setShowMobileChatSheet] = useState(false);
   const [showMobileSettings, setShowMobileSettings]   = useState(false);
   const [mobileSettingsTab, setMobileSettingsTab]     = useState<MobileSettingsTab>("sessions");
+  const [chatUnreadCount, setChatUnreadCount]         = useState(0);
+
+  const incrementChatUnread = useCallback(() => setChatUnreadCount(n => n + 1), []);
+  const clearChatUnread     = useCallback(() => setChatUnreadCount(0), []);
 
   const [selectedAi, setSelectedAi]   = useState("__auto__");
   const [newChatKey, setNewChatKey]   = useState(0);
@@ -113,6 +123,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       showTerminal, setShowTerminal, toggleTerminal,
       mobileTab, setMobileTab,
       showMobileChatSheet, setShowMobileChatSheet,
+      chatUnreadCount, incrementChatUnread, clearChatUnread,
       showMobileSettings, setShowMobileSettings,
       mobileSettingsTab, setMobileSettingsTab,
       selectedAi, setSelectedAi,

@@ -8,7 +8,7 @@
  *   TopBar → full-screen single panel driven by mobileTab → MobileNav (bottom)
  *   Editor tab shows a floating "Ask AI" FAB that slides up a bottom-sheet chat.
  */
-import { useEffect, useCallback, type ElementType } from "react";
+import { useEffect, useCallback, useState, type ElementType } from "react";
 import { useIDE, type MobileTab, type MobileSettingsTab } from "@/contexts/ide-context";
 import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
@@ -81,7 +81,7 @@ function MobileChatSheet() {
           ${showMobileChatSheet ? "translate-y-0" : "translate-y-full"}`}
         style={{
           height: "82dvh",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 52px)",
         }}
       >
         {/* Drag handle */}
@@ -170,7 +170,7 @@ function MobileSettingsSheet() {
           ${showMobileSettings ? "translate-y-0" : "translate-y-full"}`}
         style={{
           height: "92dvh",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 52px)",
         }}
       >
         {/* Sheet header */}
@@ -251,46 +251,72 @@ const MOBILE_TABS: { id: MobileTab; label: string; icon: ElementType }[] = [
 ];
 
 function MobileNav() {
-  const { mobileTab, setMobileTab, setShowMobileChatSheet } = useIDE();
+  const { mobileTab, setMobileTab, setShowMobileChatSheet, chatUnreadCount, clearChatUnread } = useIDE();
 
   const handleTab = (id: MobileTab) => {
     setMobileTab(id);
+    if (id === "chat") clearChatUnread();
     if (id !== "editor") setShowMobileChatSheet(false);
   };
 
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 z-30
-        bg-base/98 backdrop-blur-2xl border-t border-border/60
-        shadow-[0_-8px_40px_rgba(0,0,0,0.4)]"
+        bg-[#080809]/98 backdrop-blur-2xl border-t border-[#1a1a24]
+        shadow-[0_-8px_40px_rgba(0,0,0,0.5)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Main navigation"
     >
-      <div className="grid grid-cols-5 px-1">
+      <div className="grid grid-cols-5">
         {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
           const active = mobileTab === id;
+          const showBadge = id === "chat" && chatUnreadCount > 0 && !active;
+
           return (
             <button
               key={id}
               onClick={() => handleTab(id)}
-              className="relative flex flex-col items-center justify-center gap-1 py-2 min-h-[56px]
-                active:opacity-70 transition-opacity"
-              aria-label={label}
+              className={`relative flex flex-col items-center justify-center gap-0.5 py-2
+                min-h-[52px] transition-all duration-150 select-none
+                active:scale-[0.92]`}
+              aria-label={`${label}${showBadge ? ` (${chatUnreadCount} new)` : ""}`}
               aria-current={active ? "page" : undefined}
             >
-              {/* Top pill indicator */}
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2
-                  w-10 h-[2px] rounded-b-full bg-primary" />
-              )}
-              {/* Icon in pill */}
-              <div className={`h-8 w-11 rounded-2xl flex items-center justify-center transition-all
-                ${active ? "bg-primary/15" : ""}`}>
-                <Icon className={`transition-all duration-150
-                  ${active ? "h-5 w-5 text-primary" : "h-5 w-5 text-muted-foreground/85"}`} />
+              {/* Top accent line */}
+              <span
+                className={`absolute top-0 left-1/2 -translate-x-1/2 h-[2px] rounded-b-full
+                  transition-all duration-200
+                  ${active ? "w-10 bg-primary" : "w-0 bg-transparent"}`}
+              />
+
+              {/* Icon pill with unread badge */}
+              <div className="relative">
+                <div className={`h-8 w-[44px] rounded-xl flex items-center justify-center
+                  transition-all duration-200
+                  ${active ? "bg-primary/18" : ""}`}>
+                  <Icon className={`transition-all duration-150
+                    ${active ? "h-[18px] w-[18px] text-primary" : "h-[18px] w-[18px] text-[#7878a8]"}`}
+                  />
+                </div>
+
+                {/* Unread badge — shown on Chat tab when off-tab AI responds */}
+                {showBadge && (
+                  <span
+                    className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1
+                      flex items-center justify-center
+                      rounded-full bg-primary text-primary-foreground
+                      text-[9px] font-bold leading-none
+                      shadow-[0_0_8px_rgba(99,102,241,0.6)]
+                      animate-in zoom-in-50 duration-200"
+                  >
+                    {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
+                  </span>
+                )}
               </div>
-              <span className={`text-[10px] font-bold tracking-wide transition-colors
-                ${active ? "text-primary" : "text-muted-foreground/70"}`}>
+
+              {/* Label */}
+              <span className={`text-[10px] font-semibold leading-none transition-colors
+                ${active ? "text-primary" : "text-[#6868a8]"}`}>
                 {label}
               </span>
             </button>
@@ -317,7 +343,7 @@ function FloatingChatFAB() {
         shadow-[0_4px_24px_rgba(99,102,241,0.45),0_0_0_1px_rgba(99,102,241,0.3)]
         transition-all duration-200 active:scale-[0.96]
         ${showMobileChatSheet ? "opacity-0 pointer-events-none scale-90" : "opacity-100 scale-100"}`}
-      style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+      style={{ bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
       aria-label="Ask AI about this code"
     >
       <Sparkles className="h-4 w-4" />
@@ -421,27 +447,70 @@ function DesktopWorkspace() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile: single-panel view based on active tab
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * MobileWorkspace — renders only the panels that have been visited.
+ *
+ * Each panel is mounted lazily (on first visit) and then kept alive in the DOM
+ * with `hidden` so its internal state (editor tabs, scroll position, etc.) is
+ * preserved without re-mounting. This dramatically reduces initial CPU/memory
+ * cost on low-end Android devices where mounting 5 complex panels at boot
+ * caused noticeable jank and network requests.
+ */
 function MobileWorkspace() {
   const { mobileTab, newChatKey } = useIDE();
 
+  // Track which tabs have been opened at least once.
+  // "chat" is pre-visited because it's the default starting tab.
+  const [mounted, setMounted] = useState<Set<MobileTab>>(new Set(["chat"]));
+
+  useEffect(() => {
+    setMounted(prev => {
+      if (prev.has(mobileTab)) return prev;
+      const next = new Set(prev);
+      next.add(mobileTab);
+      return next;
+    });
+  }, [mobileTab]);
+
+  const show = (tab: MobileTab) => (mobileTab === tab ? "" : "hidden");
+
   return (
     <div className="flex-1 min-h-0 overflow-hidden">
-      {/* Each panel is always mounted once the tab is active, to preserve state */}
-      <div className={`h-full ${mobileTab === "chat"     ? "" : "hidden"}`}>
+      {/* Chat — always mounted (default tab) */}
+      <div className={`h-full ${show("chat")}`}>
         <ChatPanel newChatKey={newChatKey} mobile />
       </div>
-      <div className={`h-full ${mobileTab === "editor"   ? "" : "hidden"}`}>
-        <EditorPanel mobile />
-      </div>
-      <div className={`h-full ${mobileTab === "agent"    ? "" : "hidden"}`}>
-        <div className="h-full overflow-y-auto bg-surface"><AgentPage mobile /></div>
-      </div>
-      <div className={`h-full ${mobileTab === "files"    ? "" : "hidden"}`}>
-        <FileExplorer activePath={null} />
-      </div>
-      <div className={`h-full ${mobileTab === "terminal" ? "" : "hidden"}`}>
-        <TerminalPanel />
-      </div>
+
+      {/* Editor — mounted on first visit */}
+      {mounted.has("editor") && (
+        <div className={`h-full ${show("editor")}`}>
+          <EditorPanel mobile />
+        </div>
+      )}
+
+      {/* Agent runner — mounted on first visit */}
+      {mounted.has("agent") && (
+        <div className={`h-full ${show("agent")}`}>
+          <div className="h-full overflow-y-auto bg-surface">
+            <AgentPage mobile />
+          </div>
+        </div>
+      )}
+
+      {/* File explorer — mounted on first visit */}
+      {mounted.has("files") && (
+        <div className={`h-full ${show("files")}`}>
+          <FileExplorer activePath={null} />
+        </div>
+      )}
+
+      {/* Terminal — mounted on first visit */}
+      {mounted.has("terminal") && (
+        <div className={`h-full ${show("terminal")}`}>
+          <TerminalPanel />
+        </div>
+      )}
     </div>
   );
 }
@@ -507,10 +576,10 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       <MobileSettingsSheet />
       <MobileNav />
 
-      {/* Spacer so content isn't hidden behind the fixed bottom nav */}
+      {/* Spacer so content isn't hidden behind the fixed bottom nav (52px bar) */}
       <div
         className="md:hidden shrink-0"
-        style={{ height: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+        style={{ height: "calc(52px + env(safe-area-inset-bottom, 0px))" }}
       />
     </div>
   );

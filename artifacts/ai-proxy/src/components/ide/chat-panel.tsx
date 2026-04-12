@@ -578,7 +578,8 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   compact?: boolean;
   mobile?: boolean;
 }) {
-  const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
+  const { selectedAi, importedProject, setImportedProject, toggleChat,
+    mobileTab, showMobileChatSheet, incrementChatUnread } = useIDE();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep } = useWorkspace();
   const { toast } = useToast();
@@ -824,6 +825,11 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           aiId: result.aiId,
           routingInfo: (result as any).routingDecision ?? undefined,
         }]);
+        // Signal the bottom nav badge when the user is viewing another tab or
+        // the chat is closed (so they notice the reply without checking)
+        if (mobileTab !== "chat" && !showMobileChatSheet) {
+          incrementChatUnread();
+        }
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: result.error || "Failed", error: true }]);
       }
@@ -831,7 +837,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps]);
+  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps, mobileTab, showMobileChatSheet, incrementChatUnread]);
 
   // ── Install-intent handler ────────────────────────────────────────────────
   const handleInstallConfirm = useCallback(async (packageName: string) => {

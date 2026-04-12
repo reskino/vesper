@@ -468,7 +468,9 @@ export function TerminalPanel() {
   }, []);
 
   // ── Smart run button ────────────────────────────────────────────────────────
-  const runCmd = activeFilePath ? getRunCommand(activeFilePath) : null;
+  // Use an absolute path so the workspace cwd doesn't duplicate the relative prefix
+  const activeFileAbsPath = activeFilePath ? `/home/runner/workspace/${activeFilePath}` : null;
+  const runCmd = activeFileAbsPath ? getRunCommand(activeFileAbsPath) : null;
   const runFile = useCallback(() => {
     if (!runCmd || !termRef.current) return;
     termRef.current.writeln(runCmd);

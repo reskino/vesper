@@ -549,17 +549,19 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     // Auto-save first so changes are on disk
     await handleSave(activeTab);
 
-    // Build the shell command to run the file
+    // Build the shell command to run the file.
+    // Always use the absolute path so the cwd (workspace root) doesn't duplicate it.
+    const absPath = `/home/runner/workspace/${activeTab}`;
     let cmd: string;
     if (ext === "py") {
       // python auto-resolves to the workspace .venv via PATH override in the backend
-      cmd = `python "${activeTab}"`;
+      cmd = `python "${absPath}"`;
     } else if (["js", "mjs", "cjs"].includes(ext)) {
-      cmd = `node "${activeTab}"`;
+      cmd = `node "${absPath}"`;
     } else if (ext === "ts") {
-      cmd = `npx tsx "${activeTab}"`;
+      cmd = `npx tsx "${absPath}"`;
     } else {
-      cmd = `bash "${activeTab}"`;
+      cmd = `bash "${absPath}"`;
     }
 
     // Determine cwd: workspace directory if available, else repo root

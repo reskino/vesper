@@ -33,13 +33,13 @@ args = "artifacts/ai-proxy: web"
 name = "Python AI Backend"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd python-backend && PYTHON_BACKEND_PORT=5050 python3 main.py"
-waitForPort = 5050
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd python-backend && PYTHON_BACKEND_PORT=5050 /home/runner/workspace/.pythonlibs/bin/python3 main.py"
+waitForPort = 5050
 
 [[workflows.workflow]]
 name = "artifacts/api-server: API Server"

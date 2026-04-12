@@ -572,11 +572,30 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     const pipInstall = `[ -f "${reqTxt}" ] && "${venvPy}" -m pip install -q -r "${reqTxt}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
     const npmInstall = `[ -f "${pkgJson}" ] && npm install --silent 2>/dev/null ; `;
 
+    // Detect whether the Python file starts a persistent server so we can
+    // run it in the background instead of blocking the HTTP request.
+    const fileContent = tabStates[activeTab]?.content ?? "";
+    const isServer = ext === "py" && /uvicorn\.run|app\.run\s*\(|server\.run\s*\(|socketio\.run|serve\s*\(app/.test(fileContent);
+
     let cmd: string;
     if (ext === "py") {
-      // Install from requirements.txt (if present) then run — both using the
-      // venv Python so packages are found and Nix system-pip is never touched.
-      cmd = `${pipInstall}"${venvPy}" "${absPath}"`;
+      if (isServer) {
+        // Background mode: start the server, wait 6 s for startup logs, then
+        // return. The process keeps running after the HTTP response.
+        // Using a unique log file per run so concurrent runs don't collide.
+        const logFile = `/tmp/vesper_run_$$.log`;
+        cmd = [
+          pipInstall.replace(/ ; $/, ""),  // install step (no trailing semicolon)
+          `"${venvPy}" "${absPath}" >"${logFile}" 2>&1 &`,
+          `SERVER_PID=$!`,
+          `sleep 6`,
+          `cat "${logFile}"`,
+          `kill -0 $SERVER_PID 2>/dev/null && echo "[Server running — PID $SERVER_PID]" || echo "[Server exited]"`,
+        ].join(" ; ");
+      } else {
+        // Regular script — venv pip install then run, within proxy timeout.
+        cmd = `${pipInstall}"${venvPy}" "${absPath}"`;
+      }
     } else if (["js", "mjs", "cjs"].includes(ext)) {
       cmd = `${npmInstall}node "${absPath}"`;
     } else if (ext === "ts") {
@@ -586,9 +605,8 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     }
 
     const wsId = currentWorkspace?.id ?? null;
-    // Server processes (uvicorn, flask dev server) run until killed — give them
-    // 5 minutes so startup output is visible before the timeout message appears.
-    const runTimeout = ext === "py" ? 300 : 60;
+    // Server mode returns in ~6 s; scripts get 55 s (safely under the 60 s proxy limit).
+    const runTimeout = isServer ? 30 : 55;
     const toastId = toast.loading(`Running ${filename}…`);
     setIsRunning(true);
     setRunOutput(null);
@@ -610,7 +628,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       setIsRunning(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentWorkspace, ensureVenv, handleSave, execMutation]);
+  }, [activeTab, tabStates, currentWorkspace, ensureVenv, handleSave, execMutation]);
 
   // ── Handle Monaco editor change ─────────────────────────────────────────────
   const handleEditorChange: OnChange = useCallback((value) => {

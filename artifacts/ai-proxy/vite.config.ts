@@ -1,4 +1,4 @@
-import { defineConfig, splitVendorChunkPlugin } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import monacoEditorPlugin from "vite-plugin-monaco-editor";
@@ -33,7 +33,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    splitVendorChunkPlugin(),
     // Bundles Monaco Editor workers locally so IntelliSense works without CDN
     (monacoEditorPlugin as any).default({
       languageWorkers: [

@@ -27,8 +27,11 @@ from terminal_manager import exec_command, get_cwd, set_cwd, get_env_info
 from agent import run_agent, get_status as get_agent_status, get_screenshot_path, stop_agent
 from router import route as smart_route, explain as explain_route
 
+# Use INFO level in production to avoid writing request bodies / debug traces
+# that may contain sensitive user data (API keys, session cookies, etc.).
+_log_level = logging.DEBUG if os.environ.get("FLASK_ENV") != "production" else logging.INFO
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=_log_level,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
@@ -36,6 +39,17 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ── Gzip compression ──────────────────────────────────────────────────────────
+# Compress API responses (JSON, text) before sending to save bandwidth.
+# Responses to the API gateway (localhost) still compress fine; the gateway
+# decompresses transparently via http.request.
+try:
+    from flask_compress import Compress as _FlaskCompress
+    _FlaskCompress(app)
+    logger.info("flask-compress: gzip enabled")
+except ImportError:
+    logger.warning("flask-compress not installed — responses will not be gzip-compressed")
 
 
 @app.route("/api/healthz")

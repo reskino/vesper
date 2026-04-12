@@ -9,6 +9,11 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Trust the first reverse-proxy hop (Replit's load balancer / preview proxy).
+// Required so express-rate-limit can read X-Forwarded-For correctly and so
+// req.protocol returns "https" behind the Replit mTLS proxy.
+app.set("trust proxy", 1);
+
 // ── Security headers ────────────────────────────────────────────────────────
 // Helmet sets X-Content-Type-Options, X-Frame-Options, HSTS, etc.
 // Content-Security-Policy is disabled here because the frontend is served by

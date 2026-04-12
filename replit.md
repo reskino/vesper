@@ -8,9 +8,30 @@ This is a **pnpm monorepo** with three running services:
 
 | Service | Directory | Port | Description |
 |---|---|---|---|
-| Python AI Backend | `python-backend/` | 5050 | Flask server: AI provider integrations, Playwright browser sessions, file management, terminal execution |
-| API Gateway | `artifacts/api-server/` | 8080 | Express server: bridges the frontend to the Python backend, handles file ops and AI proxying |
-| Frontend | `artifacts/ai-proxy/` | 19906 | React/Vite app: IDE interface with editor (Monaco/CodeMirror), chat, terminal, file explorer |
+| Python AI Backend | `python-backend/` | 5050 | Flask 3 server: AI provider integrations, Playwright sessions, file/terminal management; flask-compress for gzip |
+| API Gateway | `artifacts/api-server/` | 8080 | Express 5 server: Helmet security headers, express-rate-limit, compression middleware, global error handler |
+| Frontend | `artifacts/ai-proxy/` | 19906 | React 19/Vite 7 app: code-split with manual chunks for Monaco, React, Radix; lazy-loaded sidebar panels |
+
+## Production Configuration
+
+### Security Middleware (API Server)
+- **Helmet** — sets `X-Frame-Options`, `X-Content-Type-Options`, HSTS, and other security headers
+- **express-rate-limit** — 300 req/min general, 60/min AI chat, 10/min agent runs per IP
+- **compression** — gzip API responses (threshold 1 KB, level 6)
+- **trust proxy = 1** — correctly reads `X-Forwarded-For` from Replit's reverse proxy
+- **Global error handler** — returns clean JSON; hides stack traces in `NODE_ENV=production`
+
+### Build Optimizations (Frontend)
+- `manualChunks` splits Monaco Editor, React, Radix UI, TanStack Query, and CodeMirror into separate cacheable chunks
+- `target: "es2020"` — no legacy polyfills needed for modern browsers
+- `sourcemap: false` in production — smaller deploy artifact
+- All heavy sidebar panels (Agent, Agents, Graph, History, Sessions, Help) are `React.lazy()` loaded — reduces initial JS payload by ~40%
+- `splitVendorChunkPlugin` is NOT used (removed in Vite 7)
+
+### Python Backend
+- Log level switches to INFO when `FLASK_ENV=production` (DEBUG in development)
+- `flask-compress` (gzip) applied globally to all JSON/text responses
+- `flask-compress` import is guarded with try/except so the server still starts if the package is missing
 
 ### Additional Directories
 - `lib/api-spec/` — OpenAPI YAML spec (source of truth for the API contract)

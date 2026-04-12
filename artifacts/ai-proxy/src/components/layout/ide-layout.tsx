@@ -8,7 +8,7 @@
  *   TopBar → full-screen single panel driven by mobileTab → MobileNav (bottom)
  *   Editor tab shows a floating "Ask AI" FAB that slides up a bottom-sheet chat.
  */
-import { useEffect, useCallback, useState, type ElementType } from "react";
+import { useEffect, useCallback, useState, lazy, Suspense, type ElementType } from "react";
 import { useIDE, type MobileTab, type MobileSettingsTab } from "@/contexts/ide-context";
 import { ActivityBar } from "./activity-bar";
 import { TopBar } from "./top-bar";
@@ -20,12 +20,27 @@ import { PanelErrorBoundary } from "@/components/ide/error-boundary";
 import { ChatPanel } from "@/components/ide/chat-panel";
 import { TerminalPanel } from "@/components/ide/terminal-panel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Sessions } from "@/pages/sessions";
-import { History } from "@/pages/history";
-import AgentPage from "@/pages/agent";
-import AgentsPage from "@/pages/agents";
-import GraphPage from "@/pages/graph";
-import HelpPage from "@/pages/help";
+
+// Lazy-load heavy pages that are only shown on demand.
+// Each gets its own async chunk so the main bundle stays small.
+const Sessions   = lazy(() => import("@/pages/sessions").then(m => ({ default: m.Sessions })));
+const History    = lazy(() => import("@/pages/history").then(m => ({ default: m.History })));
+const AgentPage  = lazy(() => import("@/pages/agent"));
+const AgentsPage = lazy(() => import("@/pages/agents"));
+const GraphPage  = lazy(() => import("@/pages/graph"));
+const HelpPage   = lazy(() => import("@/pages/help"));
+
+// Minimal skeleton shown while a lazy panel is loading
+function PanelSkeleton() {
+  return (
+    <div className="flex-1 flex items-center justify-center bg-[#0d0d12]">
+      <div className="flex flex-col items-center gap-3 text-[#7878a8]">
+        <div className="h-6 w-6 rounded-full border-2 border-[#2a2a3c] border-t-primary/60 animate-spin" />
+        <p className="text-xs font-medium">Loading…</p>
+      </div>
+    </div>
+  );
+}
 import { VesperLogo } from "@/components/vesper-logo";
 import {
   MessageSquare, Code2, FolderOpen, TerminalSquare,
@@ -235,9 +250,11 @@ function MobileSettingsSheet() {
 
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {mobileSettingsTab === "sessions" && <Sessions />}
-          {mobileSettingsTab === "history"  && <History />}
-          {mobileSettingsTab === "help"     && <HelpPage />}
+          <Suspense fallback={<PanelSkeleton />}>
+            {mobileSettingsTab === "sessions" && <Sessions />}
+            {mobileSettingsTab === "history"  && <History />}
+            {mobileSettingsTab === "help"     && <HelpPage />}
+          </Suspense>
         </div>
       </div>
     </>
@@ -365,12 +382,12 @@ function SidebarContent({ activeFilePath }: { activeFilePath: string | null }) {
   const { sidebarPanel } = useIDE();
   switch (sidebarPanel) {
     case "files":    return <FileExplorer activePath={activeFilePath} />;
-    case "agent":    return <div className="h-full overflow-y-auto bg-surface"><AgentPage /></div>;
-    case "agents":   return <div className="h-full overflow-y-auto bg-surface"><AgentsPage /></div>;
-    case "graph":    return <div className="h-full flex flex-col bg-[#07070e]"><GraphPage /></div>;
-    case "sessions": return <div className="h-full overflow-y-auto bg-surface"><Sessions /></div>;
-    case "history":  return <div className="h-full overflow-y-auto bg-surface"><History /></div>;
-    case "help":     return <div className="h-full overflow-y-auto bg-surface"><HelpPage /></div>;
+    case "agent":    return <Suspense fallback={<PanelSkeleton />}><div className="h-full overflow-y-auto bg-surface"><AgentPage /></div></Suspense>;
+    case "agents":   return <Suspense fallback={<PanelSkeleton />}><div className="h-full overflow-y-auto bg-surface"><AgentsPage /></div></Suspense>;
+    case "graph":    return <Suspense fallback={<PanelSkeleton />}><div className="h-full flex flex-col bg-[#07070e]"><GraphPage /></div></Suspense>;
+    case "sessions": return <Suspense fallback={<PanelSkeleton />}><div className="h-full overflow-y-auto bg-surface"><Sessions /></div></Suspense>;
+    case "history":  return <Suspense fallback={<PanelSkeleton />}><div className="h-full overflow-y-auto bg-surface"><History /></div></Suspense>;
+    case "help":     return <Suspense fallback={<PanelSkeleton />}><div className="h-full overflow-y-auto bg-surface"><HelpPage /></div></Suspense>;
     default:         return null;
   }
 }
@@ -509,7 +526,9 @@ function MobileWorkspace() {
       {mounted.has("agent") && (
         <div className={`h-full ${show("agent")}`}>
           <div className="h-full overflow-y-auto bg-surface">
-            <AgentPage mobile />
+            <Suspense fallback={<PanelSkeleton />}>
+              <AgentPage mobile />
+            </Suspense>
           </div>
         </div>
       )}

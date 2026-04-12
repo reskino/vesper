@@ -43,7 +43,11 @@ import { useAgentMode, type AgentType } from "@/contexts/agent-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
-import { detectIntent, AGENT_PREFIXES, type IntentResult } from "@/lib/intent-detect";
+import {
+  detectIntent, detectInstallIntent,
+  AGENT_PREFIXES,
+  type IntentResult, type InstallIntentResult,
+} from "@/lib/intent-detect";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -471,6 +475,101 @@ function IntentStrip({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Install confirm strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Shown when the user's message looks like a package install request.
+ * Lets them confirm or dismiss without ever sending to the AI.
+ */
+function InstallConfirmStrip({
+  intent,
+  dismissed,
+  hasWorkspace,
+  isInstalling,
+  onConfirm,
+  onDismiss,
+  onAskAI,
+}: {
+  intent:       InstallIntentResult | null;
+  dismissed:    boolean;
+  hasWorkspace: boolean;
+  isInstalling: boolean;
+  onConfirm:    (pkg: string) => void;
+  onDismiss:    () => void;
+  onAskAI:      () => void;
+}) {
+  const visible = !!intent && !dismissed;
+  if (!visible) return null;
+
+  const pkg = intent!.packageName;
+  const mgr = intent!.manager === "npm" ? "npm" : "workspace";
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-teal-500/30 bg-teal-500/8">
+        {/* Icon */}
+        <span className="mt-0.5 shrink-0 h-4 w-4 text-teal-400">
+          <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" aria-hidden>
+            <rect width="16" height="16" rx="4" fill="currentColor" fillOpacity="0.15" />
+            <path d="M4 8h8M8 4v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-teal-300 font-medium mb-1.5">
+            Install <code className="px-1 py-0.5 rounded bg-teal-500/15 font-mono">{pkg}</code>
+            {" "}in your {mgr}?
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {/* Primary: Install now */}
+            <button
+              onClick={() => onConfirm(pkg)}
+              disabled={!hasWorkspace || isInstalling}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold
+                bg-teal-500/20 border border-teal-500/40 text-teal-300
+                hover:bg-teal-500/30 active:scale-95 transition-all duration-100
+                disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+              title={hasWorkspace ? undefined : "Select a workspace first"}
+            >
+              {isInstalling ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> Installing…</>
+              ) : (
+                <><ArrowRight className="h-3 w-3" /> Install now</>
+              )}
+            </button>
+
+            {/* Secondary: Ask AI instead */}
+            <button
+              onClick={onAskAI}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium
+                border border-[#2a2a3e] text-[#9898b8] hover:text-foreground hover:border-[#3a3a54]
+                active:scale-95 transition-all duration-100 min-h-[32px]"
+            >
+              Ask AI instead
+            </button>
+
+            {/* Dismiss */}
+            <button
+              onClick={onDismiss}
+              className="p-1.5 text-[#7878a8] hover:text-[#9898b8] transition-colors rounded-lg min-h-[32px]"
+              aria-label="Dismiss install suggestion"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {!hasWorkspace && (
+            <p className="mt-1.5 text-[10px] text-amber-400/80">
+              Select a workspace in the file explorer to enable installs.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main chat panel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -481,7 +580,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
   const { agentType } = useAgentMode();
-  const { currentWorkspace, deps } = useWorkspace();
+  const { currentWorkspace, deps, installDep } = useWorkspace();
   const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
@@ -508,6 +607,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const [detectedIntent, setDetectedIntent]       = useState<IntentResult | null>(null);
   const [intentDismissed, setIntentDismissed]     = useState(false);
   const [routingLabel, setRoutingLabel]           = useState<string | null>(null);
+  // Install intent — triggers workspace dep install without an AI roundtrip
+  const [installIntent, setInstallIntent]         = useState<InstallIntentResult | null>(null);
+  const [installDismissed, setInstallDismissed]   = useState(false);
+  const [isInstalling, setIsInstalling]           = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef    = useRef<HTMLDivElement>(null);
@@ -566,21 +669,35 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
 
   // ── Debounced intent detection (300 ms after user stops typing) ───────────
   useEffect(() => {
-    if (!prompt.trim()) {
+    const trimmed = prompt.trim();
+    if (!trimmed) {
       setDetectedIntent(null);
+      setInstallIntent(null);
       return;
     }
     const timer = setTimeout(() => {
-      const result = detectIntent(prompt);
-      setDetectedIntent(prev => {
-        if (prev?.agentType !== result?.agentType) setIntentDismissed(false);
-        return result;
+      // Install intent takes priority — it bypasses the AI completely
+      const install = detectInstallIntent(trimmed);
+      setInstallIntent(prev => {
+        if (prev?.packageName !== install?.packageName) setInstallDismissed(false);
+        return install;
       });
+
+      // Agent intent only shown when no install intent is active
+      if (!install) {
+        const result = detectIntent(trimmed);
+        setDetectedIntent(prev => {
+          if (prev?.agentType !== result?.agentType) setIntentDismissed(false);
+          return result;
+        });
+      } else {
+        setDetectedIntent(null);
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [prompt]);
 
-  const isPending    = askAi.isPending || askAiWithContext.isPending;
+  const isPending    = askAi.isPending || askAiWithContext.isPending || isInstalling;
   const isAuto       = selectedAi === "__auto__";
   const connectedAis = aisData?.ais?.filter((a: any) => a.hasSession) ?? [];
   const clearAttachment = () => { setAttachedFile(null); setUploadedFile(null); };
@@ -660,11 +777,16 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       const rolePrefix = AGENT_PREFIXES[effectiveAgent] ?? "";
       const promptWithRole = rolePrefix ? rolePrefix + text : text;
 
+      // `action` maps to the backend's ACTION_PREFIXES for specialist prompting.
+      // `agentType` lets the backend apply a stronger system-prompt for the persona.
+      const detectedAction = !intentDismissed ? detectedIntent?.action : undefined;
       const payload = {
-        aiId: effectiveAiId,
-        prompt: promptWithRole,
+        aiId:          effectiveAiId,
+        prompt:        promptWithRole,
         conversationId: conversationId ?? undefined,
-        fallback: isAuto,
+        fallback:      isAuto,
+        agentType:     effectiveAgent !== "builder" ? effectiveAgent : undefined,
+        action:        detectedAction,
       };
 
       // Build file context: workspace overview + explicit attachment + imported project
@@ -710,6 +832,42 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps]);
+
+  // ── Install-intent handler ────────────────────────────────────────────────
+  const handleInstallConfirm = useCallback(async (packageName: string) => {
+    if (!currentWorkspace) {
+      toast({ title: "No workspace", description: "Select a workspace first.", variant: "destructive" });
+      return;
+    }
+    setIsInstalling(true);
+    setInstallIntent(null);
+    setInstallDismissed(false);
+    setPrompt("");
+
+    // Show a user-side message so it feels conversational
+    setMessages(prev => [...prev, {
+      role: "user",
+      content: `Install \`${packageName}\` in workspace **${currentWorkspace.name}**`,
+    }]);
+
+    try {
+      await installDep(packageName);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `**\`${packageName}\` installed successfully** in \`${currentWorkspace.name}\`.\n\nYou can now import it in your code.`,
+      }]);
+      toast({ title: "Package installed", description: `${packageName} is ready to use.` });
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `**Installation failed** for \`${packageName}\`.\n\n${err?.message ?? "Unknown error — check the terminal for details."}`,
+        error: true,
+      }]);
+      toast({ title: "Install failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    } finally {
+      setIsInstalling(false);
+    }
+  }, [currentWorkspace, installDep, toast]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
@@ -878,8 +1036,25 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         <div className="md:hidden flex items-center justify-between mb-2">
           <AgentSelector isPending={isPending} />
         </div>
+        {/* Install-intent confirmation — shown instead of agent routing strip */}
+        <InstallConfirmStrip
+          intent={installIntent}
+          dismissed={installDismissed}
+          hasWorkspace={!!currentWorkspace}
+          isInstalling={isInstalling}
+          onConfirm={(pkg) => handleInstallConfirm(pkg)}
+          onDismiss={() => setInstallDismissed(true)}
+          onAskAI={() => {
+            setInstallDismissed(true);
+            send(prompt);
+            setPrompt("");
+            clearAttachment();
+          }}
+        />
+
+        {/* Agent-routing strip — hidden while install strip is active */}
         <IntentStrip
-          intent={detectedIntent}
+          intent={installIntent && !installDismissed ? null : detectedIntent}
           dismissed={intentDismissed}
           onDismiss={() => setIntentDismissed(true)}
           onChip={(chip) => {

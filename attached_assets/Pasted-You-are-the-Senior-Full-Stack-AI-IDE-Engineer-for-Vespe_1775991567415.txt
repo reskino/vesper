@@ -1,0 +1,36 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (confirmed live April 2026):
+- Workspace isolation, safe dependency management, Agent Selector in Chat header, and Chat intelligence all implemented
+- Layout: Desktop three-panel (Explorer left, Editor center, Chat right) + toggleable terminal
+- Chat header rich with "Agent Idle", "Builder · Full-stack autonomous Idle", "Orchestrator – 8 specialist roles", "3 AIs ready", quick actions
+- Gap: No bottom navigation; three-panel layout performs poorly on mobile/small screens (expected horizontal scroll or cramped view)
+
+Core Vision: Fast, beautiful, reliable experience on desktop AND mobile (optimized for low-end Android devices and slower networks in Ghana). Large touch targets, minimal bundle impact, mobile-first design.
+
+Task:
+Implement a fully responsive layout with bottom navigation.
+- Main layout wrapper using Tailwind responsive classes (mobile-first).
+- Desktop (lg: and above, ~1024px+): Keep existing three-panel side-by-side layout (flex or grid) with optional resizers.
+- Mobile (<768px): Single active panel view (full height) + fixed bottom navigation bar.
+- Bottom Nav tabs: Explorer (Files), Editor, Chat, Terminal. Use Lucide icons + labels. Highlight active tab with violet accent.
+- Add Zustand store for activePanel (persist last viewed panel).
+- Panel switching: Bottom nav changes which panel is visible on mobile; on desktop all panels remain visible.
+- Ensure existing features work: Agent Selector stays visible in Chat (or header on mobile), workspace Explorer, intelligent chat input, quick actions, keyboard shortcuts (adapt where needed).
+- Optimizations: Lazy-load inactive panels on mobile, reduce heavy animations below md breakpoint, skeleton loaders, large tap targets (>44px), fast re-renders.
+- Dark zinc/neutral theme consistent everywhere.
+
+Follow exact response structure:
+1. Context Reference (mention completed features and current live layout gaps)
+2. Implementation Plan (numbered steps – layout component, bottom nav, responsive logic, state)
+3. Complete Code (full files only: updated Layout.tsx or App.tsx, new components/BottomNavigation.tsx, useActivePanel store — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions (how to wrap existing panels)
+5. Testing steps (test on desktop, tablet, mobile DevTools presets; 3G throttle; verify panel switching, Agent Selector accessibility on mobile, no breakage to workspace/chat)
+6. Suggested next priority after this change (e.g. multi-tab editor support or PDF/Word export)
+
+Deliver only production-quality, clean, commented code. Mobile-first with Tailwind breakpoints (sm, md, lg). Optimize heavily for performance on slow networks and low-end devices. Use lucide-react for icons if needed (note install).
+
+Begin.

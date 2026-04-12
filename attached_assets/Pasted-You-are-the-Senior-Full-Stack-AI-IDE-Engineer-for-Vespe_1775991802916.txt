@@ -1,0 +1,38 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (confirmed live April 2026):
+- Workspace isolation + dependency management complete
+- Agent Selector + intelligent chat intent routing complete
+- Responsive layout with bottom navigation complete
+- Editor: Shows placeholder ("Open a file from the Explorer", "Open a file to begin"); basic shortcuts (Ctrl+S save, Ctrl+W close tab) but limited/no visible multi-tab support; Monaco implied but not fully utilized for multiple files
+
+Core Vision: Production-grade Monaco editor with smooth multi-tab experience, fully integrated with workspaces and agents. Fast on desktop + mobile.
+
+Task:
+Implement full multi-tab editor support.
+- Create/use Zustand store for editor state: openTabs (array of {id, path, name, content, language, isDirty}), activeTabId.
+- Add persistent TabBar component above Monaco: file icons/names, dirty indicator (*), close X, horizontal scroll on mobile.
+- Features:
+  - Double-click or open file from Explorer → add tab or activate existing.
+  - Save active tab (Ctrl+S) → backend write to current workspace path.
+  - Close tab (Ctrl+W), close others, new empty tab (Ctrl+T).
+  - Tab cycling (Ctrl+Tab / Ctrl+Shift+Tab).
+  - Monaco configuration: dark theme matching Vesper zinc palette, language detection, auto-save option.
+  - Integration: Chat actions (e.g. "refactor this file" or "fix bug") target the active tab; Agent Selector context passed.
+- Backend: Update file read/write endpoints to be workspace-aware with proper error handling.
+- Mobile: Compact/scrollable tab bar, large close targets, no performance regression.
+
+Follow exact response structure:
+1. Context Reference (mention completed features and live Editor placeholder)
+2. Implementation Plan (numbered steps – store, TabBar, Monaco wrapper, backend)
+3. Complete Code (full files only: useEditorStore.ts, components/TabBar.tsx, updated EditorPanel.tsx — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions
+5. Testing steps (open 4-5 files from workspace, edit/save/dirty states, tab switching on desktop + mobile, test with intelligent chat commands, 3G throttle)
+6. Suggested next priority after this change (e.g. PDF/Word export or UI polish)
+
+Deliver only production-quality, clean, commented code. Ensure tabs are performant and fully workspace-isolated. Build on existing Monaco setup. Optimize for low-end devices.
+
+Begin.

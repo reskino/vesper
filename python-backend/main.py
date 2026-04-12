@@ -199,6 +199,7 @@ def ask_ai_with_context():
     user_prompt = data.get("prompt", "").strip()
     files = data.get("files", [])
     action = data.get("action")
+    agent_type = data.get("agentType")          # e.g. "code_surgeon", "scholar" …
     conversation_id = data.get("conversationId") or str(uuid.uuid4())
     use_fallback = data.get("fallback", True)
 
@@ -217,23 +218,81 @@ def ask_ai_with_context():
         ai_id = routing_decision_ctx["aiId"]
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Action-level prefixes (appended before the user message) ─────────────
     ACTION_PREFIXES = {
         "fix":      "Please analyze the following code and fix any bugs. Explain what you changed.\n\n",
         "explain":  "Please explain the following code in detail.\n\n",
         "test":     "Please write comprehensive unit tests for the following code.\n\n",
-        "refactor": "Please refactor the following code to improve readability and maintainability.\n\n",
+        "refactor": "Please refactor the following code to improve readability and maintainability. "
+                    "Preserve behaviour; only improve structure, naming, and clarity.\n\n",
         "suggest":  "Please review the following code and suggest improvements.\n\n",
         "debug":    "Please help debug the following code and provide a fix.\n\n",
-        "document": "Please add comprehensive documentation and docstrings to the following code.\n\n",
+        "document": "Please add comprehensive documentation and docstrings to the following code. "
+                    "Use the appropriate format for the language (JSDoc, Google-style Python, etc.).\n\n",
     }
 
-    prefix = ACTION_PREFIXES.get(action, "") if action else ""
+    # ── Agent-type system prompts (prepended before action prefix) ────────────
+    # These tell the AI which specialist persona to embody, giving richer
+    # persona context than the short banner already prepended by the frontend.
+    AGENT_SYSTEM_PROMPTS = {
+        "code_surgeon": (
+            "You are Vesper Code Surgeon — a senior software engineer specialising in "
+            "precise, surgical code improvements. Your priorities: correctness first, "
+            "readability second, performance third. Always explain what you changed and why. "
+            "Prefer minimal diffs; never rewrite working code unnecessarily.\n\n"
+        ),
+        "scholar": (
+            "You are Vesper Research Scholar — a rigorous academic assistant. "
+            "Provide well-structured, citation-backed answers. Use numbered sections, "
+            "bullet points, and code examples where relevant. Acknowledge uncertainty "
+            "explicitly and distinguish facts from opinions.\n\n"
+        ),
+        "search_master": (
+            "You are Vesper Search Master — a deep research assistant. "
+            "Surface the most authoritative, up-to-date sources. "
+            "Always include real URLs or package references where possible. "
+            "Summarise findings concisely then provide detail on request.\n\n"
+        ),
+        "docs_weaver": (
+            "You are Vesper Docs Weaver — a technical writing specialist. "
+            "Produce clear, beautifully structured documentation. "
+            "Use Markdown headings, tables, and code blocks. "
+            "Tailor the tone to the audience (developer docs vs end-user guides).\n\n"
+        ),
+        "orchestrator": (
+            "You are Vesper Orchestrator — a full-stack architect with broad expertise. "
+            "Break large problems into concrete, ordered steps. "
+            "Consider scalability, security, and maintainability in every design decision. "
+            "Produce production-quality, complete implementations — never stubs.\n\n"
+        ),
+    }
+
+    agent_prefix = AGENT_SYSTEM_PROMPTS.get(agent_type, "") if agent_type else ""
+    action_prefix = ACTION_PREFIXES.get(action, "") if action else ""
+    prefix = agent_prefix + action_prefix
+
+    # ── Build file context ────────────────────────────────────────────────────
     file_context = ""
     if files:
-        file_context = "\n\n--- Attached Files ---\n"
+        # Separate the special workspace context file from regular attachments
+        ws_context_parts = []
+        regular_files = []
         for f in files:
-            lang = f.get("language") or get_language(f.get("path", ""))
-            file_context += f"\n**File: `{f['path']}`**\n```{lang}\n{f['content']}\n```\n"
+            if f.get("path") in ("__workspace_context__", "__imported_project_context__"):
+                ws_context_parts.append(f)
+            else:
+                regular_files.append(f)
+
+        if ws_context_parts:
+            file_context += "\n\n--- Workspace Context ---\n"
+            for f in ws_context_parts:
+                file_context += f"\n{f['content']}\n"
+
+        if regular_files:
+            file_context += "\n\n--- Attached Files ---\n"
+            for f in regular_files:
+                lang = f.get("language") or get_language(f.get("path", ""))
+                file_context += f"\n**File: `{f['path']}`**\n```{lang}\n{f['content']}\n```\n"
 
     full_prompt = prefix + user_prompt + file_context
     add_message(ai_id, "user", full_prompt, conversation_id)

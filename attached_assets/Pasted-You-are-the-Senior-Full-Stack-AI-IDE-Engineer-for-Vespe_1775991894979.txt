@@ -1,0 +1,38 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site (April 2026):
+- Explorer shows workspace structure with persistent files
+- Chat has Agent Selector hints ("Builder · Full-stack autonomous Idle", "Orchestrator – 8 specialist roles", quick actions)
+- Editor shows placeholder (“Open a file from the Explorer”, “Open a file to begin”) with basic shortcuts (Ctrl+S save, Ctrl+W close tab) — no visible multi-tab support
+- Responsive elements exist but mobile/bottom nav and advanced editor features are limited
+
+Core Vision: Full-featured Monaco editor with smooth multi-tab experience, workspace-aware, and integrated with agents/chat.
+
+Task:
+Implement complete multi-tab editor support.
+- Zustand store for editor tabs: openTabs array ({id, path, name, content, language, isDirty}), activeTabId
+- New TabBar component: horizontal scrollable tabs with file icons/names, dirty (*), close X, active highlighting (violet)
+- Features:
+  - Open file from Explorer (double-click or button) → add/switch tab
+  - Save active tab (Ctrl+S) to current workspace path via backend
+  - Close tab (Ctrl+W), close all, new tab (Ctrl+T)
+  - Tab cycling (Ctrl+Tab / Ctrl+Shift+Tab)
+  - Monaco dark theme matching Vesper zinc palette, language auto-detection
+  - Integration: Chat/agent actions target active tab; workspace isolation enforced
+- Backend updates for workspace-aware file read/write
+- Mobile optimization: scrollable compact tab bar, large touch targets
+
+Follow exact response structure:
+1. Context Reference (mention live Editor placeholder and completed features)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files: useEditorStore.ts, components/TabBar.tsx, updated EditorPanel.tsx — clean, commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions
+5. Testing steps (open multiple files, edit/save, tab operations on desktop + mobile, test with chat commands, 3G throttle)
+6. Suggested next priority (e.g. PDF/Word export or command palette)
+
+Deliver only production-quality, clean code. Build on existing Monaco setup. Optimize for performance and mobile.
+
+Begin.

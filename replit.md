@@ -40,6 +40,7 @@ The project uses three parallel workflows (started via the "Project" run button)
 - `artifacts/ai-proxy/src/contexts/workspace-context.tsx` — Per-project workspace state (list, current, deps, install); persisted to localStorage
 - `artifacts/ai-proxy/src/components/chat/agent-selector.tsx` — Dropdown in chat panel header for switching agent personas
 - `artifacts/ai-proxy/src/components/chat/markdown-renderer.tsx` — Renders AI responses; CodeBlock has Copy + Run + **Save-to-workspace** buttons
+- `artifacts/ai-proxy/src/lib/intent-detect.ts` — `detectInstallIntent` (package name extractor) + `detectIntent` (agent routing) + `AGENT_PREFIXES`
 - `artifacts/ai-proxy/src/components/ide/file-explorer.tsx` — File tree scoped to active workspace; workspace switcher + Install Dependency panel
 
 ## Per-Project Workspace System

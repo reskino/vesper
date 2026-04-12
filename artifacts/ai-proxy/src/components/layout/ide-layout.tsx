@@ -62,7 +62,7 @@ function MobileChatSheet() {
       {/* Backdrop */}
       <div
         className={`md:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm
-          transition-opacity duration-300
+          transition-opacity duration-300 motion-reduce:transition-none motion-reduce:duration-0
           ${showMobileChatSheet ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setShowMobileChatSheet(false)}
         aria-hidden="true"
@@ -78,6 +78,7 @@ function MobileChatSheet() {
           bg-surface border-t border-border
           shadow-[0_-24px_80px_rgba(0,0,0,0.5)]
           transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
+          motion-reduce:transition-none motion-reduce:duration-0
           ${showMobileChatSheet ? "translate-y-0" : "translate-y-full"}`}
         style={{
           height: "82dvh",
@@ -152,7 +153,7 @@ function MobileSettingsSheet() {
       {/* Backdrop */}
       <div
         className={`md:hidden fixed inset-0 z-40 bg-black/80 backdrop-blur-sm
-          transition-opacity duration-300
+          transition-opacity duration-300 motion-reduce:transition-none motion-reduce:duration-0
           ${showMobileSettings ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setShowMobileSettings(false)}
         aria-hidden="true"
@@ -167,6 +168,7 @@ function MobileSettingsSheet() {
           bg-surface border-t border-border
           shadow-[0_-24px_80px_rgba(0,0,0,0.5)]
           transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]
+          motion-reduce:transition-none motion-reduce:duration-0
           ${showMobileSettings ? "translate-y-0" : "translate-y-full"}`}
         style={{
           height: "92dvh",
@@ -278,23 +280,23 @@ function MobileNav() {
               onClick={() => handleTab(id)}
               className={`relative flex flex-col items-center justify-center gap-0.5 py-2
                 min-h-[52px] transition-all duration-150 select-none
-                active:scale-[0.92]`}
+                active:scale-[0.92] motion-reduce:transition-none motion-reduce:active:scale-100`}
               aria-label={`${label}${showBadge ? ` (${chatUnreadCount} new)` : ""}`}
               aria-current={active ? "page" : undefined}
             >
               {/* Top accent line */}
               <span
                 className={`absolute top-0 left-1/2 -translate-x-1/2 h-[2px] rounded-b-full
-                  transition-all duration-200
+                  transition-all duration-200 motion-reduce:transition-none
                   ${active ? "w-10 bg-primary" : "w-0 bg-transparent"}`}
               />
 
               {/* Icon pill with unread badge */}
               <div className="relative">
                 <div className={`h-8 w-[44px] rounded-xl flex items-center justify-center
-                  transition-all duration-200
+                  transition-all duration-200 motion-reduce:transition-none
                   ${active ? "bg-primary/18" : ""}`}>
-                  <Icon className={`transition-all duration-150
+                  <Icon className={`transition-all duration-150 motion-reduce:transition-none
                     ${active ? "h-[18px] w-[18px] text-primary" : "h-[18px] w-[18px] text-[#7878a8]"}`}
                   />
                 </div>
@@ -307,7 +309,7 @@ function MobileNav() {
                       rounded-full bg-primary text-primary-foreground
                       text-[9px] font-bold leading-none
                       shadow-[0_0_8px_rgba(99,102,241,0.6)]
-                      animate-in zoom-in-50 duration-200"
+                      animate-in zoom-in-50 duration-200 motion-reduce:animate-none"
                   >
                     {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
                   </span>
@@ -342,6 +344,7 @@ function FloatingChatFAB() {
         font-bold text-[13px] tracking-wide
         shadow-[0_4px_24px_rgba(99,102,241,0.45),0_0_0_1px_rgba(99,102,241,0.3)]
         transition-all duration-200 active:scale-[0.96]
+        motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:active:scale-100
         ${showMobileChatSheet ? "opacity-0 pointer-events-none scale-90" : "opacity-100 scale-100"}`}
       style={{ bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
       aria-label="Ask AI about this code"

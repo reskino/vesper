@@ -80,7 +80,19 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [showChat, setShowChat]         = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
 
-  const [mobileTab, setMobileTab]                     = useState<MobileTab>("chat");
+  // ── Mobile tab — persisted so the user lands back where they left off ────────
+  const [mobileTab, _setMobileTab] = useState<MobileTab>(() => {
+    try {
+      const v = localStorage.getItem("vesper.mobileTab");
+      if (v && ["chat","editor","files","terminal","agent"].includes(v)) return v as MobileTab;
+    } catch { /* SSR / private-mode guard */ }
+    return "chat";
+  });
+  const setMobileTab = useCallback((tab: MobileTab) => {
+    _setMobileTab(tab);
+    try { localStorage.setItem("vesper.mobileTab", tab); } catch { /* ignore */ }
+  }, []);
+
   const [showMobileChatSheet, setShowMobileChatSheet] = useState(false);
   const [showMobileSettings, setShowMobileSettings]   = useState(false);
   const [mobileSettingsTab, setMobileSettingsTab]     = useState<MobileSettingsTab>("sessions");
@@ -89,7 +101,14 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const incrementChatUnread = useCallback(() => setChatUnreadCount(n => n + 1), []);
   const clearChatUnread     = useCallback(() => setChatUnreadCount(0), []);
 
-  const [selectedAi, setSelectedAi]   = useState("__auto__");
+  // ── Selected AI model — persisted across reloads ──────────────────────────
+  const [selectedAi, _setSelectedAi] = useState<string>(() => {
+    try { return localStorage.getItem("vesper.selectedAi") || "__auto__"; } catch { return "__auto__"; }
+  });
+  const setSelectedAi = useCallback((id: string) => {
+    _setSelectedAi(id);
+    try { localStorage.setItem("vesper.selectedAi", id); } catch { /* ignore */ }
+  }, []);
   const [newChatKey, setNewChatKey]   = useState(0);
   const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
   const [activeFilePath, setActiveFilePath]   = useState<string | null>(null);

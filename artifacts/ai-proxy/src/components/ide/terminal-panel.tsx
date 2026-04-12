@@ -484,8 +484,11 @@ export function TerminalPanel() {
     if (["py", "pyw"].includes(ext)) {
       const req    = `${wsCwd}/requirements.txt`;
       const venvPy = `${wsCwd}/.venv/bin/python`;
-      // Use the venv's own Python for pip to avoid the Nix system-pip block
-      return `[ -f "${venvPy}" ] && [ -f "${req}" ] && "${venvPy}" -m pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; ${baseRunCmd}`;
+      // Install deps with venv pip, then run with venv Python — never touches Nix system Python
+      const install = `[ -f "${req}" ] && "${venvPy}" -m pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
+      // Replace python3/python in the run command with the absolute venv python
+      const runWithVenv = baseRunCmd.replace(/^python3?(?=\s)/, `"${venvPy}"`);
+      return `${install}${runWithVenv}`;
     }
     if (["js", "mjs", "cjs", "ts", "tsx"].includes(ext)) {
       const pkg = `${wsCwd}/package.json`;

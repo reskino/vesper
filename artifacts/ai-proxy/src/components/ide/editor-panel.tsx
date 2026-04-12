@@ -574,8 +574,9 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
     let cmd: string;
     if (ext === "py") {
-      // Auto-install from requirements.txt if present, then run
-      cmd = `${pipInstall}python "${absPath}"`;
+      // Install from requirements.txt (if present) then run — both using the
+      // venv Python so packages are found and Nix system-pip is never touched.
+      cmd = `${pipInstall}"${venvPy}" "${absPath}"`;
     } else if (["js", "mjs", "cjs"].includes(ext)) {
       cmd = `${npmInstall}node "${absPath}"`;
     } else if (ext === "ts") {

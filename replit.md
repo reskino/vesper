@@ -51,6 +51,8 @@ The project uses three parallel workflows (started via the "Project" run button)
 - `artifacts/ai-proxy/src/components/ide/error-boundary.tsx` — `PanelErrorBoundary` class component wrapping editor, chat, terminal panels (desktop + mobile)
 - `artifacts/ai-proxy/src/contexts/ide-context.tsx` — adds `paletteInitialQuery`, `openCommandMode`, `showShortcutsModal`, `openShortcutsModal`, `closeShortcutsModal`
 - `artifacts/ai-proxy/src/components/layout/activity-bar.tsx` — Keyboard icon button (amber hover) opens shortcuts modal
+- `artifacts/ai-proxy/src/components/ide/file-explorer.tsx` — Workspace Explorer with per-workspace isolation, WorkspaceSwitcher dropdown, NoWorkspacePanel onboarding, InstallDepPanel (uv/npm), collapse-all (collapseAllKey counter), workspace-aware header label ("WORKSPACE" when active), language badge (py/js), refresh syncs workspace metadata; all file ops (create/rename/delete/import/export/search) scoped to active workspace
+- `python-backend/workspace_manager.py` — `list_workspaces()` detects language live from disk (not just stored metadata); lazy-writes detected lang back to `.vesper/workspace.json`
 - `artifacts/ai-proxy/src/lib/export-chat.ts` — PDF (print-window), Word via backend (`exportChatAsDocxBackend` with client-side fallback), save to workspace as `.md` (`saveChatToWorkspace`)
 - `artifacts/ai-proxy/src/components/chat/export-menu.tsx` — 3-option export dropdown: PDF, Word (.docx), Save to Workspace; desktop header + mobile compact icon
 - `python-backend/main.py` — `/api/export/docx` endpoint uses `python-docx`; returns real .docx binary with coloured headers, code blocks, inline formatting

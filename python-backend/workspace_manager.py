@@ -98,17 +98,29 @@ def _find_uv() -> Optional[str]:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def list_workspaces() -> List[Dict[str, Any]]:
-    """Return sorted list of workspace metadata dicts."""
+    """Return sorted list of workspace metadata dicts.
+
+    Language is detected live from the workspace directory so the badge
+    reflects the current state of files (not just the last install).
+    """
     _ensure_workspaces_dir()
     result: List[Dict[str, Any]] = []
     for entry in sorted(Path(WORKSPACES_DIR).iterdir()):
         if not entry.is_dir():
             continue
         meta = _read_meta(str(entry))
+        live_lang = _detect_language(str(entry))
+        # Persist detected language back if it changed (lazy update)
+        if live_lang != meta.get("language", "unknown"):
+            try:
+                meta["language"] = live_lang
+                _write_meta(str(entry), meta)
+            except Exception:
+                pass
         result.append({
             "id":       entry.name,
             "name":     meta.get("name", entry.name),
-            "language": meta.get("language", "unknown"),
+            "language": live_lang,
             "created":  meta.get("created", ""),
             "relPath":  _rel_path(entry.name),
         })

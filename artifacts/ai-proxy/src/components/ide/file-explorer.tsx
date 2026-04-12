@@ -26,7 +26,7 @@ import {
   Folder, FolderOpen, FileIcon, FileCode, FileText, FileJson,
   ChevronRight, ChevronDown, RefreshCw, FilePlus, FolderPlus,
   Trash2, Upload, Download, Check, X, Loader2, Pencil, Search,
-  ChevronsLeft, FolderX, Package, PackagePlus, Plus, Layers,
+  ChevronsLeft, ChevronsUpDown, FolderX, Package, PackagePlus, Plus, Layers,
   ChevronUp, AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +91,7 @@ interface TreeItemProps {
   activePath: string | null;
   renamingPath: string | null;
   selectedPaths: Set<string>;
+  collapseAllKey: number;
   onSelect: (path: string, multi: boolean) => void;
   onDelete: (path: string, isDir: boolean) => void;
   onNewFile: (dir: string) => void;
@@ -101,11 +102,19 @@ interface TreeItemProps {
 }
 
 function TreeItem({
-  node, depth, activePath, renamingPath, selectedPaths,
+  node, depth, activePath, renamingPath, selectedPaths, collapseAllKey,
   onSelect, onDelete, onNewFile, onNewFolder,
   onStartRename, onConfirmRename, onCancelRename,
 }: TreeItemProps) {
   const [expanded, setExpanded] = useState(depth === 0);
+
+  // Collapse all folders when collapseAllKey increments (except workspace root at depth 0)
+  useEffect(() => {
+    if (collapseAllKey > 0 && node.type === "directory") {
+      setExpanded(false);
+    }
+  }, [collapseAllKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isSelected = activePath === node.path;
   const isMulti    = selectedPaths.has(node.path);
   const isRenaming = renamingPath === node.path;
@@ -157,6 +166,7 @@ function TreeItem({
             activePath={activePath}
             renamingPath={renamingPath}
             selectedPaths={selectedPaths}
+            collapseAllKey={collapseAllKey}
             onSelect={onSelect}
             onDelete={onDelete}
             onNewFile={onNewFile}
@@ -687,7 +697,7 @@ interface NewItemState { type: "file" | "folder"; parentPath: string; }
 
 export function FileExplorer({ activePath }: { activePath: string | null }) {
   const { openFileInEditor, importedProject, toggleSidebarPanel } = useIDE();
-  const { currentWorkspace }                                       = useWorkspace();
+  const { currentWorkspace, refreshWorkspaces }                   = useWorkspace();
   const { toast }                                                  = useToast();
   const [showImported, setShowImported]   = useState(true);
   const [showInstallDep, setShowInstallDep] = useState(false);
@@ -700,6 +710,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
   const newItemInputRef                 = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery]   = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [collapseAllKey, setCollapseAllKey] = useState(0);
 
   // ── Workspace-scoped tree path ───────────────────────────────────────────
   // Only query the file tree when a workspace is actually selected.
@@ -729,6 +740,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     setRenamingPath(null);
     setNewItem(null);
     setShowInstallDep(false);
+    setCollapseAllKey(0); // reset collapse state so the new tree opens fully
   }, [treePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createFileMutation = useCreateFile();
@@ -851,25 +863,43 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
 
       {/* ── Desktop header ───────────────────────────────────────────────── */}
       <div className="hidden md:flex flex-col border-b border-[#1a1a24] shrink-0">
-        {/* Row 1: collapse + title + action icons */}
+        {/* Row 1: collapse + workspace-aware title + action icons */}
         <div className="flex items-center justify-between px-2 py-1.5">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0">
             <button
               onClick={() => toggleSidebarPanel("files")}
-              className={`${iconBtn}`}
+              className={`${iconBtn} shrink-0`}
               title="Collapse explorer"
             >
               <ChevronsLeft className="h-3 w-3" />
             </button>
-            <span className="text-[10px] font-bold text-[#7878a8] uppercase tracking-widest select-none pl-1">
-              Explorer
+            <span className="text-[10px] font-bold text-[#7878a8] uppercase tracking-widest select-none pl-1 shrink-0">
+              {currentWorkspace ? "Workspace" : "Explorer"}
             </span>
+            {currentWorkspace?.language && currentWorkspace.language !== "unknown" && (
+              <span className={`text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border leading-none shrink-0
+                ${currentWorkspace.language === "python"
+                  ? "text-green-400 border-green-500/30 bg-green-500/10"
+                  : "text-blue-400 border-blue-500/30 bg-blue-500/10"
+                }`}>
+                {currentWorkspace.language === "python" ? "py" : "js"}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 shrink-0">
+            {treeEnabled && (
+              <button
+                className={`${iconBtn}`}
+                title="Collapse all folders"
+                onClick={() => setCollapseAllKey(k => k + 1)}
+              >
+                <ChevronsUpDown className="h-3 w-3" />
+              </button>
+            )}
             {[
               { icon: FilePlus,    title: "New file",    onClick: () => { setNewItem({ type: "file",   parentPath: wsRootPath }); setNewItemName(""); } },
               { icon: FolderPlus, title: "New folder",  onClick: () => { setNewItem({ type: "folder", parentPath: wsRootPath }); setNewItemName(""); } },
-              { icon: RefreshCw,  title: "Refresh",     onClick: () => refetch() },
+              { icon: RefreshCw,  title: "Refresh",     onClick: () => { refetch(); refreshWorkspaces(); } },
               { icon: Upload,     title: "Import files (zip/GitHub)", onClick: () => setShowImportExport(true) },
               { icon: Download,   title: "Export workspace", onClick: exportWorkspace },
               { icon: FolderX,    title: "Start fresh", onClick: clearWorkspace },
@@ -886,7 +916,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             <button
               onClick={() => setShowInstallDep(v => !v)}
               className={`${iconBtn} ${showInstallDep ? "text-primary" : ""}`}
-              title="Install dependency"
+              title="Toggle dependencies panel"
             >
               <PackagePlus className="h-3 w-3" />
             </button>
@@ -894,11 +924,11 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
           </div>
         </div>
 
-        {/* Row 2: workspace switcher */}
+        {/* Row 2: workspace switcher + context path */}
         <div className="px-2 pb-1.5 flex items-center gap-1.5">
           <WorkspaceSwitcher />
           {currentWorkspace && (
-            <span className="text-[9px] text-[#7878a8] truncate">
+            <span className="text-[9px] text-[#505070] truncate">
               workspaces/{currentWorkspace.id}
             </span>
           )}
@@ -951,7 +981,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             { icon: FilePlus,   label: "New File",   onClick: () => { setNewItem({ type: "file",   parentPath: wsRootPath }); setNewItemName(""); } },
             { icon: FolderPlus, label: "New Folder", onClick: () => { setNewItem({ type: "folder", parentPath: wsRootPath }); setNewItemName(""); } },
             { icon: Upload,     label: "Import Zip", onClick: () => setShowImportExport(true) },
-            { icon: RefreshCw,  label: "Refresh",    onClick: () => refetch() },
+            { icon: RefreshCw,  label: "Refresh",    onClick: () => { refetch(); refreshWorkspaces(); } },
           ].map(({ icon: Icon, label, onClick }) => (
             <button key={label} onClick={onClick}
               className="flex-1 flex flex-col items-center justify-center gap-1 h-14 rounded-2xl
@@ -1072,6 +1102,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
                   activePath={activePath}
                   renamingPath={renamingPath}
                   selectedPaths={selectedPaths}
+                  collapseAllKey={collapseAllKey}
                   onSelect={handleSelect}
                   onDelete={handleDelete}
                   onNewFile={dir  => { setNewItem({ type: "file",   parentPath: dir }); setNewItemName(""); }}

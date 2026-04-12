@@ -348,7 +348,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
   // ── UI state — editor preferences persisted across sessions ──────────────
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "off"));
+  const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "on"));
   const [fontSize, setFontSizeRaw]    = useState<number>(() => lsGet<number>("vesper.editor.fontSize", 14));
   const [cursorPos, setCursorPos]     = useState({ line: 1, col: 1 });
   const [isSaving, setIsSaving]       = useState(false);

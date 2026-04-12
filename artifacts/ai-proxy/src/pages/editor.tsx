@@ -329,7 +329,7 @@ export default function Editor() {
   }, [handleSave, activeTab, closeTab]);
 
   // ── Editor options ──────────────────────────────────────────────────────────
-  const [wordWrap, setWordWrap] = useState(false);
+  const [wordWrap, setWordWrap] = useState(true);
   const [fontSize, setFontSize] = useState(14);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
 

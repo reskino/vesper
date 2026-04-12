@@ -719,7 +719,6 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
   // ── Monaco editor options (memo to avoid full re-mount on every render) ────
   const monacoOptions = useMemo((): MonacoNS.editor.IStandaloneEditorConstructionOptions => ({
-    theme: "vesper-dark",
     fontSize,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
     fontLigatures: !mobile, // ligatures hurt perf on low-end devices
@@ -971,6 +970,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 {currentState?.loaded ? (
                   <MonacoEditor
                     height="100%"
+                    theme="vesper-dark"
                     language={getMonacoLanguage(activeTab)}
                     value={currentState.content}
                     options={monacoOptions}

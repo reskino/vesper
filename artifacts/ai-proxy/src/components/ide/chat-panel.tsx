@@ -39,9 +39,10 @@ import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { TerminalOutput } from "@/components/chat/terminal-output";
 import { AgentSelector } from "@/components/chat/agent-selector";
 import { useIDE } from "@/contexts/ide-context";
-import { useAgentMode } from "@/contexts/agent-context";
+import { useAgentMode, type AgentType } from "@/contexts/agent-context";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
+import { detectIntent, AGENT_PREFIXES, type IntentResult } from "@/lib/intent-detect";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -401,6 +402,74 @@ function ImportedProjectBanner({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Intent detection strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+const INTENT_COLORS: Record<string, { badge: string; chip: string; dot: string }> = {
+  rose:    { badge: "border-rose-500/35 bg-rose-500/10 text-rose-400",    chip: "border-rose-500/25 text-rose-400/80 hover:bg-rose-500/10 active:bg-rose-500/20",    dot: "bg-rose-400" },
+  emerald: { badge: "border-emerald-500/35 bg-emerald-500/10 text-emerald-400", chip: "border-emerald-500/25 text-emerald-400/80 hover:bg-emerald-500/10 active:bg-emerald-500/20", dot: "bg-emerald-400" },
+  sky:     { badge: "border-sky-500/35 bg-sky-500/10 text-sky-400",       chip: "border-sky-500/25 text-sky-400/80 hover:bg-sky-500/10 active:bg-sky-500/20",       dot: "bg-sky-400" },
+  amber:   { badge: "border-amber-500/35 bg-amber-500/10 text-amber-400", chip: "border-amber-500/25 text-amber-400/80 hover:bg-amber-500/10 active:bg-amber-500/20", dot: "bg-amber-400" },
+  violet:  { badge: "border-violet-500/35 bg-violet-500/10 text-violet-400", chip: "border-violet-500/25 text-violet-400/80 hover:bg-violet-500/10 active:bg-violet-500/20", dot: "bg-violet-400" },
+  primary: { badge: "border-primary/30 bg-primary/10 text-primary",       chip: "border-primary/20 text-primary/80 hover:bg-primary/10 active:bg-primary/15",       dot: "bg-primary" },
+};
+
+function IntentStrip({
+  intent,
+  dismissed,
+  onDismiss,
+  onChip,
+}: {
+  intent: IntentResult | null;
+  dismissed: boolean;
+  onDismiss: () => void;
+  onChip: (chip: string) => void;
+}) {
+  const visible = !!intent && !dismissed;
+
+  if (!visible) return null;
+
+  const c = INTENT_COLORS[intent!.color] ?? INTENT_COLORS.primary;
+
+  return (
+    <div className="mb-2 space-y-1.5">
+      {/* Detection badge row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-semibold ${c.badge}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${c.dot} animate-pulse`} />
+          {intent!.label} detected
+        </span>
+        <button
+          onClick={onDismiss}
+          className="text-[10px] text-[#7878a8] hover:text-[#9898b8] transition-colors p-1 -ml-1"
+          aria-label="Dismiss agent suggestion"
+          title="Dismiss — send with current agent"
+        >
+          <X className="h-3 w-3" />
+        </button>
+        <span className="text-[10px] text-[#7878a8]">or pick an action:</span>
+      </div>
+
+      {/* Action chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {intent!.chips.map(chip => (
+          <button
+            key={chip}
+            onClick={() => onChip(chip)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium
+              transition-all duration-100 active:scale-95 min-h-[32px]
+              bg-transparent ${c.chip}`}
+          >
+            <ArrowRight className="h-2.5 w-2.5 shrink-0" />
+            {chip}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main chat panel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -432,6 +501,11 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const [isFilePickerOpen, setIsFilePickerOpen]   = useState(false);
   const [showAttachMenu, setShowAttachMenu]       = useState(false);
   const [projectDetached, setProjectDetached]     = useState(false);
+
+  // ── Intent detection ──────────────────────────────────────────────────────
+  const [detectedIntent, setDetectedIntent]       = useState<IntentResult | null>(null);
+  const [intentDismissed, setIntentDismissed]     = useState(false);
+  const [routingLabel, setRoutingLabel]           = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef    = useRef<HTMLDivElement>(null);
@@ -473,6 +547,22 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     return () => document.removeEventListener("mousedown", close);
   }, [showAttachMenu]);
 
+  // ── Debounced intent detection (300 ms after user stops typing) ───────────
+  useEffect(() => {
+    if (!prompt.trim()) {
+      setDetectedIntent(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const result = detectIntent(prompt);
+      setDetectedIntent(prev => {
+        if (prev?.agentType !== result?.agentType) setIntentDismissed(false);
+        return result;
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [prompt]);
+
   const isPending    = askAi.isPending || askAiWithContext.isPending;
   const isAuto       = selectedAi === "__auto__";
   const connectedAis = aisData?.ais?.filter((a: any) => a.hasSession) ?? [];
@@ -481,22 +571,33 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   // Whether the imported project is active in this chat
   const hasImportedProject = !!importedProject && !projectDetached;
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, forceAgent?: AgentType) => {
     if (!text.trim() || isPending) return;
+
+    // Resolve which agent persona to use for this single message:
+    // 1. Explicit forceAgent (from action chip click)
+    // 2. Detected intent (if not dismissed by user)
+    // 3. User's current persisted agentType
+    const effectiveAgent: AgentType =
+      forceAgent ??
+      (!intentDismissed && detectedIntent ? detectedIntent.agentType : agentType);
+
+    // Flash a routing indicator when auto-switching to a different persona
+    if (!forceAgent && !intentDismissed && detectedIntent && detectedIntent.agentType !== agentType) {
+      setRoutingLabel(detectedIntent.label);
+      setTimeout(() => setRoutingLabel(null), 2200);
+    }
+
     setMessages(prev => [...prev, { role: "user", content: text }]);
+    setDetectedIntent(null);
+    setIntentDismissed(false);
+
     try {
       // When in Auto mode, send "__auto__" and let the smart router on the backend
       // pick the best connected AI. The response will include routingDecision.
       const effectiveAiId = isAuto ? "__auto__" : selectedAi;
 
-      const AGENT_PREFIXES: Record<string, string> = {
-        orchestrator:  "[Vesper Orchestrator — all-in-one expert AI]\n\n",
-        scholar:       "[Vesper Research Scholar — academic rigour, citations, export-ready]\n\n",
-        search_master: "[Vesper Search Master — deep research, source-verified]\n\n",
-        docs_weaver:   "[Vesper Docs Weaver — technical documentation specialist]\n\n",
-        code_surgeon:  "[Vesper Code Surgeon — surgical refactoring & optimisation]\n\n",
-      };
-      const rolePrefix = AGENT_PREFIXES[agentType] ?? "";
+      const rolePrefix = AGENT_PREFIXES[effectiveAgent] ?? "";
       const promptWithRole = rolePrefix ? rolePrefix + text : text;
 
       const payload = {
@@ -538,7 +639,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
-  }, [isPending, isAuto, selectedAi, agentType, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
+  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
@@ -692,6 +793,17 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         className="shrink-0 px-3 py-3 border-t border-[#1a1a24] bg-[#0a0a0c]"
         style={{ paddingBottom: compact ? "12px" : mobile ? "calc(env(safe-area-inset-bottom, 0px) + 8px)" : "env(safe-area-inset-bottom, 12px)" }}
       >
+        <IntentStrip
+          intent={detectedIntent}
+          dismissed={intentDismissed}
+          onDismiss={() => setIntentDismissed(true)}
+          onChip={(chip) => {
+            const text = prompt.trim() ? prompt : chip;
+            send(text, detectedIntent?.agentType);
+            setPrompt("");
+            clearAttachment();
+          }}
+        />
         <div
           className="relative flex items-end gap-2 bg-[#141420] border border-[#1e1e2e]
             focus-within:border-primary/50 rounded-2xl transition-colors shadow-lg"
@@ -776,8 +888,11 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           </div>
         </div>
 
-        <p className="mt-1.5 text-center text-[11px] text-[#7878a8] hidden md:block">
-          Shift+Enter for new line · Enter to send
+        <p className="mt-1.5 text-center text-[11px] text-[#7878a8] hidden md:block transition-all">
+          {routingLabel
+            ? <span className="text-primary/70 animate-pulse">↪ Routing to {routingLabel}…</span>
+            : "Shift+Enter for new line · Enter to send"
+          }
         </p>
       </div>
 

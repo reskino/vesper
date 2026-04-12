@@ -45,10 +45,11 @@ import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 import { ExportMenu } from "@/components/chat/export-menu";
 import {
-  detectIntent, detectInstallIntent,
+  detectIntent, detectInstallIntent, detectRunIntent,
   AGENT_PREFIXES,
-  type IntentResult, type InstallIntentResult,
+  type IntentResult, type InstallIntentResult, type RunIntentResult,
 } from "@/lib/intent-detect";
+import { useTerminalExec } from "@workspace/api-client-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -583,6 +584,93 @@ function InstallConfirmStrip({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RunConfirmStrip — "Run main.py in workspace venv?" shortcut
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RunConfirmStrip({
+  intent,
+  dismissed,
+  hasWorkspace,
+  workspaceName,
+  isRunning,
+  onConfirm,
+  onDismiss,
+  onAskAI,
+}: {
+  intent:        RunIntentResult | null;
+  dismissed:     boolean;
+  hasWorkspace:  boolean;
+  workspaceName: string | undefined;
+  isRunning:     boolean;
+  onConfirm:     (script: string) => void;
+  onDismiss:     () => void;
+  onAskAI:       () => void;
+}) {
+  const visible = !!intent && !dismissed;
+  if (!visible) return null;
+
+  const script = intent!.scriptName;
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-indigo-500/30 bg-indigo-500/8">
+        <span className="mt-0.5 shrink-0 text-indigo-400">
+          <Play className="h-4 w-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-indigo-300 font-medium mb-1.5">
+            Run <code className="px-1 py-0.5 rounded bg-indigo-500/15 font-mono">{script}</code>
+            {workspaceName && (
+              <span className="ml-1 text-indigo-400/70">
+                in <span className="font-semibold text-indigo-300">{workspaceName}</span> venv
+              </span>
+            )}
+            ?
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => onConfirm(script)}
+              disabled={!hasWorkspace || isRunning}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold
+                bg-indigo-500/20 border border-indigo-500/40 text-indigo-300
+                hover:bg-indigo-500/30 active:scale-95 transition-all duration-100
+                disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+              title={hasWorkspace ? undefined : "Select a workspace first"}
+            >
+              {isRunning ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> Running…</>
+              ) : (
+                <><Play className="h-3 w-3" /> Run now</>
+              )}
+            </button>
+            <button
+              onClick={onAskAI}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium
+                border border-[#2a2a3e] text-[#9898b8] hover:text-foreground hover:border-[#3a3a54]
+                active:scale-95 transition-all duration-100 min-h-[32px]"
+            >
+              Ask AI instead
+            </button>
+            <button
+              onClick={onDismiss}
+              className="p-1.5 text-[#7878a8] hover:text-[#9898b8] transition-colors rounded-lg min-h-[32px]"
+              aria-label="Dismiss run suggestion"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {!hasWorkspace && (
+            <p className="mt-1.5 text-[10px] text-amber-400/80">
+              Select a workspace in the file explorer to enable direct execution.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main chat panel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -624,6 +712,13 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const [installIntent, setInstallIntent]         = useState<InstallIntentResult | null>(null);
   const [installDismissed, setInstallDismissed]   = useState(false);
   const [isInstalling, setIsInstalling]           = useState(false);
+
+  // Run intent — triggers terminal exec inside the workspace .venv directly
+  const [runIntent, setRunIntent]                 = useState<RunIntentResult | null>(null);
+  const [runDismissed, setRunDismissed]           = useState(false);
+  const [isExecutingScript, setIsExecutingScript] = useState(false);
+
+  const terminalExecMutation = useTerminalExec();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef    = useRef<HTMLDivElement>(null);
@@ -694,6 +789,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     if (!trimmed) {
       setDetectedIntent(null);
       setInstallIntent(null);
+      setRunIntent(null);
       return;
     }
     const timer = setTimeout(() => {
@@ -704,8 +800,15 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         return install;
       });
 
-      // Agent intent only shown when no install intent is active
-      if (!install) {
+      // Run intent — triggers terminal exec directly when user types "run X.py"
+      const run = detectRunIntent(trimmed);
+      setRunIntent(prev => {
+        if (prev?.scriptName !== run?.scriptName) setRunDismissed(false);
+        return run;
+      });
+
+      // Agent intent only shown when no install / run intent is active
+      if (!install && !run) {
         const result = detectIntent(trimmed);
         setDetectedIntent(prev => {
           if (prev?.agentType !== result?.agentType) setIntentDismissed(false);
@@ -930,6 +1033,62 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
       setIsInstalling(false);
     }
   }, [currentWorkspace, installDep]);
+
+  // ── Run-intent handler ────────────────────────────────────────────────────
+  const handleRunConfirm = useCallback(async (scriptName: string) => {
+    if (!currentWorkspace) {
+      toast.error("No workspace selected", { description: "Select a workspace first." });
+      return;
+    }
+    setIsExecutingScript(true);
+    setRunIntent(null);
+    setRunDismissed(false);
+    setPrompt("");
+
+    setMessages(prev => [...prev, {
+      role: "user",
+      content: `Run \`${scriptName}\` in workspace **${currentWorkspace.name}**`,
+      timestamp: new Date(),
+    }]);
+
+    try {
+      const result = await terminalExecMutation.mutateAsync({
+        data: {
+          command:      `python ${scriptName}`,
+          workspace_id: currentWorkspace.id,
+        },
+      });
+      const output  = (result as any).stdout ?? (result as any).output ?? "";
+      const stderr  = (result as any).stderr ?? "";
+      const exitCode = (result as any).exit_code ?? (result as any).returncode ?? 0;
+      const success = exitCode === 0;
+
+      setMessages(prev => [...prev, {
+        role:      "assistant",
+        content:   success
+          ? `**\`${scriptName}\` completed** (exit 0)${output ? `\n\n\`\`\`\n${output.trim()}\n\`\`\`` : ""}`
+          : `**\`${scriptName}\` exited with code ${exitCode}**${stderr ? `\n\n\`\`\`\n${stderr.trim()}\n\`\`\`` : ""}${output ? `\n\n\`\`\`\n${output.trim()}\n\`\`\`` : ""}`,
+        error:     !success,
+        timestamp: new Date(),
+      }]);
+
+      if (success) {
+        toast.success(`${scriptName} completed`, { description: "Exit code 0" });
+      } else {
+        toast.error(`${scriptName} failed`, { description: `Exit code ${exitCode}` });
+      }
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        role:      "assistant",
+        content:   `**Execution failed** for \`${scriptName}\`.\n\n${err?.message ?? "Unknown error — check the terminal for details."}`,
+        error:     true,
+        timestamp: new Date(),
+      }]);
+      toast.error("Execution failed", { description: err?.message ?? "Unknown error" });
+    } finally {
+      setIsExecutingScript(false);
+    }
+  }, [currentWorkspace, terminalExecMutation]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };

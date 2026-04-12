@@ -13,4 +13,6 @@ export interface ExecuteCodeBody {
   language?: string;
   /** Execution timeout in seconds */
   timeout?: number;
+  /** Workspace slug — when supplied the workspace .venv is used for Python execution */
+  workspace_id?: string | null;
 }

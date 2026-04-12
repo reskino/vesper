@@ -1,0 +1,31 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (April 2026):
+- Explorer upgraded with per-workspace isolation, Dependencies section, and Install Dependency
+- Multi-tab Editor, PDF/Word export, responsive layout with bottom navigation, Agent Selector with 8 specialist roles, intelligent chat, and full professional polish (Sonner toasts, Command Palette Ctrl+K, loading skeletons) all implemented
+- Chat shows "Builder · Full-stack autonomous Idle", "Orchestrator – 8 specialist roles", quick actions
+
+Task:
+Implement advanced safe virtual environment management for Python agents and code execution.
+- Per-workspace automatic venv creation/activation using uv (fast, modern, Replit-friendly).
+- Backend utilities to detect, create, and activate venv before any Python execution in the current workspace.
+- UI in Explorer: show venv status (active/inactive, Python version) in Dependencies section with "Activate Venv" / "Repair" buttons if needed.
+- All agent/chat Python actions (running scripts, installing packages, executing code) must run inside the workspace's isolated venv.
+- Safe guards: timeout, error catching, clear toast notifications on failure/success.
+- Integration with intelligent chat: commands like "run this script" or "install requests" automatically use the correct venv.
+- Auto-repair broken venvs with user-friendly feedback.
+
+Follow exact response structure:
+1. Context Reference (mention completed polish and workspace features)
+2. Implementation Plan (numbered steps – backend venv manager, frontend status UI, integration points)
+3. Complete Code (full files only: Python backend venv handlers + utils, updated Explorer Dependencies component, any store updates — clean, well-commented TypeScript + Python)
+4. Exact file paths and integration instructions
+5. Testing steps (create workspace, install Python package, run a simple script via chat/agent, switch workspaces and verify isolation, test error cases, mobile view)
+6. Suggested next priority (Full Testing Round)
+
+Deliver only production-quality, clean, commented code. Strongly prefer uv for performance. Ensure complete isolation, security, and reliability. No global installs.
+
+Begin.

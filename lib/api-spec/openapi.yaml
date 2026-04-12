@@ -536,6 +536,10 @@ components:
           type: integer
           default: 30
           description: Execution timeout in seconds
+        workspace_id:
+          type: string
+          nullable: true
+          description: Workspace slug — when supplied the workspace .venv is used for Python execution
       required:
         - code
 
@@ -982,7 +986,11 @@ components:
         workingDir:
           type: string
           nullable: true
-          description: Working directory for the agent
+          description: Working directory for the agent (explicit)
+        workspaceId:
+          type: string
+          nullable: true
+          description: Workspace slug — auto-resolves workingDir and activates .venv for all Python tool calls
         maxSteps:
           type: integer
           default: 20

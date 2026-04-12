@@ -12,8 +12,10 @@ export interface AgentRunBody {
   aiId: string;
   /** Task description — what to build or do */
   task: string;
-  /** Working directory for the agent */
+  /** Working directory for the agent (explicit override) */
   workingDir?: string | null;
+  /** Workspace slug — auto-resolves workingDir and activates .venv for all Python tool calls */
+  workspaceId?: string | null;
   /** Maximum number of tool calls */
   maxSteps?: number;
   /** Which agent persona to use — builder, orchestrator, scholar, or search_master */

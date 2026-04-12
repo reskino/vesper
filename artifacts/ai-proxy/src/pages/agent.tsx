@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAgentMode } from "@/contexts/agent-context";
+import { useWorkspace } from "@/contexts/workspace-context";
 
 // ─── Tool metadata ────────────────────────────────────────────────────────────
 
@@ -320,6 +321,7 @@ function MaxStepsControl({ value, onChange, disabled }: { value: number; onChang
 export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   const [task, setTask]               = useState("");
   const { agentType, setAgentType } = useAgentMode();
+  const { currentWorkspace }          = useWorkspace();
   const [selectedAi, setSelectedAi]   = useState("__auto__");
   const [selectedModel, setSelectedModel] = useState("");
   const [maxSteps, setMaxSteps]       = useState(20);
@@ -430,7 +432,18 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
     setIsRunning(true);
     setShowSetup(false);
     runAgentMutation.mutate(
-      { data: { aiId: resolvedAi, modelId: selectedModel || null, task: task.trim(), maxSteps, agentType } },
+      {
+        data: {
+          aiId:        resolvedAi,
+          modelId:     selectedModel || null,
+          task:        task.trim(),
+          maxSteps,
+          agentType,
+          // Pass the active workspace so the backend auto-sets workingDir and
+          // activates the workspace .venv for all Python tool calls.
+          workspaceId: currentWorkspace?.id ?? null,
+        },
+      },
       {
         onError: err => {
           setIsRunning(false);
@@ -439,7 +452,7 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
         }
       }
     );
-  }, [task, agentType, resolvedAi, selectedModel, maxSteps, runAgentMutation]);
+  }, [task, agentType, resolvedAi, selectedModel, maxSteps, currentWorkspace, runAgentMutation]);
 
   const handleStop = async () => {
     if (!isRunning || isStopping) return;
@@ -723,6 +736,30 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
               </div>
               <MaxStepsControl value={maxSteps} onChange={setMaxSteps} disabled={isRunning} />
             </div>
+
+            {/* Active Workspace context indicator */}
+            {currentWorkspace ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0d0d12] border border-[#1a1a24]">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-foreground/80 truncate">
+                    Workspace: <span className="text-emerald-400">{currentWorkspace.name}</span>
+                  </p>
+                  <p className="text-[9px] text-[#7878a8] truncate">
+                    {currentWorkspace.language === "python"
+                      ? "Python .venv will be activated automatically"
+                      : `Language: ${currentWorkspace.language}`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/8 border border-amber-500/20">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                <p className="text-[10px] text-amber-300/80">
+                  No workspace selected — agent will use the repo root
+                </p>
+              </div>
+            )}
 
             {/* Run button */}
             <button

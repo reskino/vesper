@@ -1,0 +1,31 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site (April 2026):
+- Header: "Vesper" + "Auto · 3 AIs ready"
+- Explorer: Placeholder ("Open a file from the Explorer")
+- Editor: Multi-tab shortcuts but placeholder state ("Save file", "Close tab", "New untitled tab")
+- Chat: Strong with "Builder · Full-stack autonomous Idle", rich quick actions (Explain code, Fix bug, Refactor, Write documentation, Optimise performance, Build REST API, etc.), "3 AI providers connected"
+- Features implemented: Workspace isolation, Agent Selector, intelligent chat, multi-tab Editor, PDF/Word export, professional polish (toasts, Command Palette Ctrl+K)
+
+Task:
+Add a polished Onboarding / Welcome Experience + Sample Project to make Vesper feel immediately high-tech and discoverable.
+- First-launch welcome modal (or sidebar) with short tour, "Create Demo Project" button, and quick start guide.
+- Pre-populate a small sample workspace (e.g., simple React + FastAPI or Python script) with files, dependencies, and example code when user chooses "Try Demo".
+- Add "New Project from Template" in Explorer/Command Palette (options: React App, FastAPI Backend, etc.).
+- Ensure onboarding highlights key features: Agent Selector, multi-tab Editor, intelligent chat, export, workspaces.
+- Dark modern theme, mobile-friendly modal.
+
+Follow exact response structure:
+1. Context Reference (mention live placeholder states)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files: WelcomeModal.tsx, sample project generator, integration in root layout)
+4. Exact file paths and integration instructions
+5. Testing steps (first visit simulation, create demo project, verify features are highlighted)
+6. Suggested next step (e.g., codebase indexing or git integration)
+
+Deliver only production-quality, clean, commented code. Keep it lightweight and performant.
+
+Begin.

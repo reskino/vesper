@@ -369,38 +369,97 @@ def ask_ai_with_context():
 
 @app.route("/api/proxy/execute", methods=["POST"])
 def execute_code():
+    """
+    Execute a code snippet in the appropriate environment.
+
+    Accepts an optional `workspace_id` parameter.  When supplied and the
+    language is Python, the workspace's isolated .venv is used instead of the
+    global python3 interpreter so that packages installed via uv/pip inside
+    that workspace are available without any manual activation step.
+
+    JSON body fields:
+        code        (str)  — the source code to run
+        language    (str)  — "python" | "javascript" | "bash"
+        timeout     (int)  — max seconds (capped at 60)
+        workspace_id (str) — optional workspace slug; activates its .venv
+    """
     data = request.get_json()
-    code = data.get("code", "").strip()
-    language = data.get("language", "python")
-    timeout = min(int(data.get("timeout", 30)), 60)
+    code        = data.get("code", "").strip()
+    language    = data.get("language", "python")
+    timeout     = min(int(data.get("timeout", 30)), 60)
+    workspace_id = data.get("workspace_id")
 
     if not code:
         return jsonify({"error": "code is required"}), 400
 
-    start_time = time.time()
-    allowed_languages = {
-        "python": ["python3", "-c"],
-        "javascript": ["node", "-e"],
-        "bash": ["bash", "-c"]
-    }
-    if language not in allowed_languages:
+    if language not in ("python", "javascript", "bash"):
         return jsonify({"error": f"Unsupported language: {language}"}), 400
 
-    cmd = allowed_languages[language] + [code]
+    # ── Resolve workspace path + venv (Python only) ───────────────────────────
+    run_cwd   = "/tmp"
+    extra_env = None
+    python_bin = "python3"   # default: global interpreter
+
+    if workspace_id:
+        ws_path = workspace_manager.get_workspace_path(workspace_id)
+        if ws_path:
+            run_cwd = ws_path  # run in the workspace directory
+            if language == "python":
+                from pathlib import Path as _Path
+                venv_py = _Path(ws_path) / ".venv" / "bin" / "python"
+                if venv_py.exists():
+                    python_bin = str(venv_py)
+                    # Build env overrides that mimic `source .venv/bin/activate`
+                    try:
+                        from agent import _get_venv_extra_env as _gvee
+                        extra_env = _gvee(ws_path) or None
+                    except Exception:
+                        pass
+                else:
+                    logger.debug(
+                        "execute_code: workspace %s has no .venv, using global python3",
+                        workspace_id,
+                    )
+
+    # ── Build the command ─────────────────────────────────────────────────────
+    if language == "python":
+        cmd = [python_bin, "-c", code]
+    elif language == "javascript":
+        cmd = ["node", "-e", code]
+    else:
+        cmd = ["bash", "-c", code]
+
+    start_time = time.time()
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd="/tmp")
+        env = {**os.environ, **(extra_env or {})}
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=run_cwd,
+            env=env,
+        )
         elapsed_ms = int((time.time() - start_time) * 1000)
         return jsonify({
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exitCode": result.returncode,
-            "elapsedMs": elapsed_ms,
+            "success":    result.returncode == 0,
+            "stdout":     result.stdout,
+            "stderr":     result.stderr,
+            "exitCode":   result.returncode,
+            "elapsedMs":  elapsed_ms,
+            "pythonBin":  python_bin if language == "python" else None,
+            "workspaceId": workspace_id,
         })
     except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "stdout": "", "stderr": f"Timed out after {timeout}s", "exitCode": 1, "elapsedMs": timeout * 1000})
+        return jsonify({
+            "success": False, "stdout": "", "stderr": f"Timed out after {timeout}s",
+            "exitCode": 124, "elapsedMs": timeout * 1000,
+        })
     except Exception as e:
-        return jsonify({"success": False, "stdout": "", "stderr": str(e), "exitCode": 1, "elapsedMs": 0})
+        return jsonify({
+            "success": False, "stdout": "", "stderr": str(e),
+            "exitCode": 1, "elapsedMs": 0,
+        })
 
 
 # ─── Sessions ────────────────────────────────────────────────────────────────
@@ -1599,10 +1658,20 @@ def agent_run():
     if not ai_id or not task:
         return jsonify({"error": "aiId and task are required"}), 400
 
-    working_dir = data.get("workingDir")
-    max_steps = min(int(data.get("maxSteps", 20)), 50)
-    model_id = data.get("modelId") or None
-    agent_type = data.get("agentType", "builder")
+    working_dir  = data.get("workingDir")
+    workspace_id = data.get("workspaceId")
+    max_steps    = min(int(data.get("maxSteps", 20)), 50)
+    model_id     = data.get("modelId") or None
+    agent_type   = data.get("agentType", "builder")
+
+    # Auto-resolve workingDir from workspaceId when not explicitly provided.
+    # This ensures agent tools (execute, install_packages, write_file …) all
+    # operate inside the correct workspace and inherit its .venv automatically.
+    if not working_dir and workspace_id:
+        resolved = workspace_manager.get_workspace_path(workspace_id)
+        if resolved:
+            working_dir = resolved
+            logger.info("agent_run: resolved workspaceId=%s → workingDir=%s", workspace_id, working_dir)
 
     if get_agent_status().get("running"):
         return jsonify({"error": "An agent task is already running"}), 409

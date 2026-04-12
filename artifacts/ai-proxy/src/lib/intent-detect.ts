@@ -90,6 +90,44 @@ export function detectInstallIntent(text: string): InstallIntentResult | null {
   return null;
 }
 
+// ── Run / execute script intent ────────────────────────────────────────────────
+
+/**
+ * Detects "run X.py" / "execute main.py" type commands in the chat input.
+ * Returns the extracted script filename so the RunConfirmStrip can trigger
+ * a direct terminal execution inside the workspace .venv, bypassing the AI.
+ */
+export interface RunIntentResult {
+  /** Extracted script filename, e.g. "main.py" or "app.py" */
+  scriptName: string;
+  /** Full matched raw string for display */
+  raw: string;
+}
+
+const RUN_PATTERNS: RegExp[] = [
+  // "run main.py" / "execute app.py" / "launch server.py"
+  /\b(?:run|execute|launch|start)\s+([\w.\-/]+\.py)\b/i,
+  // "run the script main.py"
+  /\b(?:run|execute)\s+(?:the\s+)?(?:script|file|code|program)\s+([\w.\-/]+\.py)\b/i,
+  // "python main.py" / "python3 app.py"
+  /\bpython3?\s+([\w.\-/]+\.py)\b/i,
+];
+
+export function detectRunIntent(text: string): RunIntentResult | null {
+  const trimmed = text.trim();
+  if (trimmed.length < 4) return null;
+
+  for (const re of RUN_PATTERNS) {
+    const m = re.exec(trimmed);
+    if (!m) continue;
+    const scriptName = m[1]?.trim() ?? "";
+    if (!scriptName || !/\.py$/i.test(scriptName)) continue;
+    return { scriptName, raw: m[0] };
+  }
+
+  return null;
+}
+
 // ── Agent intent ──────────────────────────────────────────────────────────────
 
 type IntentRule = {
@@ -168,6 +206,19 @@ const RULES: IntentRule[] = [
     confidence: 0.81,
     color:      "violet",
     chips:      ["Build from scratch", "Design architecture", "Create full project", "Plan the system"],
+  },
+
+  // ── Builder: run / execute a script ────────────────────────────────────────
+  // Fires when the user wants to run code directly in the workspace venv.
+  // The `action` key is used by the chat panel to surface a RunConfirmStrip.
+  {
+    agentType:  "builder",
+    label:      "Run Script",
+    action:     "run",
+    pattern:    /\b(run|execute|launch|start)\b.{0,40}\b(script|file|code|program|py|\.py|main|app|server|test|module)\b/i,
+    confidence: 0.85,
+    color:      "primary",
+    chips:      ["Run in workspace venv", "Run and show output", "Run with debug output", "Run and test"],
   },
 ];
 

@@ -1,0 +1,38 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site review (April 2026):
+- Three-panel layout: Explorer (left, with file tree, import ZIP, New File/Folder), Editor (center, Monaco-like with Ctrl+S save, Ctrl+W close, "Open a file from the Explorer"), Chat (right)
+- Chat header: "Chat", "3 AIs", "Agent Idle", "Orchestrator – 8 specialist roles", "Auto · 3 AIs ready", "Auto Best picks best connected AI"
+- Visible agent hints: "Builder – Plan, code, test & ship", "Scholar – Research & papers", "Search Master – Deep web research"
+- Quick action buttons present (Explain this code, Fix the bug, Refactor code, Write documentation, etc.)
+- Input placeholder: "How can I help you?" with Shift+Enter new line, Enter to send, Ctrl+Enter to run
+- Keyboard shortcuts shown (Ctrl+J toggle chat, Ctrl+` terminal, etc.)
+- Gap: No interactive Agent Selector dropdown/tabs for switching between Orchestrator and specialists (Scholar, Search Master, Builder, etc.)
+
+Core Vision: Fast, beautiful, reliable multi-agent AI IDE with dark zinc/neutral theme + violet accents. Optimized for desktop and mobile (low-end devices, slower networks in Ghana).
+
+Task:
+Implement a production-ready Agent Selector UI component.
+- Place it prominently in the Chat panel header, near "Agent Idle" / "Orchestrator" status and "3 AIs" (e.g., as a dropdown or segmented control next to "Auto").
+- Use typed Agent interface matching live hints: Orchestrator (default), Builder, Scholar (Research Scholar), Search Master, plus Docs Weaver and Code Surgeon for completeness.
+- Include: id, name, icon (Lucide or emoji fallback), short description, capabilities array, accent color.
+- Zustand store for currentAgent with localStorage persistence.
+- Beautiful dropdown showing agent cards: colored icon, name + role hint (e.g. "8 specialist roles"), description, capability tags.
+- On select: update current agent, log switch (future backend hook), close dropdown.
+- Fully accessible (ARIA, keyboard nav), large touch targets for mobile, performant (no heavy libs beyond zustand + lucide-react if needed).
+- Dark modern theme consistent with current UI (zinc-900 bg, zinc-700 borders, violet accents).
+
+Follow this exact response structure:
+1. Context Reference (mention live site chat header and agent hints)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files only: types/agent.ts, store/useAgentStore.ts, components/AgentSelector.tsx — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions (how to place in Chat header component, e.g. next to "Agent Idle")
+5. Testing steps (desktop + mobile DevTools view with 3G throttle, verify persistence on refresh, switching updates status visually)
+6. Suggested next priority after this change
+
+Deliver only production-quality, clean, commented code. Prefer existing dependencies; note any new installs (zustand, lucide-react). Optimize for slow networks and mobile. Ensure dropdown doesn't break existing "Auto" or quick actions.
+
+Begin.

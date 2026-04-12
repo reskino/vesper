@@ -1,0 +1,41 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site:
+- Explorer always shows persistent/shared files (no true per-project isolation)
+- No workspace switcher or per-project dependency management
+- Dependency installation attempts previously failed (path/venv/sandbox issues)
+- Chat and Editor exist but Explorer is not smart per-workspace
+
+Core Vision: Every project/workspace must have its OWN isolated dependencies and folder path. Explorer must be fully dynamic and only show files from the active workspace.
+
+Task:
+Implement full per-project workspace + isolated dependency management.
+Make Explorer smart and fully functional:
+- Add workspace state (Zustand store: currentWorkspace, list of workspaces)
+- Each workspace has its own root folder (e.g. /workspaces/my-project-1)
+- Explorer dynamically renders ONLY files/folders from current workspace (no shared default files)
+- Add "New Workspace" / "Open Workspace" / "Switch Workspace" UI in Explorer header
+- Add per-workspace dependency management:
+  - Detect language (Python/JS)
+  - Python: use uv + venv inside workspace folder (create venv if missing)
+  - JS: manage package.json + npm install inside workspace
+  - New button "Install Dependency" (prompt for package name/version) that installs safely into the workspace's own path
+- Fix all previous install failures: use correct working directory, proper error handling, progress toast, and Replit-safe paths
+- Backend (Python side): expose API endpoints for workspace create/switch/install (use subprocess for uv/pip/npm with workspace cwd)
+- Frontend: show installed dependencies list in Explorer (collapsible section), lockfile status
+- Keep everything secure, fast on mobile/low-end devices, dark zinc theme
+
+Follow exact response structure:
+1. Context Reference (mention live Explorer issue and failed installs)
+2. Implementation Plan (numbered steps – frontend + backend)
+3. Complete Code (full files only: new workspace store, updated Explorer.tsx or equivalent, backend API handlers, utils for safe install)
+4. Exact file paths and integration instructions (how to hook into existing Explorer and backend)
+5. Testing steps (create new workspace, install a Python package like "requests" and a JS package like "lodash", verify files appear only in that workspace, test on mobile + 3G throttle)
+6. Suggested next priority after this change
+
+Deliver only production-quality, clean, well-commented TypeScript + Tailwind + Python code. Use uv for Python (fast & reliable). Ensure zero global installs and full isolation. Optimize for Replit sandbox.
+
+Begin.

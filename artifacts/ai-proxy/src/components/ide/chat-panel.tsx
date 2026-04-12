@@ -678,7 +678,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             <Sparkles className="h-3 w-3 text-primary/70" />
             <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Chat</span>
           </div>
-          <AgentSelector />
+          <AgentSelector isPending={isPending} />
           {hasImportedProject && (
             <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
               <FolderOpen className="h-2.5 w-2.5" />
@@ -793,6 +793,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         className="shrink-0 px-3 py-3 border-t border-[#1a1a24] bg-[#0a0a0c]"
         style={{ paddingBottom: compact ? "12px" : mobile ? "calc(env(safe-area-inset-bottom, 0px) + 8px)" : "env(safe-area-inset-bottom, 12px)" }}
       >
+        {/* Mobile-only agent selector row (desktop header is hidden on small screens) */}
+        <div className="md:hidden flex items-center justify-between mb-2">
+          <AgentSelector isPending={isPending} />
+        </div>
         <IntentStrip
           intent={detectedIntent}
           dismissed={intentDismissed}

@@ -32,7 +32,7 @@ import {
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
   AlertCircle, Upload, Copy, Check, RotateCcw, Sparkles,
   FolderOpen, Search, Bug, FlaskConical, Globe, Code2,
-  BookOpen, Zap, ArrowRight, ChevronsRight,
+  BookOpen, Zap, ArrowRight, ChevronsRight, Bot,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -41,6 +41,11 @@ import { AgentSelector } from "@/components/chat/agent-selector";
 import { useIDE } from "@/contexts/ide-context";
 import { useAgentMode, type AgentType } from "@/contexts/agent-context";
 import { useWorkspace } from "@/contexts/workspace-context";
+import { useAutonomous, SAFETY_META, type SafetyLevel } from "@/contexts/autonomous-context";
+import {
+  AutonomousStepper,
+  type AgentStep, type AutoSession, type StepType,
+} from "@/components/chat/autonomous-stepper";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 import { ExportMenu } from "@/components/chat/export-menu";
@@ -50,6 +55,57 @@ import {
   type IntentResult, type InstallIntentResult, type RunIntentResult,
 } from "@/lib/intent-detect";
 import { useTerminalExec } from "@workspace/api-client-react";
+
+// Safety levels list (ordered)
+const SAFETY_LEVELS: SafetyLevel[] = ["conservative", "balanced", "aggressive"];
+
+// ── Autonomous helpers (module-level, no React deps) ──────────────────────────
+
+function normalizeStepType(raw: string): StepType {
+  const s = raw.toLowerCase();
+  if (s === "edit" || s === "write") return "edit";
+  if (s === "run" || s === "exec" || s === "test") return "run";
+  if (s === "review") return "review";
+  if (s === "analyse" || s === "analyze") return "analyse";
+  return "think";
+}
+
+function computeRequiresConfirm(type: StepType, safety: SafetyLevel): boolean {
+  if (safety === "aggressive") return false;
+  if (type === "run") return true;
+  if (type === "edit" && safety === "conservative") return true;
+  return false;
+}
+
+function parsePlan(response: string, safetyLevel: SafetyLevel): AgentStep[] {
+  const steps: AgentStep[] = [];
+  for (const line of response.split("\n")) {
+    const m = line.match(/^\d+\.\s*\[([A-Z]+(?::[^\]]*)?)\]\s*(.+)$/);
+    if (!m) continue;
+    const [, typeStr, title] = m;
+    const colonIdx  = typeStr.indexOf(":");
+    const rawType   = colonIdx >= 0 ? typeStr.slice(0, colonIdx) : typeStr;
+    const rawParam  = colonIdx >= 0 ? typeStr.slice(colonIdx + 1).trim() : "";
+    const type      = normalizeStepType(rawType);
+    steps.push({
+      id:             crypto.randomUUID(),
+      index:          steps.length,
+      title:          title.trim(),
+      type,
+      status:         "pending",
+      filePath:       type === "edit" && rawParam ? rawParam : undefined,
+      command:        type === "run"  && rawParam ? rawParam : undefined,
+      requiresConfirm: computeRequiresConfirm(type, safetyLevel),
+    });
+  }
+  return steps;
+}
+
+function extractCode(text: string): string {
+  const m = text.match(/```(?:\w+)?\n?([\s\S]+?)```/);
+  if (m) return m[1].trimEnd();
+  return text.trim();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -683,6 +739,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath } = useIDE();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep, venvStatus } = useWorkspace();
+  const { isEnabled: autoEnabled, safetyLevel, toggleEnabled: toggleAuto, setSafetyLevel } = useAutonomous();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
   });
@@ -724,6 +781,19 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const scrollRef    = useRef<HTMLDivElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
 
+  // ── Autonomous agent state ────────────────────────────────────────────────
+  const [autoSession, setAutoSession]   = useState<AutoSession | null>(null);
+  const [showSafetyMenu, setShowSafetyMenu] = useState(false);
+  const autoAbortRef          = useRef(false);
+  const autoPauseRef          = useRef(false);
+  const pendingConfirmRef     = useRef<Record<string, (ok: boolean) => void>>({});
+  const selectedAiRef         = useRef(selectedAi);
+  const safetyLevelRef        = useRef(safetyLevel);
+  const currentWorkspaceRef   = useRef(currentWorkspace);
+  useEffect(() => { selectedAiRef.current = selectedAi; }, [selectedAi]);
+  useEffect(() => { safetyLevelRef.current = safetyLevel; }, [safetyLevel]);
+  useEffect(() => { currentWorkspaceRef.current = currentWorkspace; }, [currentWorkspace]);
+
   // Reset on new chat
   useEffect(() => {
     if (newChatKey === 0) return;
@@ -738,6 +808,9 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     setRunDismissed(false);
     setInstallIntent(null);
     setInstallDismissed(false);
+    setAutoSession(null);
+    autoAbortRef.current      = true;
+    pendingConfirmRef.current = {};
   }, [newChatKey]);
 
   // File picker tree (only loaded when picker is open)
@@ -776,7 +849,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, executionResult]);
+  }, [messages, executionResult, autoSession]);
 
   useEffect(() => {
     if (!showAttachMenu) return;
@@ -903,6 +976,189 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     lines.push("\n(You have read/write access to all files in this workspace.)");
     return lines.join("\n");
   }
+
+  // ── callAiDirect — direct fetch to AI, safe inside async loops ───────────
+
+  const callAiDirect = useCallback(async (
+    prompt:       string,
+    contextFiles: { path: string; content: string }[] = [],
+  ): Promise<string> => {
+    const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+    const aiId = selectedAiRef.current;
+    const body: Record<string, unknown> = {
+      aiId,
+      prompt:   `${AGENT_PREFIXES.orchestrator}${prompt}`,
+      fallback: aiId === "__auto__",
+    };
+    const url = contextFiles.length > 0
+      ? `${BASE}/api/proxy/ask-with-context`
+      : `${BASE}/api/proxy/ask`;
+    if (contextFiles.length > 0) body.files = contextFiles;
+    const res  = await fetch(url, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(body),
+    });
+    const data = await res.json() as { success: boolean; response?: string; error?: string };
+    if (!data.success) throw new Error(data.error ?? "AI request failed");
+    return data.response ?? "";
+  }, []);
+
+  // ── runAutonomous — orchestrated multi-step execution loop ────────────────
+
+  const runAutonomous = useCallback(async (task: string) => {
+    autoAbortRef.current  = false;
+    autoPauseRef.current  = false;
+
+    const ws       = currentWorkspaceRef.current;
+    const safety   = safetyLevelRef.current;
+    const wsCtx    = buildWsContext();
+    const ctxFiles = wsCtx ? [{ path: "__workspace_context__", content: wsCtx }] : [];
+
+    // Phase 1: planning
+    const planPrompt = [
+      "[VESPER AUTONOMOUS MODE — PLANNING PHASE]",
+      `Task: ${task}`,
+      "",
+      "Break this into 3–6 numbered steps. Use ONLY these labels:",
+      "  [THINK] — analysis or reasoning",
+      "  [ANALYSE] — review existing code",
+      "  [EDIT:filename] — create or modify a file",
+      "  [RUN:command] — execute a terminal command",
+      "  [REVIEW] — final verification",
+      "",
+      "Output ONLY the numbered list. No explanation, no preamble.",
+      "Example:",
+      "1. [THINK] Plan the overall approach",
+      "2. [EDIT:main.py] Write the implementation",
+      "3. [RUN:python main.py] Verify it works",
+      "4. [REVIEW] Confirm the result",
+    ].join("\n");
+
+    setAutoSession({ task, steps: [], isRunning: true, isPaused: false, isComplete: false, isStopped: false });
+
+    let steps: AgentStep[];
+    try {
+      const planResponse = await callAiDirect(planPrompt, ctxFiles);
+      steps = parsePlan(planResponse, safety);
+      if (steps.length === 0) throw new Error("No steps parsed from plan — try rephrasing.");
+    } catch (err: any) {
+      toast.error("Autonomous planning failed", { description: err.message });
+      setAutoSession(null);
+      return;
+    }
+
+    setAutoSession(prev => prev ? { ...prev, steps } : prev);
+
+    function patchStep(id: string, patch: Partial<AgentStep>) {
+      setAutoSession(prev => {
+        if (!prev) return prev;
+        return { ...prev, steps: prev.steps.map(s => s.id === id ? { ...s, ...patch } : s) };
+      });
+    }
+
+    async function awaitConfirm(stepId: string): Promise<boolean> {
+      return new Promise(resolve => { pendingConfirmRef.current[stepId] = resolve; });
+    }
+
+    // Phase 2: execute each step
+    for (const step of steps) {
+      // Abort check
+      if (autoAbortRef.current) { patchStep(step.id, { status: "skipped" }); continue; }
+      // Pause loop
+      while (autoPauseRef.current && !autoAbortRef.current) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      if (autoAbortRef.current) { patchStep(step.id, { status: "skipped" }); continue; }
+
+      patchStep(step.id, { status: "running" });
+
+      try {
+        if (step.type === "edit") {
+          const editPrompt = [
+            `[Step ${step.index + 1}: ${step.title}]`,
+            `Generate the COMPLETE file content for: ${step.filePath ?? "output.txt"}`,
+            `Task: ${task}`,
+            "Output ONLY the file content inside a fenced code block. No explanation.",
+          ].join("\n");
+          const resp       = await callAiDirect(editPrompt, ctxFiles);
+          const newContent = extractCode(resp);
+
+          if (step.requiresConfirm) {
+            patchStep(step.id, { status: "waiting_confirm", newContent });
+            const approved = await awaitConfirm(step.id);
+            if (!approved) { patchStep(step.id, { status: "skipped" }); continue; }
+          }
+
+          // Write the file
+          const BASE     = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+          const fullPath = ws?.relPath ? `${ws.relPath}/${step.filePath}` : (step.filePath ?? "output.txt");
+          await fetch(`${BASE}/api/files/write`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ path: fullPath, content: newContent }),
+          });
+          patchStep(step.id, {
+            status:     "done",
+            newContent,
+            result:     `✓ ${step.filePath} written (${newContent.split("\n").length} lines)`,
+          });
+
+        } else if (step.type === "run") {
+          if (step.requiresConfirm) {
+            patchStep(step.id, { status: "waiting_confirm" });
+            const approved = await awaitConfirm(step.id);
+            if (!approved) { patchStep(step.id, { status: "skipped" }); continue; }
+          }
+          if (!ws) {
+            patchStep(step.id, { status: "skipped", error: "No workspace selected" });
+            continue;
+          }
+          const result = await terminalExecMutation.mutateAsync({
+            data: { command: step.command!, workspace_id: ws.id },
+          });
+          const out  = [(result as any).stdout, (result as any).stderr].filter(Boolean).join("\n").trim();
+          const code = (result as any).exit_code ?? (result as any).returncode ?? 0;
+          patchStep(step.id, {
+            status:        code === 0 ? "done" : "failed",
+            commandOutput: out || (code === 0 ? "(no output)" : `Exit code ${code}`),
+            error:         code !== 0 ? `Exit code ${code}` : undefined,
+          });
+
+        } else {
+          // think / analyse / review
+          const thinkPrompt = [
+            `[Step ${step.index + 1}: ${step.title}]`,
+            step.title,
+            `Task: ${task}`,
+            "Be concise (2–4 sentences). Focus on what is actionable.",
+          ].join("\n");
+          const resp = await callAiDirect(thinkPrompt, ctxFiles);
+          patchStep(step.id, { status: "done", result: resp });
+        }
+      } catch (err: any) {
+        patchStep(step.id, { status: "failed", error: err.message ?? "Step failed" });
+        toast.error(`Step ${step.index + 1} failed`, { description: err.message });
+      }
+    }
+
+    // Phase 3: complete
+    const stopped = autoAbortRef.current;
+    setAutoSession(prev => prev ? { ...prev, isRunning: false, isComplete: !stopped, isStopped: stopped } : prev);
+
+    if (!stopped) {
+      const doneCount = steps.filter(s => s.status === "done").length;
+      toast.success("Autonomous session complete", {
+        description: `${doneCount}/${steps.length} steps completed.`,
+      });
+      setMessages(prev => [...prev, {
+        role:      "assistant",
+        content:   `**Autonomous agent finished** — ${doneCount}/${steps.length} steps completed for:\n> ${task}`,
+        timestamp: new Date(),
+      }]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callAiDirect, terminalExecMutation]);
 
   const send = useCallback(async (text: string, forceAgent?: AgentType) => {
     if (!text.trim() || isPending) return;
@@ -1094,7 +1350,26 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     }
   }, [currentWorkspace, terminalExecMutation]);
 
-  const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
+  const handleSend = () => {
+    const text = prompt.trim();
+    if (!text) return;
+
+    // If autonomous mode is enabled and no special intent is queued, hand off
+    // to the orchestrated execution loop instead of the single-shot AI call.
+    if (autoEnabled && !installIntent && !runIntent && !isPending) {
+      setMessages(prev => [...prev, { role: "user", content: text, timestamp: new Date() }]);
+      setPrompt("");
+      clearAttachment();
+      setAutoSession(null);                // clear any previous session
+      pendingConfirmRef.current = {};      // clear stale confirms
+      runAutonomous(text);
+      return;
+    }
+
+    send(prompt);
+    setPrompt("");
+    clearAttachment();
+  };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1166,6 +1441,56 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
               {connectedAis.length} AI{connectedAis.length > 1 ? "s" : ""}
             </span>
           )}
+
+          {/* ── Autonomous mode toggle ────────────────────────────────── */}
+          <div className="relative flex items-center gap-0.5" onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setShowSafetyMenu(false);
+          }}>
+            <button
+              onClick={toggleAuto}
+              title={autoEnabled ? "Autonomous Mode: ON — click to disable" : "Enable Autonomous Agent Mode"}
+              className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-semibold border transition-all duration-200 ${
+                autoEnabled
+                  ? "bg-violet-500/20 border-violet-500/30 text-violet-400 hover:bg-violet-500/30"
+                  : "bg-[#0e0e18] border-[#2a2a3c] text-[#6868a8] hover:text-[#9898c8] hover:border-[#3a3a5a]"
+              }`}
+            >
+              <Bot className="h-2.5 w-2.5" />
+              <span>Auto</span>
+              {autoEnabled && <span className="h-1 w-1 rounded-full bg-violet-400 animate-pulse" />}
+            </button>
+            {autoEnabled && (
+              <button
+                onClick={() => setShowSafetyMenu(v => !v)}
+                className="flex items-center text-[9px] px-1 py-0.5 rounded-md font-bold border border-violet-500/20 bg-violet-500/10 text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20 transition-colors"
+                title="Safety level"
+              >
+                {SAFETY_META[safetyLevel].icon}
+              </button>
+            )}
+            {showSafetyMenu && (
+              <div className="absolute top-full left-0 mt-1.5 z-50 min-w-[210px] rounded-xl border border-[#2a2a3c] bg-[#0d0d18] shadow-2xl p-1.5 space-y-0.5">
+                <p className="text-[9px] font-bold text-[#5a5a8a] uppercase tracking-widest px-2 pt-1 pb-0.5">Safety Level</p>
+                {SAFETY_LEVELS.map(level => (
+                  <button
+                    key={level}
+                    onClick={() => { setSafetyLevel(level); setShowSafetyMenu(false); }}
+                    className={`flex items-start gap-2 w-full px-2 py-1.5 rounded-lg text-left transition-colors ${
+                      safetyLevel === level
+                        ? "bg-violet-500/15 text-violet-300"
+                        : "hover:bg-[#141420] text-[#9898b8] hover:text-foreground"
+                    }`}
+                  >
+                    <span className="text-sm leading-none mt-0.5">{SAFETY_META[level].icon}</span>
+                    <div>
+                      <p className="text-[11px] font-semibold leading-tight">{SAFETY_META[level].label}</p>
+                      <p className="text-[10px] text-[#6060a0] mt-0.5 leading-tight">{SAFETY_META[level].description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-0.5">
           {messages.length > 0 && (
@@ -1225,6 +1550,36 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
               <div className="px-4 py-1">
                 <TerminalOutput result={executionResult} />
               </div>
+            )}
+            {/* ── Autonomous stepper ─────────────────────────────────── */}
+            {autoSession && (
+              <AutonomousStepper
+                session={autoSession}
+                onApprove={(id) => {
+                  const resolver = pendingConfirmRef.current[id];
+                  if (resolver) { resolver(true); delete pendingConfirmRef.current[id]; }
+                }}
+                onSkip={(id) => {
+                  const resolver = pendingConfirmRef.current[id];
+                  if (resolver) { resolver(false); delete pendingConfirmRef.current[id]; }
+                }}
+                onPause={() => {
+                  autoPauseRef.current = true;
+                  setAutoSession(prev => prev ? { ...prev, isPaused: true } : prev);
+                }}
+                onResume={() => {
+                  autoPauseRef.current = false;
+                  setAutoSession(prev => prev ? { ...prev, isPaused: false } : prev);
+                }}
+                onStop={() => {
+                  autoAbortRef.current = true;
+                  autoPauseRef.current = false;
+                  // Resolve any pending confirms as "skip"
+                  Object.entries(pendingConfirmRef.current).forEach(([, resolve]) => resolve(false));
+                  pendingConfirmRef.current = {};
+                  setAutoSession(prev => prev ? { ...prev, isStopped: true, isRunning: false } : prev);
+                }}
+              />
             )}
             {isPending && <ThinkingDots />}
             <div className="h-2" />

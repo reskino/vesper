@@ -6,6 +6,7 @@ import { IDELayout } from "@/components/layout/ide-layout";
 import { IDEProvider } from "@/contexts/ide-context";
 import { AgentProvider } from "@/contexts/agent-context";
 import { WorkspaceProvider } from "@/contexts/workspace-context";
+import { AutonomousProvider } from "@/contexts/autonomous-context";
 
 const queryClient = new QueryClient();
 
@@ -17,7 +18,9 @@ function App() {
           <AgentProvider>
             <WorkspaceProvider>
               <IDEProvider>
-                <IDELayout />
+                <AutonomousProvider>
+                  <IDELayout />
+                </AutonomousProvider>
               </IDEProvider>
             </WorkspaceProvider>
           </AgentProvider>

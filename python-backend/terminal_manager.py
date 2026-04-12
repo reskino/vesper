@@ -118,10 +118,21 @@ def exec_command(
             "elapsedMs": elapsed,
             "cwd": working_dir,
         }
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        # Capture whatever was printed before the timeout kill
+        def _decode(v):
+            if v is None:
+                return ""
+            return v.decode("utf-8", errors="replace") if isinstance(v, bytes) else v
+        partial_stdout = _decode(exc.stdout)
+        partial_stderr = _decode(exc.stderr)
+        if len(partial_stderr.encode()) > MAX_OUTPUT_BYTES:
+            partial_stderr = partial_stderr[: MAX_OUTPUT_BYTES // 2]
+        if len(partial_stdout.encode()) > MAX_OUTPUT_BYTES:
+            partial_stdout = partial_stdout[: MAX_OUTPUT_BYTES // 2]
         return {
-            "stdout": "",
-            "stderr": f"Command timed out after {timeout}s",
+            "stdout": partial_stdout,
+            "stderr": partial_stderr + (f"\n[Timed out after {timeout}s]" if partial_stderr else f"[Timed out after {timeout}s]"),
             "exitCode": 124,
             "elapsedMs": int((time.time() - start) * 1000),
             "cwd": working_dir,

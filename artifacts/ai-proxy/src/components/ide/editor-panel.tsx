@@ -22,7 +22,7 @@ import {
 import {
   FileIcon, FileCode, FileText, FileJson,
   Save, Loader2, MessageSquare, X, WrapText,
-  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search, Play,
+  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search, Play, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -586,16 +586,21 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     }
 
     const wsId = currentWorkspace?.id ?? null;
+    // Server processes (uvicorn, flask dev server) run until killed — give them
+    // 5 minutes so startup output is visible before the timeout message appears.
+    const runTimeout = ext === "py" ? 300 : 60;
     const toastId = toast.loading(`Running ${filename}…`);
     setIsRunning(true);
     setRunOutput(null);
     try {
       const res = await execMutation.mutateAsync({
-        data: { command: cmd, cwd: wsCwd, workspace_id: wsId, timeout: 60 },
+        data: { command: cmd, cwd: wsCwd, workspace_id: wsId, timeout: runTimeout },
       });
       setRunOutput({ stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode });
       if (res.exitCode === 0) {
         toast.success(`${filename} finished`, { id: toastId, description: `Exit 0 · ${res.elapsedMs}ms` });
+      } else if (res.exitCode === 124) {
+        toast(`${filename} stopped`, { id: toastId, description: "Server process ended" });
       } else {
         toast.error(`${filename} exited with code ${res.exitCode}`, { id: toastId });
       }
@@ -1042,40 +1047,65 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       </div>
 
       {/* ── Run output panel — appears when a file has been executed ─────────── */}
-      {runOutput !== null && (
-        <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a10] max-h-48 overflow-y-auto">
-          <div className="flex items-center justify-between px-3 py-1 border-b border-[#1a1a24]">
-            <div className="flex items-center gap-2 text-[10px] font-mono">
-              <span className={`px-1.5 py-0.5 rounded font-mono ${
-                runOutput.exitCode === 0
-                  ? "bg-emerald-900/40 text-emerald-400"
-                  : "bg-red-900/40 text-red-400"
-              }`}>
-                {runOutput.exitCode === 0 ? "✓ Exit 0" : `✗ Exit ${runOutput.exitCode}`}
-              </span>
-              <span className="text-[#7878a8]">Output</span>
+      {runOutput !== null && (() => {
+        // Detect a server URL in stdout/stderr (uvicorn, flask, etc.)
+        const allOutput = (runOutput.stdout ?? "") + (runOutput.stderr ?? "");
+        const urlMatch = allOutput.match(/https?:\/\/(?:0\.0\.0\.0|127\.0\.0\.1|localhost)(:\d+)?/);
+        const serverUrl = urlMatch
+          ? urlMatch[0].replace("0.0.0.0", "localhost").replace("127.0.0.1", "localhost")
+          : null;
+        const isTimeout = runOutput.exitCode === 124;
+        return (
+          <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a10] max-h-56 overflow-y-auto">
+            <div className="flex items-center justify-between px-3 py-1 border-b border-[#1a1a24]">
+              <div className="flex items-center gap-2 text-[10px] font-mono">
+                <span className={`px-1.5 py-0.5 rounded font-mono ${
+                  runOutput.exitCode === 0
+                    ? "bg-emerald-900/40 text-emerald-400"
+                    : isTimeout
+                    ? "bg-amber-900/40 text-amber-400"
+                    : "bg-red-900/40 text-red-400"
+                }`}>
+                  {runOutput.exitCode === 0 ? "✓ Exit 0" : isTimeout ? "⏹ Stopped" : `✗ Exit ${runOutput.exitCode}`}
+                </span>
+                <span className="text-[#7878a8]">Output</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {serverUrl && (
+                  <a
+                    href={serverUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-violet-600/20 text-violet-300 hover:bg-violet-600/40 transition-colors font-mono"
+                    title={`Open ${serverUrl}`}
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    {serverUrl.replace("http://localhost", "localhost")}
+                  </a>
+                )}
+                <button
+                  className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
+                  onClick={() => setRunOutput(null)}
+                  title="Dismiss output"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             </div>
-            <button
-              className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
-              onClick={() => setRunOutput(null)}
-              title="Dismiss output"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            <div className="p-3 font-mono text-xs leading-relaxed space-y-1">
+              {runOutput.stdout && (
+                <pre className="text-emerald-300 whitespace-pre-wrap break-all">{runOutput.stdout}</pre>
+              )}
+              {runOutput.stderr && (
+                <pre className={`whitespace-pre-wrap break-all ${isTimeout ? "text-amber-300/80" : "text-red-400"}`}>{runOutput.stderr}</pre>
+              )}
+              {!runOutput.stdout && !runOutput.stderr && (
+                <span className="text-[#7878a8]">(no output)</span>
+              )}
+            </div>
           </div>
-          <div className="p-3 font-mono text-xs leading-relaxed space-y-1">
-            {runOutput.stdout && (
-              <pre className="text-emerald-300 whitespace-pre-wrap break-all">{runOutput.stdout}</pre>
-            )}
-            {runOutput.stderr && (
-              <pre className="text-red-400 whitespace-pre-wrap break-all">{runOutput.stderr}</pre>
-            )}
-            {!runOutput.stdout && !runOutput.stderr && (
-              <span className="text-[#7878a8]">(no output)</span>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Status bar ───────────────────────────────────────────────────────── */}
       <div className="shrink-0 flex items-center justify-between px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none">

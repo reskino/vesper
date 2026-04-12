@@ -1,4 +1,4 @@
-import { Files, Bot, Key, History, HelpCircle, Settings, Users, Network } from "lucide-react";
+import { Files, Bot, Key, History, HelpCircle, Settings, Users, Network, Keyboard } from "lucide-react";
 import { useIDE, type SidebarPanel } from "@/contexts/ide-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "wouter";
@@ -14,7 +14,7 @@ const PANELS: { id: Exclude<SidebarPanel, null>; icon: React.ElementType; label:
 ];
 
 export function ActivityBar() {
-  const { sidebarPanel, toggleSidebarPanel } = useIDE();
+  const { sidebarPanel, toggleSidebarPanel, openShortcutsModal } = useIDE();
 
   return (
     <aside className="hidden sm:flex shrink-0 w-11 flex-col items-center bg-[#080809] border-r border-[#131318] py-2 z-10">
@@ -50,9 +50,27 @@ export function ActivityBar() {
         })}
       </div>
 
-      {/* ── Bottom separator + settings ──────────────────────────────── */}
+      {/* ── Bottom separator + shortcuts + settings ───────────────────── */}
       <div className="flex flex-col items-center gap-0.5 pb-1">
         <div className="w-5 h-px bg-[#1a1a24] mb-1" />
+
+        {/* Keyboard shortcuts reference */}
+        <Tooltip delayDuration={400}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={openShortcutsModal}
+              className="w-8 h-8 flex items-center justify-center rounded-lg
+                text-[#7878a8] hover:text-amber-400 hover:bg-[#111118] transition-all duration-150"
+              aria-label="Keyboard shortcuts (?)"
+            >
+              <Keyboard style={{ width: 15, height: 15 }} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs font-semibold">
+            Keyboard shortcuts <span className="ml-1 opacity-60">?</span>
+          </TooltipContent>
+        </Tooltip>
+
         <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <Link href="/sessions">

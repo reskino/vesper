@@ -1,0 +1,33 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (confirmed live April 2026):
+- Explorer upgraded with workspace header, switcher, Dependencies section, and Install Dependency
+- Multi-tab Editor, PDF/Word export, responsive layout with bottom navigation, Agent Selector with 8 specialist roles, and intelligent chat all implemented
+- Chat shows "Builder · Full-stack autonomous Idle", quick actions, "3 AIs ready"
+- Gaps: No global toasts, no Command Palette (Ctrl+K), limited loading states/skeletons, no shortcut help modal
+
+Core Vision: Polish Vesper to feel like a premium AI IDE (Cursor-level UX) — smooth feedback, accessible, delightful on desktop and mobile (optimized for low-end devices and slower networks in Ghana). Dark zinc/neutral theme with violet accents.
+
+Task:
+Implement comprehensive Professional Polish & UX Improvements.
+- Install and integrate Sonner for global toast notifications (success, error, warning, loading/progress with dismiss).
+- Build Command Palette triggered by Ctrl+K / Cmd+K: searchable commands for switch agent, open file/workspace, install dependency, export PDF/Word, run quick actions, show shortcuts.
+- Add loading skeletons for chat responses, file loading in Editor, and export operations.
+- Create a Keyboard Shortcuts help modal (triggered by ? or button in header).
+- Improve micro-interactions: subtle hover/focus states, reduced animations on mobile, consistent error boundaries with friendly messages.
+- Ensure accessibility (ARIA, focus management) and performance (no heavy re-renders).
+
+Follow exact response structure:
+1. Context Reference (mention completed features and current polish gaps from live site)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files only: providers/ToastProvider.tsx using Sonner, components/CommandPalette.tsx, skeletons, updated root Layout/App.tsx — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions (wrap root with <Toaster /> and providers)
+5. Testing steps (trigger toasts on actions like export/install/agent switch, open Command Palette, test skeletons on slow 3G, verify on desktop + mobile)
+6. Suggested next priority after this change (e.g. advanced safe venv management, final testing round, or deployment optimizations)
+
+Deliver only production-quality, clean, commented code. Use Sonner for toasts (lightweight and modern). Keep bundle impact minimal. Optimize heavily for slow networks and low-end devices.
+
+Begin.

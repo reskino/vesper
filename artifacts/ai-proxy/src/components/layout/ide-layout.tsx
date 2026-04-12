@@ -15,6 +15,8 @@ import { TopBar } from "./top-bar";
 import { FileExplorer } from "@/components/ide/file-explorer";
 import { EditorPanel } from "@/components/ide/editor-panel";
 import { CommandPalette } from "@/components/ide/command-palette";
+import { ShortcutsModal, useShortcutsKey } from "@/components/ide/shortcuts-modal";
+import { PanelErrorBoundary } from "@/components/ide/error-boundary";
 import { ChatPanel } from "@/components/ide/chat-panel";
 import { TerminalPanel } from "@/components/ide/terminal-panel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -28,7 +30,7 @@ import { VesperLogo } from "@/components/vesper-logo";
 import {
   MessageSquare, Code2, FolderOpen, TerminalSquare,
   MessageSquarePlus, X, Sparkles, Bot,
-  ShieldCheck, Clock, BookOpen, Sun, Moon,
+  ShieldCheck, Clock, BookOpen, Sun, Moon, Keyboard,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 
@@ -418,14 +420,18 @@ function DesktopWorkspace() {
         <div className="flex h-full min-w-0">
           <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
             <ResizablePanel defaultSize={showChat ? 55 : 100} minSize={30}>
-              <EditorPanel />
+              <PanelErrorBoundary label="Editor">
+                <EditorPanel />
+              </PanelErrorBoundary>
             </ResizablePanel>
 
             {showChat && (
               <>
                 <ResizableHandle className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
                 <ResizablePanel defaultSize={45} minSize={25} maxSize={65}>
-                  <ChatPanel newChatKey={newChatKey} />
+                  <PanelErrorBoundary label="Chat">
+                    <ChatPanel newChatKey={newChatKey} />
+                  </PanelErrorBoundary>
                 </ResizablePanel>
               </>
             )}
@@ -440,7 +446,9 @@ function DesktopWorkspace() {
         <>
           <ResizableHandle className="h-px bg-border hover:bg-primary/40 transition-colors cursor-row-resize" />
           <ResizablePanel defaultSize={30} minSize={15} maxSize={60}>
-            <TerminalPanel />
+            <PanelErrorBoundary label="Terminal">
+              <TerminalPanel />
+            </PanelErrorBoundary>
           </ResizablePanel>
         </>
       )}
@@ -483,13 +491,17 @@ function MobileWorkspace() {
     <div className="flex-1 min-h-0 overflow-hidden">
       {/* Chat — always mounted (default tab) */}
       <div className={`h-full ${show("chat")}`}>
-        <ChatPanel newChatKey={newChatKey} mobile />
+        <PanelErrorBoundary label="Chat">
+          <ChatPanel newChatKey={newChatKey} mobile />
+        </PanelErrorBoundary>
       </div>
 
       {/* Editor — mounted on first visit */}
       {mounted.has("editor") && (
         <div className={`h-full ${show("editor")}`}>
-          <EditorPanel mobile />
+          <PanelErrorBoundary label="Editor">
+            <EditorPanel mobile />
+          </PanelErrorBoundary>
         </div>
       )}
 
@@ -525,8 +537,13 @@ function MobileWorkspace() {
 export function IDELayout({ children }: { children?: React.ReactNode }) {
   const {
     sidebarPanel, toggleTerminal, toggleChat, triggerNewChat,
-    showCommandPalette, openCommandPalette, closeCommandPalette,
+    showCommandPalette, paletteInitialQuery,
+    openCommandPalette, openCommandMode, closeCommandPalette,
+    showShortcutsModal, openShortcutsModal, closeShortcutsModal,
   } = useIDE();
+
+  // Wire the "?" key globally to open shortcuts modal
+  useShortcutsKey();
 
   // Global keyboard shortcuts (desktop + mobile)
   useEffect(() => {
@@ -536,12 +553,14 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       if (ctrl && e.key === "`") { e.preventDefault(); toggleTerminal(); }
       if (ctrl && e.key === "j") { e.preventDefault(); toggleChat(); }
       if (ctrl && e.key === "n") { e.preventDefault(); triggerNewChat(); }
-      // Ctrl+P — command palette (catches focus when editor isn't active)
+      // Ctrl+P — file search palette
       if (ctrl && e.key === "p") { e.preventDefault(); openCommandPalette(); }
+      // Ctrl+K — command mode palette (VSCode style)
+      if (ctrl && e.key === "k") { e.preventDefault(); openCommandMode(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleTerminal, toggleChat, triggerNewChat, openCommandPalette]);
+  }, [toggleTerminal, toggleChat, triggerNewChat, openCommandPalette, openCommandMode]);
 
   return (
     <div className="flex flex-col h-dvh w-full bg-background overflow-hidden font-sans">
@@ -585,8 +604,15 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
       <MobileSettingsSheet />
       <MobileNav />
 
-      {/* ── Command Palette (Ctrl+P, z-300, above everything) ───────────── */}
-      <CommandPalette open={showCommandPalette} onClose={closeCommandPalette} />
+      {/* ── Command Palette (Ctrl+P = files / Ctrl+K = commands, z-300) ── */}
+      <CommandPalette
+        open={showCommandPalette}
+        onClose={closeCommandPalette}
+        initialQuery={paletteInitialQuery}
+      />
+
+      {/* ── Keyboard Shortcut Reference (? key, z-310) ──────────────────── */}
+      <ShortcutsModal open={showShortcutsModal} onClose={closeShortcutsModal} />
 
       {/* Spacer so content isn't hidden behind the fixed bottom nav (52px bar) */}
       <div

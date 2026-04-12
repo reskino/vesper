@@ -72,10 +72,19 @@ interface IDEContextValue {
   importedProject: ImportedFileNode | null;
   setImportedProject: (node: ImportedFileNode | null) => void;
 
-  // ── Command Palette (Ctrl+P) ───────────────────────────────────────────────
+  // ── Command Palette (Ctrl+P = files, Ctrl+K = commands) ───────────────────
   showCommandPalette: boolean;
-  openCommandPalette: () => void;
+  /** Text pre-filled in the palette input — "" for file mode, ">" for command mode */
+  paletteInitialQuery: string;
+  openCommandPalette:  () => void;
+  /** Open with ">" pre-filled to jump straight into command mode */
+  openCommandMode:     () => void;
   closeCommandPalette: () => void;
+
+  // ── Keyboard shortcut help modal (?? key) ─────────────────────────────────
+  showShortcutsModal: boolean;
+  openShortcutsModal:  () => void;
+  closeShortcutsModal: () => void;
 }
 
 const IDEContext = createContext<IDEContextValue | null>(null);
@@ -117,9 +126,16 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [newChatKey, setNewChatKey]   = useState(0);
   const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
   const [activeFilePath, setActiveFilePath]   = useState<string | null>(null);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const openCommandPalette  = useCallback(() => setShowCommandPalette(true),  []);
+  const [showCommandPalette, setShowCommandPalette]   = useState(false);
+  const [paletteInitialQuery, setPaletteInitialQuery] = useState("");
+  const [showShortcutsModal, setShowShortcutsModal]   = useState(false);
+
+  const openCommandPalette  = useCallback(() => { setPaletteInitialQuery(""); setShowCommandPalette(true);  }, []);
+  const openCommandMode     = useCallback(() => { setPaletteInitialQuery(">"); setShowCommandPalette(true);  }, []);
   const closeCommandPalette = useCallback(() => setShowCommandPalette(false), []);
+
+  const openShortcutsModal  = useCallback(() => setShowShortcutsModal(true),  []);
+  const closeShortcutsModal = useCallback(() => setShowShortcutsModal(false), []);
 
   const onOpenFileRef       = useRef<((path: string) => void) | null>(null);
   const onOpenMobileFileRef = useRef<((path: string) => void) | null>(null);
@@ -158,7 +174,9 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
       importedProject, setImportedProject,
-      showCommandPalette, openCommandPalette, closeCommandPalette,
+      showCommandPalette, paletteInitialQuery,
+      openCommandPalette, openCommandMode, closeCommandPalette,
+      showShortcutsModal, openShortcutsModal, closeShortcutsModal,
     }}>
       {children}
     </IDEContext.Provider>

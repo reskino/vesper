@@ -46,7 +46,11 @@ The project uses three parallel workflows (started via the "Project" run button)
 - Command Palette (`Ctrl+P`): fuzzy file search, ↑↓ keyboard nav, highlights matches — registered in IDEContext, rendered above all overlays
 - Custom Vesper Monaco theme (zinc/violet palette): violet keywords, emerald strings, amber numbers, cyan types
 - Tab bar active-tab auto-scroll: `scrollIntoView` fires whenever `activeTab` changes; scrollbar hidden for clean look
-- `artifacts/ai-proxy/src/components/ide/command-palette.tsx` — standalone command palette component
+- `artifacts/ai-proxy/src/components/ide/command-palette.tsx` — unified Ctrl+P/Ctrl+K palette; file mode (default) + command mode (`>` prefix); agent-switch, export, panel-toggle, and help commands
+- `artifacts/ai-proxy/src/components/ide/shortcuts-modal.tsx` — keyboard shortcut reference modal; triggered by `?` key, activity bar button, or palette command; `useShortcutsKey()` hook wires the key globally
+- `artifacts/ai-proxy/src/components/ide/error-boundary.tsx` — `PanelErrorBoundary` class component wrapping editor, chat, terminal panels (desktop + mobile)
+- `artifacts/ai-proxy/src/contexts/ide-context.tsx` — adds `paletteInitialQuery`, `openCommandMode`, `showShortcutsModal`, `openShortcutsModal`, `closeShortcutsModal`
+- `artifacts/ai-proxy/src/components/layout/activity-bar.tsx` — Keyboard icon button (amber hover) opens shortcuts modal
 - `artifacts/ai-proxy/src/lib/export-chat.ts` — PDF (print-window), Word via backend (`exportChatAsDocxBackend` with client-side fallback), save to workspace as `.md` (`saveChatToWorkspace`)
 - `artifacts/ai-proxy/src/components/chat/export-menu.tsx` — 3-option export dropdown: PDF, Word (.docx), Save to Workspace; desktop header + mobile compact icon
 - `python-backend/main.py` — `/api/export/docx` endpoint uses `python-docx`; returns real .docx binary with coloured headers, code blocks, inline formatting

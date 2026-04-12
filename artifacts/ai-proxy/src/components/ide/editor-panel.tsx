@@ -967,7 +967,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Monaco editor */}
             <ResizablePanel defaultSize={showAiPanel ? 60 : 100} minSize={35}>
-              <div className="h-full">
+              <div className="h-full bg-[#0d0d12]">
                 {currentState?.loaded ? (
                   <MonacoEditor
                     height="100%"

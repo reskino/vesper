@@ -916,6 +916,8 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [collapseAllKey, setCollapseAllKey] = useState(0);
   const [isCreatingDemo, setIsCreatingDemo] = useState(false);
+  const [showOverflow, setShowOverflow] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
 
   // ── Workspace-scoped tree path ───────────────────────────────────────────
   // Only query the file tree when a workspace is actually selected.
@@ -1134,50 +1136,111 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {treeEnabled && (
-              <button
-                className={`${iconBtn}`}
-                title="Collapse all folders"
-                onClick={() => setCollapseAllKey(k => k + 1)}
-              >
-                <ChevronsUpDown className="h-3 w-3" />
-              </button>
-            )}
-            {[
-              { icon: FilePlus,    title: "New file",    onClick: () => { setNewItem({ type: "file",   parentPath: wsRootPath }); setNewItemName(""); } },
-              { icon: FolderPlus, title: "New folder",  onClick: () => { setNewItem({ type: "folder", parentPath: wsRootPath }); setNewItemName(""); } },
-              { icon: RefreshCw,  title: "Refresh",     onClick: () => { refetch(); refreshWorkspaces(); } },
-              { icon: Upload,     title: "Import files (zip/GitHub)", onClick: () => setShowImportExport(true) },
-              { icon: Download,   title: "Export workspace", onClick: exportWorkspace },
-              { icon: FolderX,    title: "Start fresh", onClick: clearWorkspace },
-            ].map(({ icon: Icon, title, onClick }) => (
-              <button
-                key={title}
-                className={`${iconBtn} last:hover:text-red-400`}
-                title={title}
-                onClick={onClick}
-              >
-                <Icon className="h-3 w-3" />
-              </button>
-            ))}
+            {/* Primary always-visible actions */}
             <button
-              onClick={() => setShowInstallDep(v => !v)}
-              className={`${iconBtn} ${showInstallDep ? "text-primary" : ""}`}
-              title="Toggle dependencies panel"
+              className={iconBtn}
+              title="New file"
+              onClick={() => { setNewItem({ type: "file", parentPath: wsRootPath }); setNewItemName(""); }}
             >
-              <PackagePlus className="h-3 w-3" />
+              <FilePlus className="h-3 w-3" />
             </button>
             <button
-              onClick={createDemoProject}
-              disabled={isCreatingDemo}
-              className={`${iconBtn} hover:text-violet-400 disabled:opacity-40`}
-              title="New Demo Project — React + FastAPI starter"
+              className={iconBtn}
+              title="New folder"
+              onClick={() => { setNewItem({ type: "folder", parentPath: wsRootPath }); setNewItemName(""); }}
             >
-              {isCreatingDemo
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <Rocket className="h-3 w-3" />}
+              <FolderPlus className="h-3 w-3" />
             </button>
-            <FolderImportButton />
+            <button
+              className={iconBtn}
+              title="Refresh"
+              onClick={() => { refetch(); refreshWorkspaces(); }}
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+
+            {/* ⋯ Overflow menu */}
+            <div ref={overflowRef} className="relative">
+              <button
+                className={`${iconBtn} ${showOverflow ? "text-[#a0a0c0] bg-[#141420]" : ""}`}
+                title="More actions"
+                onClick={() => setShowOverflow(v => !v)}
+              >
+                <span className="text-[10px] font-bold leading-none tracking-tight">⋯</span>
+              </button>
+              {showOverflow && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[190px]
+                    bg-[#0f0f18] border border-[#1e1e2e] rounded-lg shadow-xl py-1
+                    flex flex-col"
+                  onMouseLeave={() => setShowOverflow(false)}
+                >
+                  {treeEnabled && (
+                    <button
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                        hover:text-[#c0c0e0] hover:bg-[#141420] w-full text-left transition-colors"
+                      onClick={() => { setCollapseAllKey(k => k + 1); setShowOverflow(false); }}
+                    >
+                      <ChevronsUpDown className="h-3 w-3 shrink-0" />
+                      Collapse all folders
+                    </button>
+                  )}
+                  <button
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                      hover:text-[#c0c0e0] hover:bg-[#141420] w-full text-left transition-colors"
+                    onClick={() => { setShowInstallDep(v => !v); setShowOverflow(false); }}
+                  >
+                    <PackagePlus className="h-3 w-3 shrink-0" />
+                    {showInstallDep ? "Hide" : "Show"} dependencies
+                  </button>
+                  <button
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                      hover:text-violet-300 hover:bg-[#141420] w-full text-left transition-colors
+                      disabled:opacity-40"
+                    disabled={isCreatingDemo}
+                    onClick={() => { createDemoProject(); setShowOverflow(false); }}
+                  >
+                    {isCreatingDemo
+                      ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                      : <Rocket className="h-3 w-3 shrink-0" />}
+                    New demo project
+                  </button>
+                  <div className="my-1 border-t border-[#1e1e2e]" />
+                  <button
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                      hover:text-[#c0c0e0] hover:bg-[#141420] w-full text-left transition-colors"
+                    onClick={() => { setShowImportExport(true); setShowOverflow(false); }}
+                  >
+                    <Upload className="h-3 w-3 shrink-0" />
+                    Import (zip / GitHub)
+                  </button>
+                  <div
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                      hover:text-[#c0c0e0] hover:bg-[#141420] transition-colors cursor-pointer"
+                    onClick={() => setShowOverflow(false)}
+                  >
+                    <FolderImportButton />
+                  </div>
+                  <button
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-[#9898b8]
+                      hover:text-[#c0c0e0] hover:bg-[#141420] w-full text-left transition-colors"
+                    onClick={() => { exportWorkspace(); setShowOverflow(false); }}
+                  >
+                    <Download className="h-3 w-3 shrink-0" />
+                    Export workspace
+                  </button>
+                  <div className="my-1 border-t border-[#1e1e2e]" />
+                  <button
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-xs
+                      text-red-400/80 hover:text-red-400 hover:bg-[#141420] w-full text-left transition-colors"
+                    onClick={() => { clearWorkspace(); setShowOverflow(false); }}
+                  >
+                    <FolderX className="h-3 w-3 shrink-0" />
+                    Start fresh
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

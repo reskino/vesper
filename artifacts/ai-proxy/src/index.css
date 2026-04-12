@@ -214,3 +214,11 @@
     pointer-events: none;
   }
 }
+
+/* Monaco editor — always dark, never white-flash */
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .margin,
+.monaco-scrollable-element {
+  background-color: #0d0d12 !important;
+}

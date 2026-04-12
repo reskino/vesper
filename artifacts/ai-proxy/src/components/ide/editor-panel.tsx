@@ -290,9 +290,11 @@ interface ContextMenu { x: number; y: number; tab: string }
 
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
-  const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath, openCommandPalette } = useIDE();
+  const { onOpenFileRef, onOpenMobileFileRef, onReloadFileRef, onReloadMobileFileRef,
+    setActiveFilePath, openCommandPalette } = useIDE();
   const { currentWorkspace, venvStatus } = useWorkspace();
-  const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
+  const theRef       = mobile ? onOpenMobileFileRef : onOpenFileRef;
+  const theReloadRef = mobile ? onReloadMobileFileRef : onReloadFileRef;
   // Run-file feature — executes the current file in the workspace venv (Python)
   // or with node (JavaScript / TypeScript)
   const execMutation = useTerminalExec();
@@ -435,6 +437,23 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     theRef.current = openFile;
     return () => { theRef.current = null; };
   }, [openFile, theRef]);
+
+  // ── Force-reload a file (called by autonomous agent after writing) ────────────
+  // Clears the loaded flag so the read query re-enables, fetching fresh content
+  // from disk. Safe to call whether the file is already open or brand-new.
+  const reloadFile = useCallback((path: string) => {
+    setOpenTabs(prev => prev.includes(path) ? prev : [...prev, path]);
+    setTabStates(prev => {
+      if (!prev[path]) return prev; // not cached yet — normal load path handles it
+      return { ...prev, [path]: { ...prev[path], loaded: false } };
+    });
+    setActiveTab(path);
+  }, [setActiveTab]);
+
+  useEffect(() => {
+    theReloadRef.current = reloadFile;
+    return () => { theReloadRef.current = null; };
+  }, [reloadFile, theReloadRef]);
 
   // ── Open a new empty untitled tab ────────────────────────────────────────────
   const untitledCount = useRef(0);

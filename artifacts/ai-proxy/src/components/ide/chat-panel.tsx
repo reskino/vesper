@@ -738,7 +738,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat,
     mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath,
-    openFileInEditor } = useIDE();
+    reloadFileInEditor } = useIDE();
   const queryClient = useQueryClient();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep, venvStatus } = useWorkspace();
@@ -1103,10 +1103,12 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
           });
 
           // Sync Explorer + Editor: invalidate the tree so new files appear,
-          // drop the stale read-cache for this path, then open it in the editor.
+          // drop the stale read-cache for this path, then force-reload in editor.
+          // reloadFileInEditor clears tabStates[path].loaded which re-enables
+          // the read query — guaranteeing fresh content even for already-open files.
           queryClient.invalidateQueries({ queryKey: ["/api/files/tree"] });
           queryClient.invalidateQueries({ queryKey: ["/api/files/read", { path: fullPath }] });
-          openFileInEditor(fullPath);
+          reloadFileInEditor(fullPath);
 
           patchStep(step.id, {
             status:     "done",

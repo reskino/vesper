@@ -59,6 +59,14 @@ interface IDEContextValue {
   /** Mobile EditorPanel registers here */
   onOpenMobileFileRef: React.MutableRefObject<((path: string) => void) | null>;
 
+  // ── Force-reload file (open + discard cached content → re-fetch from disk) ──
+  /** Called by the autonomous agent after writing a file, so the editor re-fetches */
+  reloadFileInEditor: (path: string) => void;
+  /** Desktop EditorPanel registers here */
+  onReloadFileRef: React.MutableRefObject<((path: string) => void) | null>;
+  /** Mobile EditorPanel registers here */
+  onReloadMobileFileRef: React.MutableRefObject<((path: string) => void) | null>;
+
   // ── Active file path (for terminal "Run" button) ───────────────────────────
   activeFilePath: string | null;
   setActiveFilePath: (path: string | null) => void;
@@ -152,8 +160,10 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     setShowWelcomeModal(false);
   }, []);
 
-  const onOpenFileRef       = useRef<((path: string) => void) | null>(null);
-  const onOpenMobileFileRef = useRef<((path: string) => void) | null>(null);
+  const onOpenFileRef         = useRef<((path: string) => void) | null>(null);
+  const onOpenMobileFileRef   = useRef<((path: string) => void) | null>(null);
+  const onReloadFileRef       = useRef<((path: string) => void) | null>(null);
+  const onReloadMobileFileRef = useRef<((path: string) => void) | null>(null);
 
   const toggleSidebarPanel = useCallback((p: Exclude<SidebarPanel, null>) => {
     setSidebarPanel(prev => (prev === p ? null : p));
@@ -172,6 +182,19 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     setShowMobileChatSheet(false);
   }, []);
 
+  /**
+   * Like openFileInEditor, but forces the editor to discard its cached content
+   * and re-fetch from disk. Used by the autonomous agent after writing a file
+   * so the editor always shows the freshly-written content, even if the file
+   * was already open.
+   */
+  const reloadFileInEditor = useCallback((path: string) => {
+    onReloadFileRef.current?.(path);
+    onReloadMobileFileRef.current?.(path);
+    setMobileTab("editor");
+    setShowMobileChatSheet(false);
+  }, []);
+
   const triggerNewChat = useCallback(() => setNewChatKey(k => k + 1), []);
 
   return (
@@ -186,6 +209,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       mobileSettingsTab, setMobileSettingsTab,
       selectedAi, setSelectedAi,
       openFileInEditor, onOpenFileRef, onOpenMobileFileRef,
+      reloadFileInEditor, onReloadFileRef, onReloadMobileFileRef,
       activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
       importedProject, setImportedProject,

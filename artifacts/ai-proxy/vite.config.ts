@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, splitVendorChunkPlugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import monacoEditorPlugin from "vite-plugin-monaco-editor";
@@ -26,11 +26,14 @@ if (!basePath) {
   );
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
+    splitVendorChunkPlugin(),
     // Bundles Monaco Editor workers locally so IntelliSense works without CDN
     (monacoEditorPlugin as any).default({
       languageWorkers: [
@@ -53,6 +56,63 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Target modern browsers — smaller output, no legacy polyfills
+    target: "es2020",
+    // Disable source maps in production for smaller deploy bundle;
+    // enable in development for debugging.
+    sourcemap: !isProduction,
+    // Monaco Editor bundles are inherently large; raise warning threshold.
+    chunkSizeWarningLimit: 4000,
+    // Use esbuild for minification (default, fastest)
+    minify: "esbuild",
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        // Explicit chunk splitting strategy:
+        //   monaco-*      — Editor + language workers (each can be >1 MB)
+        //   react-vendor  — React + React-DOM (stable across deploys → better caching)
+        //   ui-vendor     — Radix / Lucide / shadcn components
+        //   query-vendor  — TanStack React Query
+        //   router-vendor — Wouter router
+        //   utils-vendor  — all other node_modules
+        manualChunks(id) {
+          // Monaco Editor — give each worker its own chunk
+          if (id.includes("monaco-editor") || id.includes("vite-plugin-monaco-editor")) {
+            return "monaco-editor";
+          }
+          // Core React runtime (tiny, loads first)
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "react-vendor";
+          }
+          // Radix UI + Lucide icons + shadcn primitives
+          if (
+            id.includes("@radix-ui") ||
+            id.includes("lucide-react") ||
+            id.includes("class-variance-authority") ||
+            id.includes("clsx") ||
+            id.includes("tailwind-merge")
+          ) {
+            return "ui-vendor";
+          }
+          // TanStack Query
+          if (id.includes("@tanstack/react-query")) {
+            return "query-vendor";
+          }
+          // Wouter (router)
+          if (id.includes("node_modules/wouter")) {
+            return "router-vendor";
+          }
+          // CodeMirror (lightweight editor fallback used in some panels)
+          if (id.includes("codemirror") || id.includes("@codemirror")) {
+            return "codemirror-vendor";
+          }
+          // Sonner toasts
+          if (id.includes("node_modules/sonner")) {
+            return "ui-vendor";
+          }
+        },
+      },
+    },
   },
   server: {
     port,

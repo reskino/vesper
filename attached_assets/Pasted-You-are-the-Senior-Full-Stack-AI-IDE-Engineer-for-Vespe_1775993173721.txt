@@ -1,0 +1,37 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state (confirmed live April 2026):
+- Workspace isolation, Agent Selector, intelligent chat, responsive layout with bottom navigation, and multi-tab editor all implemented
+- Chat has rich quick actions and agent roles; Editor supports multi-tab and file operations
+- Gap: No PDF or Word export for chat/research/docs
+
+Core Vision: Allow seamless export of research, documentation, and chat history as professional PDF or Word files, integrated with agents (especially Research Scholar and Docs Weaver).
+
+Task:
+Implement PDF and Word export functionality.
+- Add export buttons in Chat header or quick actions ("Export Chat as PDF", "Export as Word", "Export Research Summary").
+- Support options: full chat, selected messages, or agent-generated docs.
+- Frontend: Use jsPDF (or similar lightweight lib) for PDF with proper formatting (markdown rendering, code blocks with highlighting, headers).
+- For Word (.docx): Use a lightweight library like docx or server-side generation via Python (python-docx).
+- Backend (Python): Optional endpoint to generate .docx with better styling, returning download link.
+- Features:
+  - Preserve formatting, code syntax, agent names, timestamps.
+  - Save export to current workspace (optional) or direct browser download.
+  - Progress indicator and success toast.
+  - Mobile-friendly: large buttons, no heavy processing.
+- Integrate with current Agent Selector (e.g., Docs Weaver can trigger export automatically with confirmation).
+
+Follow exact response structure:
+1. Context Reference (mention completed multi-tab editor and live chat capabilities)
+2. Implementation Plan (numbered steps – frontend components, export utils, backend if needed)
+3. Complete Code (full files only: new ExportMenu.tsx or buttons, export utils, any backend handlers — clean, well-commented TypeScript + Tailwind + Python)
+4. Exact file paths and integration instructions (placement in Chat panel)
+5. Testing steps (generate sample research/chat, export PDF and Word, verify formatting and download on desktop + mobile, 3G throttle)
+6. Suggested next priority after this change (e.g. command palette, toasts/polish, or safe venv enhancements)
+
+Deliver only production-quality, clean, commented code. Prefer lightweight dependencies (note any installs like jspdf or docx). Ensure exports are fast and secure (no sensitive data leakage). Optimize for low-end devices.
+
+Begin.

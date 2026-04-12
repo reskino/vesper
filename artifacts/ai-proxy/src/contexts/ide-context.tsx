@@ -71,6 +71,11 @@ interface IDEContextValue {
   /** Virtual file tree imported from the user's local filesystem */
   importedProject: ImportedFileNode | null;
   setImportedProject: (node: ImportedFileNode | null) => void;
+
+  // ── Command Palette (Ctrl+P) ───────────────────────────────────────────────
+  showCommandPalette: boolean;
+  openCommandPalette: () => void;
+  closeCommandPalette: () => void;
 }
 
 const IDEContext = createContext<IDEContextValue | null>(null);
@@ -112,6 +117,9 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [newChatKey, setNewChatKey]   = useState(0);
   const [importedProject, setImportedProject] = useState<ImportedFileNode | null>(null);
   const [activeFilePath, setActiveFilePath]   = useState<string | null>(null);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const openCommandPalette  = useCallback(() => setShowCommandPalette(true),  []);
+  const closeCommandPalette = useCallback(() => setShowCommandPalette(false), []);
 
   const onOpenFileRef       = useRef<((path: string) => void) | null>(null);
   const onOpenMobileFileRef = useRef<((path: string) => void) | null>(null);
@@ -150,6 +158,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
       importedProject, setImportedProject,
+      showCommandPalette, openCommandPalette, closeCommandPalette,
     }}>
       {children}
     </IDEContext.Provider>

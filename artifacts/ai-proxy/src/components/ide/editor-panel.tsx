@@ -288,7 +288,7 @@ interface ContextMenu { x: number; y: number; tab: string }
 
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
-  const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath } = useIDE();
+  const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath, openCommandPalette } = useIDE();
   const { currentWorkspace } = useWorkspace();
   const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const { toast } = useToast();
@@ -321,6 +321,11 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     if (activeTab) setActiveFilePath(activeTab);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally only on mount
+
+  // Auto-scroll the active tab into view in the tab bar whenever it changes
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeTab]);
 
   // When the workspace changes, reload tabs from the new workspace's storage
   const prevWsKey = useRef(wsKey);
@@ -381,6 +386,10 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   // Monaco editor + Monaco API refs (so we can call them imperatively)
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoNS | null>(null);
+
+  // Tab bar ref — for scrolling active tab into view
+  const tabBarRef    = useRef<HTMLDivElement>(null);
+  const activeTabRef = useRef<HTMLDivElement>(null);
 
   // Auto-save debounce timer
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -558,6 +567,11 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         e.preventDefault();
         openNewTab();
       }
+      // Ctrl+P — command palette (file search)
+      if (ctrl && e.key === "p") {
+        e.preventDefault();
+        openCommandPalette();
+      }
       // Ctrl+Tab / Ctrl+Shift+Tab — cycle through open tabs
       if (ctrl && e.key === "Tab" && openTabs.length > 1) {
         e.preventDefault();
@@ -570,11 +584,60 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave, activeTab, closeTab, openNewTab, openTabs, setActiveTab]);
+  }, [handleSave, activeTab, closeTab, openNewTab, openCommandPalette, openTabs, setActiveTab]);
+
+  // ── Vesper Monaco theme — zinc/violet palette ─────────────────────────────
+  const handleBeforeMount = useCallback((monaco: typeof MonacoNS) => {
+    monaco.editor.defineTheme("vesper-dark", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment",           foreground: "4a4a72", fontStyle: "italic" },
+        { token: "keyword",           foreground: "a78bfa" },  // violet-400
+        { token: "string",            foreground: "6ee7b7" },  // emerald-300
+        { token: "number",            foreground: "fbbf24" },  // amber-400
+        { token: "type",              foreground: "67e8f9" },  // cyan-300
+        { token: "identifier",        foreground: "c4b5fd" },  // violet-300
+        { token: "delimiter",         foreground: "8080b0" },
+        { token: "variable",          foreground: "e2e8f0" },  // slate-200
+        { token: "function",          foreground: "93c5fd" },  // blue-300
+        { token: "class",             foreground: "f9a8d4" },  // pink-300
+        { token: "interface",         foreground: "67e8f9" },  // cyan-300
+        { token: "operator",          foreground: "c084fc" },  // purple-400
+        { token: "tag",               foreground: "a78bfa" },
+        { token: "attribute.name",    foreground: "fbbf24" },
+        { token: "attribute.value",   foreground: "6ee7b7" },
+      ],
+      colors: {
+        "editor.background":                "#0d0d12",
+        "editor.foreground":                "#d4d4e8",
+        "editorLineNumber.foreground":      "#3a3a58",
+        "editorLineNumber.activeForeground":"#6868a0",
+        "editor.selectionBackground":       "#3b2d6b80",
+        "editor.inactiveSelectionBackground":"#2a2040",
+        "editorCursor.foreground":          "#a78bfa",
+        "editorWhitespace.foreground":      "#1e1e2e",
+        "editorIndentGuide.background1":    "#1a1a2e",
+        "editorIndentGuide.activeBackground1": "#2e2e4e",
+        "editor.lineHighlightBackground":   "#111118",
+        "editorBracketMatch.background":    "#3b2d6b40",
+        "editorBracketMatch.border":        "#a78bfa60",
+        "scrollbar.shadow":                 "#00000000",
+        "scrollbarSlider.background":       "#1e1e3040",
+        "scrollbarSlider.hoverBackground":  "#2a2a4880",
+        "scrollbarSlider.activeBackground": "#3a3a6080",
+        "editorSuggestWidget.background":   "#0e0e18",
+        "editorSuggestWidget.border":       "#1e1e30",
+        "editorSuggestWidget.selectedBackground": "#2a1e4a",
+        "editorHoverWidget.background":     "#0e0e18",
+        "editorHoverWidget.border":         "#1e1e30",
+      },
+    });
+  }, []);
 
   // ── Monaco editor options (memo to avoid full re-mount on every render) ────
   const monacoOptions = useMemo((): MonacoNS.editor.IStandaloneEditorConstructionOptions => ({
-    theme: "vs-dark",
+    theme: "vesper-dark",
     fontSize,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
     fontLigatures: !mobile, // ligatures hurt perf on low-end devices
@@ -617,7 +680,8 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   return (
     <div className="flex flex-col h-full bg-[#0d0d12]">
       {/* ── Tab strip ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center border-b border-[#1a1a24] bg-[#0a0a0c] overflow-x-auto shrink-0 h-9">
+      <div ref={tabBarRef} className="flex items-center border-b border-[#1a1a24] bg-[#0a0a0c] overflow-x-auto shrink-0 h-9 scroll-smooth"
+        style={{ scrollbarWidth: "none" }}>
         {openTabs.length === 0 ? (
           <div className="flex items-center gap-2 px-4 text-[#7878a8] text-xs select-none">
             <FilePlus className="h-3.5 w-3.5" />
@@ -634,11 +698,12 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
             return (
               <div
                 key={tab}
+                ref={isActive ? activeTabRef : undefined}
                 onClick={() => setActiveTab(tab)}
                 onContextMenu={e => openContextMenu(e, tab)}
                 className={`flex items-center gap-1.5 px-3 h-full text-xs cursor-pointer border-r border-[#1a1a24] shrink-0 group transition-colors ${
                   isActive
-                    ? "bg-[#0d0d12] text-foreground border-t-2 border-t-primary"
+                    ? "bg-[#0d0d12] text-foreground border-t-2 border-t-violet-500"
                     : "bg-[#0a0a0c] text-[#9898b8] hover:bg-[#111118] hover:text-[#a0a0c0]"
                 }`}
                 title={tab}
@@ -668,6 +733,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
         {/* Right-side toolbar */}
         <div className="ml-auto flex items-center gap-1 px-2 shrink-0">
+          {/* Command Palette */}
+          <button
+            onClick={openCommandPalette}
+            className="hidden md:flex h-6 w-6 items-center justify-center rounded text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-colors"
+            title="Open file (Ctrl+P)"
+          >
+            <Search className="h-3 w-3" />
+          </button>
           {/* New tab button always visible */}
           <button
             onClick={openNewTab}
@@ -795,6 +868,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                     language={getMonacoLanguage(activeTab)}
                     value={currentState.content}
                     options={monacoOptions}
+                    beforeMount={handleBeforeMount}
                     onChange={handleEditorChange}
                     onMount={handleEditorMount}
                     loading={

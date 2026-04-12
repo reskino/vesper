@@ -26,7 +26,7 @@ import {
   useReadFile, getReadFileQueryKey,
   FileNode,
 } from "@workspace/api-client-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Send, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
@@ -264,14 +264,26 @@ function MessageBubble({ msg, onExecute }: {
 
 function ThinkingDots() {
   return (
-    <div className="flex items-center gap-1.5 px-4 py-2" aria-label="AI is thinking">
-      {[0, 1, 2].map(i => (
-        <span
-          key={i}
-          className="h-2 w-2 rounded-full bg-primary/60 animate-bounce"
-          style={{ animationDelay: `${i * 0.15}s` }}
-        />
-      ))}
+    <div className="flex items-start gap-2 px-4 py-2" aria-label="AI is thinking">
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+        <span className="text-[10px] font-bold text-primary">AI</span>
+      </div>
+      <div className="flex flex-col gap-1.5 pt-1.5">
+        <div className="flex items-center gap-1.5">
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="h-2 w-2 rounded-full bg-primary/70 animate-bounce"
+              style={{ animationDelay: `${i * 0.18}s` }}
+            />
+          ))}
+          <span className="text-[11px] text-muted-foreground ml-1 animate-pulse">Thinking…</span>
+        </div>
+        <div className="space-y-1.5">
+          <div className="h-2 w-40 rounded bg-muted/60 animate-pulse" style={{ animationDelay: "0.1s" }} />
+          <div className="h-2 w-28 rounded bg-muted/40 animate-pulse" style={{ animationDelay: "0.25s" }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -583,7 +595,6 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath } = useIDE();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep } = useWorkspace();
-  const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
   });
@@ -856,7 +867,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   // ── Install-intent handler ────────────────────────────────────────────────
   const handleInstallConfirm = useCallback(async (packageName: string) => {
     if (!currentWorkspace) {
-      toast({ title: "No workspace", description: "Select a workspace first.", variant: "destructive" });
+      toast.error("No workspace selected", { description: "Select a workspace first." });
       return;
     }
     setIsInstalling(true);
@@ -878,7 +889,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         content: `**\`${packageName}\` installed successfully** in \`${currentWorkspace.name}\`.\n\nYou can now import it in your code.`,
         timestamp: new Date(),
       }]);
-      toast({ title: "Package installed", description: `${packageName} is ready to use.` });
+      toast.success("Package installed", { description: `${packageName} is ready to use.` });
     } catch (err: any) {
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -886,11 +897,11 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         error: true,
         timestamp: new Date(),
       }]);
-      toast({ title: "Install failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+      toast.error("Install failed", { description: err?.message ?? "Unknown error" });
     } finally {
       setIsInstalling(false);
     }
-  }, [currentWorkspace, installDep, toast]);
+  }, [currentWorkspace, installDep]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };

@@ -27,7 +27,7 @@ import {
   countTotalFiles,
 } from "@/lib/folder-import";
 import { useIDE } from "@/contexts/ide-context";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // File icon helper
@@ -199,7 +199,6 @@ interface ImportProgress {
 
 export function ImportedTree() {
   const { importedProject, setImportedProject } = useIDE();
-  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -219,10 +218,10 @@ export function ImportedTree() {
           setImportedProject(tree);
           const total = countTotalFiles(tree);
           const readable = countProjectFiles(tree);
-          toast({ description: `Imported "${tree.name}" — ${readable} files readable of ${total} total` });
+          toast.success(`Imported "${tree.name}" — ${readable} files readable of ${total} total`);
         }
       } catch (e: any) {
-        toast({ description: e.message || "Failed to open folder", variant: "destructive" });
+        toast.error(e.message || "Failed to open folder");
       } finally {
         setProgressMsg("");
       }
@@ -244,9 +243,9 @@ export function ImportedTree() {
       });
       setImportedProject(tree);
       const readable = countProjectFiles(tree);
-      toast({ description: `Imported "${tree.name}" — ${readable} readable files` });
+      toast.success(`Imported "${tree.name}" — ${readable} readable files`);
     } catch (err: any) {
-      toast({ description: err.message || "Import failed", variant: "destructive" });
+      toast.error(err.message || "Import failed");
     } finally {
       setProgress(null);
     }
@@ -406,7 +405,6 @@ export function ImportedTree() {
 // ── Hook: shared folder-import logic ─────────────────────────────────────────
 function useFolderImport() {
   const { importedProject, setImportedProject } = useIDE();
-  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
 
@@ -417,11 +415,11 @@ function useFolderImport() {
         const tree = await openFolderWithPicker();
         if (tree) {
           setImportedProject(tree);
-          toast({ description: `Imported "${tree.name}" — ${countProjectFiles(tree)} files` });
+          toast.success(`Imported "${tree.name}" — ${countProjectFiles(tree)} files`);
         }
       } catch (e: any) {
         if (e.name !== "AbortError")
-          toast({ description: e.message || "Failed", variant: "destructive" });
+          toast.error(e.message || "Failed");
       } finally {
         setLoading(false);
       }
@@ -438,9 +436,9 @@ function useFolderImport() {
     try {
       const tree = await readFolderFromInput(files);
       setImportedProject(tree);
-      toast({ description: `Imported "${tree.name}" — ${countProjectFiles(tree)} files` });
+      toast.success(`Imported "${tree.name}" — ${countProjectFiles(tree)} files`);
     } catch (err: any) {
-      toast({ description: err.message || "Import failed", variant: "destructive" });
+      toast.error(err.message || "Import failed");
     } finally {
       setLoading(false);
     }

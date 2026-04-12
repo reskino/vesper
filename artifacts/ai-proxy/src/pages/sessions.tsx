@@ -4,7 +4,7 @@ import {
   useListSessions, getListSessionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -115,7 +115,6 @@ function LoginGuide({ ai, onClose, onSuccess }: LoginGuideProps) {
 // ─── API Key Form ─────────────────────────────────────────────────────────────
 
 function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
-  const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +136,7 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
       });
       const data = await res.json();
       if (data.success) {
-        toast({ title: "API key saved!", description: data.message });
+        toast.success("API key saved!", { description: data.message });
         onSuccess();
         onClose();
       } else {
@@ -228,7 +227,6 @@ function ApiKeyForm({ ai, onClose, onSuccess }: LoginGuideProps) {
 // ─── Cookie Form ──────────────────────────────────────────────────────────────
 
 function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuideProps & { cloudflareBlocked: boolean }) {
-  const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [jsonText, setJsonText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -246,7 +244,7 @@ function CookieForm({ ai, onClose, onSuccess, cloudflareBlocked }: LoginGuidePro
       });
       const data = await res.json();
       if (data.success) {
-        toast({ title: "Session saved!", description: data.message });
+        toast.success("Session saved!", { description: data.message });
         onSuccess();
         onClose();
       } else {
@@ -516,7 +514,6 @@ function SectionHeader({ icon: Icon, label, color, count }: {
 // ─── Main Sessions Page ────────────────────────────────────────────────────────
 
 export function SessionsPage() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: aisData, isLoading: aisLoading } = useListAis();
   const { data: sessionsData, isLoading: sessionsLoading } = useListSessions();
@@ -563,7 +560,7 @@ export function SessionsPage() {
       const data = await res.json();
       setValidateResults(data.results ?? {});
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Validation failed", description: e.message });
+      toast.error("Validation failed", { description: e.message });
       setShowValidation(false);
     } finally {
       setValidating(false);
@@ -576,13 +573,13 @@ export function SessionsPage() {
       const res = await fetch(`/api/sessions/${aiId}/delete`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        toast({ title: "Session deleted", description: `${aiName} removed.` });
+        toast.success("Session deleted", { description: `${aiName} removed.` });
         refreshAll();
       } else {
-        toast({ variant: "destructive", title: "Delete failed", description: data.message });
+        toast.error("Delete failed", { description: data.message });
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast.error("Error", { description: e.message });
     } finally {
       setDeletingId(null);
     }

@@ -20,7 +20,7 @@ import {
   Files, Cpu, ChevronUp, AlertCircle, Zap, Copy,
   MoreVertical, TerminalSquare,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
@@ -199,7 +199,6 @@ interface NewItemState { type: "file" | "folder"; parentPath: string; }
 
 // ── MAIN EDITOR COMPONENT ─────────────────────────────────────────────────────
 export default function Editor() {
-  const { toast } = useToast();
 
   // ── File tree ───────────────────────────────────────────────────────────────
   const { data: treeData, isLoading: treeLoading, refetch: refetchTree } = useGetFileTree(
@@ -274,11 +273,11 @@ export default function Editor() {
         ...prev,
         [activeTab]: { ...prev[activeTab], savedContent: prev[activeTab].content },
       }));
-      toast({ description: `Saved ${activeTab.split("/").pop()}` });
+      toast.success(`Saved ${activeTab.split("/").pop()}`);
     } catch {
-      toast({ description: "Failed to save file", variant: "destructive" });
+      toast.error("Failed to save file");
     }
-  }, [activeTab, currentState, writeFile, toast]);
+  }, [activeTab, currentState, writeFile]);
 
   // ── Create file/folder ──────────────────────────────────────────────────────
   const createFile = useCreateFile();
@@ -294,9 +293,9 @@ export default function Editor() {
       await createFile.mutateAsync({ data: { path: fullPath, type: newItem.type } });
       await refetchTree();
       if (newItem.type === "file") openFile(fullPath);
-      toast({ description: `Created ${name}` });
+      toast.success(`Created ${name}`);
     } catch (e: any) {
-      toast({ description: e?.message || "Failed to create", variant: "destructive" });
+      toast.error(e?.message || "Failed to create");
     }
     setNewItem(null);
     setNewItemName("");
@@ -311,9 +310,9 @@ export default function Editor() {
         setOpenTabs(prev => prev.filter(p => p !== path));
         if (activeTab === path) setActiveTab(null);
       }
-      toast({ description: `Deleted ${path.split("/").pop()}` });
+      toast.success(`Deleted ${path.split("/").pop()}`);
     } catch {
-      toast({ description: "Failed to delete", variant: "destructive" });
+      toast.error("Failed to delete");
     }
   };
 
@@ -377,7 +376,7 @@ export default function Editor() {
   const sendAiMessage = async (userText: string) => {
     if (!userText.trim()) return;
     if (!activeTab && !currentState) {
-      toast({ description: "Open a file first", variant: "destructive" });
+      toast.error("Open a file first");
       return;
     }
 
@@ -409,9 +408,9 @@ export default function Editor() {
     const match = content.match(/```[\w]*\n([\s\S]*?)```/);
     if (match?.[1] && activeTab) {
       handleEditorChange(match[1].trim());
-      toast({ description: "Code applied to editor — press Ctrl+S to save" });
+      toast.success("Code applied to editor — press Ctrl+S to save");
     } else {
-      toast({ description: "No code block found in response", variant: "destructive" });
+      toast.error("No code block found in response");
     }
   };
 
@@ -454,7 +453,7 @@ export default function Editor() {
               a.href = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/files/export`;
               a.download = "";
               document.body.appendChild(a); a.click(); document.body.removeChild(a);
-              toast({ description: "Exporting workspace…" });
+              toast("Exporting workspace…");
             }}
           ><Download className="h-3.5 w-3.5" /></button>
         </div>
@@ -770,7 +769,7 @@ export default function Editor() {
                     <div className="flex gap-1 mt-2 pt-1.5 border-t border-border/50">
                       <button
                         className="text-[10px] px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => { navigator.clipboard.writeText(msg.content); toast({ description: "Copied" }); }}
+                        onClick={() => { navigator.clipboard.writeText(msg.content); toast.success("Copied"); }}
                       >
                         <Copy className="h-2.5 w-2.5 inline mr-1" />Copy
                       </button>

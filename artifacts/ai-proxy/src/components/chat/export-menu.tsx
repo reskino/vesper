@@ -12,7 +12,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Download, FileText, Printer, Loader2, ChevronDown, FolderInput } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   exportChatAsPdf,
   exportChatAsDocxBackend,
@@ -42,7 +42,6 @@ export function ExportMenu({
 }: ExportMenuProps) {
   const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState<"pdf" | "docx" | "md" | null>(null);
-  const { toast }             = useToast();
   const menuRef               = useRef<HTMLDivElement>(null);
 
   // Dismiss on click-outside or Escape
@@ -83,30 +82,30 @@ export function ExportMenu({
     setOpen(false);
     try {
       exportChatAsPdf(sharedOpts());
-      toast({ description: "Print dialog opened — choose 'Save as PDF' to download." });
+      toast.success("Print dialog opened — choose 'Save as PDF' to download.");
     } catch (err) {
       console.error("[ExportMenu] PDF error:", err);
-      toast({ description: "PDF export failed. Please try again.", variant: "destructive" });
+      toast.error("PDF export failed. Please try again.");
     } finally {
       setLoading(null);
     }
-  }, [sharedOpts, toast]);
+  }, [sharedOpts]);
 
   // ── Word (.docx) via Python backend ─────────────────────────────────────────
   const handleDocx = useCallback(async () => {
     setLoading("docx");
     setOpen(false);
-    toast({ description: "Generating Word document…" });
+    const toastId = toast.loading("Generating Word document…");
     try {
       await exportChatAsDocxBackend(sharedOpts());
-      toast({ description: "Word document downloaded successfully." });
+      toast.success("Word document downloaded successfully.", { id: toastId });
     } catch (err) {
       console.error("[ExportMenu] Word error:", err);
-      toast({ description: "Word export failed. Please try again.", variant: "destructive" });
+      toast.error("Word export failed. Please try again.", { id: toastId });
     } finally {
       setLoading(null);
     }
-  }, [sharedOpts, toast]);
+  }, [sharedOpts]);
 
   // ── Save to Workspace as Markdown ────────────────────────────────────────────
   const handleSaveToWorkspace = useCallback(async () => {
@@ -117,19 +116,14 @@ export function ExportMenu({
         ...sharedOpts(),
         workspacePath,
       });
-      toast({
-        description: `Saved to workspace: ${savedPath}`,
-      });
+      toast.success(`Saved to workspace: ${savedPath}`);
     } catch (err: any) {
       console.error("[ExportMenu] Save to workspace error:", err);
-      toast({
-        description: err?.message ?? "Could not save to workspace. Please try again.",
-        variant: "destructive",
-      });
+      toast.error(err?.message ?? "Could not save to workspace. Please try again.");
     } finally {
       setLoading(null);
     }
-  }, [sharedOpts, workspacePath, toast]);
+  }, [sharedOpts, workspacePath]);
 
   if (messages.length === 0) return null;
 

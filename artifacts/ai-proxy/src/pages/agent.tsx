@@ -14,7 +14,7 @@ import {
   Square, Package, FileDiff, FileText, RefreshCw, Activity,
   ChevronUp, Key, Badge as BadgeIcon, ChevronLeft, BookOpen, Scissors,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAgentMode } from "@/contexts/agent-context";
@@ -336,7 +336,6 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
   const [showTips, setShowTips]       = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: ais } = useListAis({ query: { queryKey: getListAisQueryKey() } });
@@ -400,11 +399,11 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
       if (statusData.result) {
         setResult(statusData.result);
         if (statusData.result.success) {
-          toast({ title: "Task complete!", description: statusData.result.summary || undefined });
+          toast.success("Task complete!", { description: statusData.result.summary || undefined });
         } else if (statusData.result.error === "Agent stopped by user.") {
-          toast({ title: "Agent stopped" });
+          toast.success("Agent stopped");
         } else {
-          toast({ title: "Task failed", description: statusData.result.error || undefined, variant: "destructive" });
+          toast.error("Task failed", { description: statusData.result.error || undefined });
         }
         queryClient.invalidateQueries({ queryKey: ["getFileTree"] });
       }
@@ -436,11 +435,11 @@ export default function AgentPage({ mobile = false }: { mobile?: boolean }) {
         onError: err => {
           setIsRunning(false);
           setCurrentAction(null);
-          toast({ title: "Failed to start agent", description: String(err), variant: "destructive" });
+          toast.error("Failed to start agent", { description: String(err) });
         }
       }
     );
-  }, [task, agentType, resolvedAi, selectedModel, maxSteps, runAgentMutation, toast]);
+  }, [task, agentType, resolvedAi, selectedModel, maxSteps, runAgentMutation]);
 
   const handleStop = async () => {
     if (!isRunning || isStopping) return;

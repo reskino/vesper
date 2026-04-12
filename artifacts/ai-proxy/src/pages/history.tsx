@@ -2,7 +2,7 @@ import { useListHistory, getListHistoryQueryKey, useGetHistoryStats, getGetHisto
 import { format } from "date-fns";
 import { MessageSquare, Clock, BarChart3, Trash2, ChevronDown, ChevronUp, Loader2, Hash } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useState } from "react";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -76,7 +76,6 @@ export function History() {
   });
   const clearHistory = useClearHistory();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [filterAi, setFilterAi] = useState<string | null>(null);
   const [expandedAi, setExpandedAi] = useState<string | null>(null);
@@ -87,10 +86,10 @@ export function History() {
       await clearHistory.mutateAsync({ aiId });
       queryClient.invalidateQueries({ queryKey: getListHistoryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetHistoryStatsQueryKey() });
-      toast({ title: "History cleared" });
+      toast.success("History cleared");
       if (expandedAi === aiId) setExpandedAi(null);
     } catch {
-      toast({ variant: "destructive", title: "Failed to clear history" });
+      toast.error("Failed to clear history");
     }
   };
 

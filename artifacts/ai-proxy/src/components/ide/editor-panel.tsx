@@ -23,7 +23,8 @@ import {
   Save, Loader2, MessageSquare, X, WrapText,
   ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace } from "@/contexts/workspace-context";
@@ -291,8 +292,6 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath, openCommandPalette } = useIDE();
   const { currentWorkspace } = useWorkspace();
   const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
-  const { toast } = useToast();
-
   // Workspace-scoped persistence key — tabs for workspace A never bleed into workspace B
   const wsKey = currentWorkspace?.slug ?? "__no_workspace__";
   const tabsKey = `vesper.editor.tabs.${wsKey}`;
@@ -477,10 +476,10 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   // ── Copy file path to clipboard ───────────────────────────────────────────
   const copyPath = useCallback((path: string) => {
     navigator.clipboard.writeText(path).then(
-      ()  => toast({ description: "Path copied to clipboard" }),
-      ()  => toast({ description: path, variant: "destructive" }),
+      ()  => toast.success("Path copied to clipboard"),
+      ()  => toast.error("Failed to copy path"),
     );
-  }, [toast]);
+  }, []); // toast is a stable Sonner import
 
   // ── Derived state ───────────────────────────────────────────────────────────
   const currentState = activeTab ? tabStates[activeTab] : null;
@@ -501,11 +500,11 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         [path]: { ...prev[path], savedContent: prev[path].content },
       }));
     } catch {
-      toast({ description: "Failed to save", variant: "destructive" });
+      toast.error("Failed to save");
     } finally {
       setIsSaving(false);
     }
-  }, [activeTab, tabStates, writeFileMutation, toast]);
+  }, [activeTab, tabStates, writeFileMutation]);
 
   // ── Handle Monaco editor change ─────────────────────────────────────────────
   const handleEditorChange: OnChange = useCallback((value) => {
@@ -548,8 +547,8 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     if (!model) return;
     // Replace the entire file content with the suggestion
     model.setValue(code);
-    toast({ description: "Applied — auto-saving…" });
-  }, [toast]);
+    toast.success("Applied — auto-saving…");
+  }, []); // toast is a stable Sonner import
 
   // ── Global keyboard shortcuts ───────────────────────────────────────────────
   useEffect(() => {
@@ -879,8 +878,21 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                   />
                 ) : (
                   /* Loading skeleton while file data is fetched */
-                  <div className="flex items-center justify-center h-full text-[#9898b8]">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                  <div className="flex flex-col gap-3 p-6 h-full bg-[#0d0d14]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Skeleton className="h-3 w-16 bg-[#1e1e2e]" />
+                      <Skeleton className="h-3 w-8 bg-[#1e1e2e]" />
+                    </div>
+                    {[70, 90, 55, 80, 45, 65, 88, 40, 72, 60].map((w, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-3 bg-[#1e1e2e]"
+                        style={{ width: `${w}%`, animationDelay: `${i * 0.04}s` }}
+                      />
+                    ))}
+                    <div className="mt-2">
+                      <Skeleton className="h-3 w-1/3 bg-[#1e1e2e]" style={{ animationDelay: "0.45s" }} />
+                    </div>
                   </div>
                 )}
               </div>

@@ -5,7 +5,7 @@ import {
   CheckCircle2, Network, Search, ZoomIn, ZoomOut, Maximize2,
   FileCode, Layers, Lightbulb, ChevronDown, ChevronRight, X,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import * as d3 from "d3";
 
 const BASE_URL = ((import.meta.env.BASE_URL as string) ?? "/").replace(/\/$/, "") + "/";
@@ -216,7 +216,6 @@ function ForceGraph({
 
 export default function GraphPage() {
   const { openFileInEditor } = useIDE();
-  const { toast } = useToast();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
@@ -258,9 +257,9 @@ export default function GraphPage() {
         if (!job.running) {
           setPolling(null);
           if (job.error) {
-            toast({ title: "Graph analysis failed", description: job.error, variant: "destructive" });
+            toast.error("Graph analysis failed", { description: job.error });
           } else {
-            toast({ title: "Graph ready", description: `${job.analysis?.nodeCount} nodes, ${job.analysis?.edgeCount} edges` });
+            toast.success("Graph ready", { description: `${job.analysis?.nodeCount} nodes, ${job.analysis?.edgeCount} edges` });
             setActiveJob(job);
           }
         }
@@ -282,9 +281,9 @@ export default function GraphPage() {
       setJobs(prev => [job, ...prev]);
       setActiveJob(job);
       setPolling(job.id);
-      toast({ title: "Analysis started", description: `Scanning ${root}` });
+      toast.success("Analysis started", { description: `Scanning ${root}` });
     } catch (e: any) {
-      toast({ title: "Failed to start", description: e.message, variant: "destructive" });
+      toast.error("Failed to start", { description: e.message });
     }
   }
 

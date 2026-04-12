@@ -157,6 +157,13 @@ Inspired by github.com/rtk-ai/rtk. Every terminal command output is compressed b
 - Terminal panel header shows a live `⚡ -X% tokens` badge once savings exceed 10%
 - Typical savings: `git status` ~65%, `pip install` ~80%, test runners ~90%
 
+## UI & UX Components
+- **Toast notifications:** Fully migrated from Radix `useToast` to [Sonner](https://sonner.emilkowal.ski/) across all pages and components. `components/ui/sonner.tsx` provides a custom Vesper dark theme (`!bg-[#0f0f16]`, `rounded-xl`, `duration: 3500`, `position: bottom-right`). All call sites use `toast.success()`, `toast.error()`, or `toast()` from `"sonner"`.
+- **ThinkingDots:** Animated AI-thinking indicator with avatar badge, staggered bouncing dots, "Thinking…" label, and skeleton preview lines — shown in chat panel while AI is streaming.
+- **Editor skeleton:** When a file is loading, a rich 10-line code-skeleton placeholder fills the Monaco area instead of a bare spinner.
+- **Activity bar:** Keyboard shortcut button (`Keyboard` icon) in the footer toggles the command palette.
+- **File explorer:** Collapse-all button, workspace-aware header, language badge (py/js), refresh syncs workspace metadata. `list_workspaces()` runs live `_detect_language()` per request.
+
 ## AI Provider Authentication
 - **Cookie-based** (ChatGPT, Grok, etc.): Import browser cookies via the Sessions UI
 - **API key-based** (Claude, Gemini, OpenAI API, etc.): Add keys via the Sessions UI

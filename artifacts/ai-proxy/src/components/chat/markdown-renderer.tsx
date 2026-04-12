@@ -20,7 +20,7 @@ import { useRef, useState } from "react";
 import { useExecuteCode, useWriteFile, useCreateFile, getGetFileTreeQueryKey } from "@workspace/api-client-react";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ── Language → suggested file extension map ───────────────────────────────────
 
@@ -131,8 +131,6 @@ function CodeBlock({ code, language, onExecute, isExecuting }: CodeBlockProps) {
   const writeFile  = useWriteFile();
   const createFile = useCreateFile();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-
   const [copied,   setCopied]   = useState(false);
   const [saving,   setSaving]   = useState(false);   // inline save panel open
   const [savePath, setSavePath] = useState(() => suggestFilename(language));
@@ -171,10 +169,10 @@ function CodeBlock({ code, language, onExecute, isExecuting }: CodeBlockProps) {
           Array.isArray(q.queryKey) &&
           String(q.queryKey[0]).includes("file"),
       });
-      toast({ description: `Saved → ${savePath.trim()}` });
+      toast.success(`Saved → ${savePath.trim()}`);
       setSaving(false);
     } catch (err: any) {
-      toast({ description: err?.message ?? "Save failed", variant: "destructive" });
+      toast.error(err?.message ?? "Save failed");
     } finally {
       setIsSaving(false);
     }

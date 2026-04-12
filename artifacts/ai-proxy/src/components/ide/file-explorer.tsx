@@ -29,7 +29,7 @@ import {
   ChevronsLeft, ChevronsUpDown, FolderX, Package, PackagePlus, Plus, Layers,
   ChevronUp, AlertCircle, CheckCircle2,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace, type Workspace } from "@/contexts/workspace-context";
 import { ImportExportModal } from "@/components/import-export-modal";
@@ -235,7 +235,6 @@ function WorkspaceSwitcher() {
   const [busy, setBusy]       = useState(false);
   const wrapRef               = useRef<HTMLDivElement>(null);
   const inputRef              = useRef<HTMLInputElement>(null);
-  const { toast }             = useToast();
   const listboxId             = useId();
 
   // Close on click-outside
@@ -257,12 +256,12 @@ function WorkspaceSwitcher() {
     setBusy(true);
     try {
       await createWorkspace(newName.trim());
-      toast({ description: `Workspace "${newName.trim()}" created` });
+      toast.success(`Workspace "${newName.trim()}" created`);
       setNewName("");
       setCreating(false);
       setOpen(false);
     } catch (err: any) {
-      toast({ description: err?.message ?? "Failed to create workspace", variant: "destructive" });
+      toast.error(err?.message ?? "Failed to create workspace");
     } finally {
       setBusy(false);
     }
@@ -417,7 +416,6 @@ function NoWorkspacePanel() {
   const {
     workspaces, isLoading, createWorkspace, switchWorkspace,
   } = useWorkspace();
-  const { toast }           = useToast();
   const [name, setName]     = useState("");
   const [busy, setBusy]     = useState(false);
   const inputRef            = useRef<HTMLInputElement>(null);
@@ -429,10 +427,10 @@ function NoWorkspacePanel() {
     setBusy(true);
     try {
       await createWorkspace(name.trim());
-      toast({ description: `Workspace "${name.trim()}" created` });
+      toast.success(`Workspace "${name.trim()}" created`);
       setName("");
     } catch (err: any) {
-      toast({ description: err?.message ?? "Failed to create workspace", variant: "destructive" });
+      toast.error(err?.message ?? "Failed to create workspace");
     } finally {
       setBusy(false);
     }
@@ -526,7 +524,6 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
   const [pkg, setPkg]         = useState("");
   const [ver, setVer]         = useState("");
   const [showDeps, setShowDeps] = useState(true);
-  const { toast }             = useToast();
   const inputRef              = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -538,11 +535,11 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
     if (!pkg.trim()) return;
     try {
       await installDep(pkg.trim(), ver.trim() || undefined);
-      toast({ description: `${pkg.trim()} installed into "${currentWorkspace?.name}"` });
+      toast.success(`${pkg.trim()} installed`, { description: `Ready to use in "${currentWorkspace?.name}"` });
       setPkg("");
       setVer("");
     } catch (err: any) {
-      toast({ description: err?.message ?? "Install failed", variant: "destructive" });
+      toast.error(err?.message ?? "Install failed");
     }
   };
 
@@ -698,7 +695,6 @@ interface NewItemState { type: "file" | "folder"; parentPath: string; }
 export function FileExplorer({ activePath }: { activePath: string | null }) {
   const { openFileInEditor, importedProject, toggleSidebarPanel } = useIDE();
   const { currentWorkspace, refreshWorkspaces }                   = useWorkspace();
-  const { toast }                                                  = useToast();
   const [showImported, setShowImported]   = useState(true);
   const [showInstallDep, setShowInstallDep] = useState(false);
   const queryClient                         = useQueryClient();
@@ -783,9 +779,9 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
       await createFileMutation.mutateAsync({ data: { path: fullPath, type: newItem.type } });
       await refetch();
       if (newItem.type === "file") openFileInEditor(fullPath);
-      toast({ description: `Created "${newItemName.trim()}"` });
+      toast.success(`Created "${newItemName.trim()}"`);
     } catch (e: any) {
-      toast({ description: e?.message || "Failed to create", variant: "destructive" });
+      toast.error(e?.message || "Failed to create");
     }
     setNewItem(null);
     setNewItemName("");
@@ -798,9 +794,9 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     try {
       await deleteFileMutation.mutateAsync({ params: { path } });
       await refetch();
-      toast({ description: `Deleted "${name}"` });
+      toast.success(`Deleted "${name}"`);
     } catch {
-      toast({ description: "Failed to delete", variant: "destructive" });
+      toast.error("Failed to delete");
     }
   };
 
@@ -814,9 +810,9 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     try {
       await renameFileMutation.mutateAsync({ data: { old_path: oldPath, new_path: newPath } });
       await refetch();
-      toast({ description: `Renamed to "${newName}"` });
+      toast.success(`Renamed to "${newName}"`);
     } catch (e: any) {
-      toast({ description: e?.message || "Failed to rename", variant: "destructive" });
+      toast.error(e?.message || "Failed to rename");
     }
   };
 
@@ -828,7 +824,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    toast({ description: "Exporting workspace…" });
+    toast("Exporting workspace…");
   };
 
   // ── Clear workspace ──────────────────────────────────────────────────────
@@ -845,7 +841,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     }
     await refetch();
     setSelectedPaths(new Set());
-    toast({ description: `Cleared — ${deleted} item${deleted !== 1 ? "s" : ""} removed.` });
+    toast.success(`Cleared — ${deleted} item${deleted !== 1 ? "s" : ""} removed.`);
   };
 
   // Compute search results

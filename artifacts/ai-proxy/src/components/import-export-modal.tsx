@@ -13,7 +13,7 @@ import {
   GitBranch, Send, Trash2, Key, RefreshCw, Lock, Unlock,
   GitCommit,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetFileTreeQueryKey } from "@workspace/api-client-react";
 
@@ -156,7 +156,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // ── Files tab
@@ -233,7 +232,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       if (!resp.ok) { const e = await resp.json().catch(() => ({ error: resp.statusText })); throw new Error(e.error); }
       const data = await resp.json() as UploadResult;
       setUploadResult(data); setUploadProgress(100); invalidateTree();
-      toast({ title: `Imported ${data.uploaded} file(s)` });
+      toast.success(`Imported ${data.uploaded} file(s)`);
     } catch (err) { setUploadError(String(err)); }
     finally { setUploading(false); }
   };
@@ -252,12 +251,12 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       if (data.success) {
         setTokenStatus({ set: true, masked: data.masked });
         setTokenInput("");
-        toast({ title: "GitHub token saved" });
+        toast.success("GitHub token saved");
       } else {
-        toast({ title: "Failed to save token", description: data.error, variant: "destructive" });
+        toast.error("Failed to save token", { description: data.error });
       }
     } catch (err) {
-      toast({ title: "Error", description: String(err), variant: "destructive" });
+      toast.error("Error", { description: String(err) });
     } finally {
       setSavingToken(false);
     }
@@ -266,7 +265,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
   const handleClearToken = async () => {
     await fetch(`${BASE}/api/files/git-token`, { method: "DELETE" });
     setTokenStatus({ set: false, masked: null });
-    toast({ title: "GitHub token removed" });
+    toast.success("GitHub token removed");
   };
 
   // ── Clone handler
@@ -281,7 +280,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       });
       const data = await resp.json() as GithubResult;
       setCloneResult(data);
-      if (data.success) { invalidateTree(); toast({ title: `Cloned ${data.repoName}` }); }
+      if (data.success) { invalidateTree(); toast.success(`Cloned ${data.repoName}`); }
     } catch (err) {
       setCloneResult({ success: false, error: String(err) });
     } finally { setCloning(false); }
@@ -298,7 +297,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       });
       const data = await resp.json() as GitOpResult;
       setPullResult(data);
-      if (data.success) { invalidateTree(); toast({ title: "Pull complete" }); }
+      if (data.success) { invalidateTree(); toast.success("Pull complete"); }
     } catch (err) {
       setPullResult({ success: false, error: String(err) });
     } finally { setPulling(false); }
@@ -319,7 +318,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       });
       const data = await resp.json() as GitOpResult;
       setPushResult(data);
-      if (data.success) toast({ title: "Push complete" });
+      if (data.success) toast.success("Push complete");
     } catch (err) {
       setPushResult({ success: false, error: String(err) });
     } finally { setPushing(false); }
@@ -334,7 +333,7 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       const data = await resp.json() as GitStatusResult;
       setStatusResult(data);
     } catch (err) {
-      toast({ title: "Error", description: String(err), variant: "destructive" });
+      toast.error("Error", { description: String(err) });
     } finally { setStatusLoading(false); }
   };
 
@@ -349,9 +348,9 @@ export function ImportExportModal({ open, onClose }: ImportExportModalProps) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      toast({ title: "Download started" });
+      toast.success("Download started");
     } catch (err) {
-      toast({ title: "Export failed", description: String(err), variant: "destructive" });
+      toast.error("Export failed", { description: String(err) });
     } finally {
       setTimeout(() => setExporting(false), 1500);
     }

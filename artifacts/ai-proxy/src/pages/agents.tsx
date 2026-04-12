@@ -8,7 +8,7 @@ import {
   AlertCircle, Camera, List, FileDiff, FolderPlus, FileCode,
   WifiOff, Server, Search, FileText, Bot,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 const BASE_URL = ((import.meta.env.BASE_URL as string) ?? "/").replace(/\/$/, "") + "/";
 
@@ -333,7 +333,6 @@ function AgentCard({ agent, onStop, onClear }: {
 function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
   const { data: aisData } = useListAis();
   const { selectedAi } = useIDE();
-  const { toast } = useToast();
   const [task, setTask] = useState("");
   const [aiId, setAiId] = useState(selectedAi === "__auto__" ? "" : selectedAi);
   const [modelId, setModelId] = useState("__auto__");
@@ -386,9 +385,9 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
       setTask("");
       setOpen(false);
       onSpawned();
-      toast({ description: "Agent spawned successfully" });
+      toast.success("Agent spawned successfully");
     } catch {
-      toast({ description: "Failed to spawn agent", variant: "destructive" });
+      toast.error("Failed to spawn agent");
     } finally {
       setSpawning(false);
     }
@@ -527,7 +526,6 @@ function SpawnForm({ onSpawned }: { onSpawned: () => void }) {
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const refresh = useCallback(async () => {
@@ -560,7 +558,7 @@ export default function AgentsPage() {
   const handleClearDone = async () => {
     await clearDone();
     refresh();
-    toast({ description: "Cleared completed agents" });
+    toast.success("Cleared completed agents");
   };
 
   const running = agents.filter(a => a.running);

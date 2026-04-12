@@ -12,7 +12,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useIDE } from "@/contexts/ide-context";
 import { VesperLogo } from "@/components/vesper-logo";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Plus, TerminalSquare, MessageSquare, Settings, Loader2,
   ChevronDown, Check, Zap, ChevronUp, PanelRight, PanelBottom,
@@ -39,7 +39,6 @@ function TierBadge({ tier }: { tier?: string }) {
 // ── Model selector ────────────────────────────────────────────────────────────
 export function ModelSelector({ compact = false }: { compact?: boolean }) {
   const { selectedAi, setSelectedAi } = useIDE();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const setModelMutation = useSetModel();
   const { data: aisData, isLoading } = useListAis({
@@ -73,7 +72,7 @@ export function ModelSelector({ compact = false }: { compact?: boolean }) {
           queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
           const ai = ais.find((a: any) => a.id === aiId);
           const m = ai?.models?.find((m: any) => m.id === modelId);
-          toast({ description: `Switched to ${m?.name ?? modelId}` });
+          toast.success(`Switched to ${m?.name ?? modelId}`);
         },
       }
     );

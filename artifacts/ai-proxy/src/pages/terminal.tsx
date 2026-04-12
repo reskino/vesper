@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTerminalExec, useGetTerminalCwd, getGetTerminalCwdQueryKey } from "@workspace/api-client-react";
 import { Loader2, TerminalSquare, Trash2, Copy, ChevronRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface HistoryEntry {
   id: number;
@@ -22,7 +22,6 @@ export default function TerminalPage() {
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
   const idCounter = useRef(0);
 
   const { data: cwdInfo } = useGetTerminalCwd({
@@ -73,7 +72,7 @@ export default function TerminalPage() {
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Copied to clipboard" });
+    toast.success("Copied to clipboard");
   };
 
   return (

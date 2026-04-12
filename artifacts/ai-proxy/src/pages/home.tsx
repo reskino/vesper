@@ -9,7 +9,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Send, PlusCircle, Paperclip, X, Folder, FileIcon, FileCode,
   FileText, FileJson, ChevronRight, ChevronDown, Loader2,
@@ -307,7 +307,6 @@ function ModelSelectorDropdown({
 // ── Main component ────────────────────────────────────────────────────────────
 export function Home() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { data: aisData, isLoading: isLoadingAis } = useListAis({
     query: {
       queryKey: getListAisQueryKey(),
@@ -435,10 +434,10 @@ export function Home() {
           queryClient.invalidateQueries({ queryKey: getListAisQueryKey() });
           const ai = aisData?.ais?.find((a: any) => a.id === aiId);
           const m = ai?.models?.find((m: any) => m.id === modelId);
-          toast({ title: "Model updated", description: `Switched to ${m?.name ?? modelId}` });
+          toast.success("Model updated", { description: `Switched to ${m?.name ?? modelId}` });
         },
         onError: () => {
-          toast({ title: "Failed to switch model", variant: "destructive" });
+          toast.error("Failed to switch model");
         },
       }
     );

@@ -26,7 +26,7 @@ import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { useAgentMode, AGENT_OPTIONS } from "@/contexts/agent-context";
 import { exportChatAsPdf, exportChatAsDocxBackend } from "@/lib/export-chat";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // File-mode helpers
@@ -119,12 +119,11 @@ function buildCommands(deps: {
   triggerNewChat:     () => void;
   openShortcutsModal: () => void;
   setMobileTab:       (t: any) => void;
-  toast:              ReturnType<typeof useToast>["toast"];
 }): Command[] {
   const {
     setAgentType, currentAgentId,
     toggleChat, toggleTerminal, triggerNewChat,
-    openShortcutsModal, setMobileTab, toast,
+    openShortcutsModal, setMobileTab,
   } = deps;
 
   const ICON = { size: "h-3.5 w-3.5 shrink-0" };
@@ -138,7 +137,7 @@ function buildCommands(deps: {
     icon:  <span className={`w-2 h-2 rounded-full shrink-0 ${a.dotColor}`} />,
     onRun: () => {
       setAgentType(a.id);
-      toast({ description: `Switched to ${a.name}` });
+      toast.success(`Switched to ${a.name}`);
     },
   }));
 
@@ -161,17 +160,17 @@ function buildCommands(deps: {
     {
       id: "export-pdf",  group: "Export", label: "Export Chat as PDF",
       icon: <Printer className={`${ICON.size} text-rose-400`} />,
-      onRun: () => toast({ description: "Use the Export menu in the chat header to export as PDF." }),
+      onRun: () => toast("Use the Export menu in the chat header to export as PDF."),
     },
     {
       id: "export-docx", group: "Export", label: "Export Chat as Word (.docx)",
       icon: <FileDown className={`${ICON.size} text-sky-400`} />,
-      onRun: () => toast({ description: "Use the Export menu in the chat header to download Word." }),
+      onRun: () => toast("Use the Export menu in the chat header to download Word."),
     },
     {
       id: "save-workspace", group: "Export", label: "Save Chat to Workspace",
       icon: <FolderInput className={`${ICON.size} text-emerald-400`} />,
-      onRun: () => toast({ description: "Use the Export menu in the chat header to save to workspace." }),
+      onRun: () => toast("Use the Export menu in the chat header to save to workspace."),
     },
     {
       id: "show-shortcuts", group: "Help", label: "Show Keyboard Shortcuts",
@@ -198,8 +197,6 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
   const { openFileInEditor, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab } = useIDE();
   const { currentWorkspace } = useWorkspace();
   const { setAgentType, agentType } = useAgentMode();
-  const { toast } = useToast();
-
   const [query, setQuery]   = useState(initialQuery);
   const [cursor, setCursor] = useState(0);
   const inputRef   = useRef<HTMLInputElement>(null);
@@ -233,8 +230,8 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
 
   // ── Commands ───────────────────────────────────────────────────────────────
   const allCommands = useMemo(() =>
-    buildCommands({ setAgentType, currentAgentId: agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab, toast }),
-    [setAgentType, agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab, toast]
+    buildCommands({ setAgentType, currentAgentId: agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab }),
+    [setAgentType, agentType, toggleChat, toggleTerminal, triggerNewChat, openShortcutsModal, setMobileTab]
   );
   const commandResults = useMemo(() => {
     if (!isCommandMode) return allCommands;

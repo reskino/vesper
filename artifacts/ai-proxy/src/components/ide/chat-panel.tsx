@@ -40,6 +40,7 @@ import { TerminalOutput } from "@/components/chat/terminal-output";
 import { AgentSelector } from "@/components/chat/agent-selector";
 import { useIDE } from "@/contexts/ide-context";
 import { useAgentMode, type AgentType } from "@/contexts/agent-context";
+import { useWorkspace } from "@/contexts/workspace-context";
 import { ArrowUpRight } from "lucide-react";
 import { buildProjectContext, countProjectFiles } from "@/lib/folder-import";
 import { detectIntent, AGENT_PREFIXES, type IntentResult } from "@/lib/intent-detect";
@@ -480,6 +481,7 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat } = useIDE();
   const { agentType } = useAgentMode();
+  const { currentWorkspace, deps } = useWorkspace();
   const { toast } = useToast();
   const { data: aisData } = useListAis({
     query: { queryKey: getListAisQueryKey(), staleTime: 15_000, refetchInterval: 30_000 },
@@ -523,10 +525,25 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     setProjectDetached(false);
   }, [newChatKey]);
 
+  // File picker tree (only loaded when picker is open)
   const { data: treeData } = useGetFileTree(
     { path: "", depth: 10 },
     { query: { queryKey: getGetFileTreeQueryKey({ path: "", depth: 10 }), enabled: isFilePickerOpen } }
   );
+
+  // Workspace tree — fetched continuously when a workspace is active, used for AI context
+  const wsTreePath = currentWorkspace?.relPath ?? "";
+  const { data: wsTreeData } = useGetFileTree(
+    { path: wsTreePath, depth: 4 },
+    {
+      query: {
+        queryKey: getGetFileTreeQueryKey({ path: wsTreePath, depth: 4 }),
+        enabled: !!currentWorkspace,
+        staleTime: 30_000,
+      },
+    }
+  );
+
   const { data: attachedFileData } = useReadFile(
     { path: attachedFile || "" },
     { query: { enabled: !!attachedFile, queryKey: getReadFileQueryKey({ path: attachedFile || "" }) } }
@@ -571,6 +588,49 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   // Whether the imported project is active in this chat
   const hasImportedProject = !!importedProject && !projectDetached;
 
+  // ── Workspace context builder ─────────────────────────────────────────────
+  // Builds a compact text summary of the active workspace for AI context.
+  // Included automatically with every message when a workspace is selected.
+  function buildWsContext(): string | null {
+    if (!currentWorkspace || !wsTreeData?.tree) return null;
+
+    const lines: string[] = [
+      `# Active Workspace: ${currentWorkspace.name}`,
+      `Language: ${currentWorkspace.language ?? "unknown"}`,
+      `Path: ${currentWorkspace.relPath}`,
+    ];
+
+    if (deps.length > 0) {
+      lines.push(`\nInstalled packages (${deps.length}):`);
+      deps.slice(0, 20).forEach(d => {
+        lines.push(`  • ${d.name}${d.version ? `@${d.version}` : ""}`);
+      });
+      if (deps.length > 20) lines.push(`  …and ${deps.length - 20} more`);
+    }
+
+    // Compact file tree (max 60 entries)
+    const fileLines: string[] = [];
+    function walkTree(node: FileNode, depth: number) {
+      if (fileLines.length >= 60) return;
+      if (node.name.startsWith(".")) return;
+      const indent = "  ".repeat(depth);
+      fileLines.push(`${indent}${node.type === "directory" ? "📁 " : ""}${node.name}`);
+      if (node.type === "directory" && node.children) {
+        node.children.forEach(c => walkTree(c, depth + 1));
+      }
+    }
+    if (wsTreeData.tree.children) {
+      wsTreeData.tree.children.forEach(c => walkTree(c, 0));
+    }
+
+    if (fileLines.length > 0) {
+      lines.push(`\nWorkspace files:\n${fileLines.join("\n")}`);
+    }
+
+    lines.push("\n(You have read/write access to all files in this workspace.)");
+    return lines.join("\n");
+  }
+
   const send = useCallback(async (text: string, forceAgent?: AgentType) => {
     if (!text.trim() || isPending) return;
 
@@ -607,16 +667,25 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         fallback: isAuto,
       };
 
-      // Build file context: workspace attachment + imported project
+      // Build file context: workspace overview + explicit attachment + imported project
       const fileContent = uploadedFile?.content ?? attachedFileData?.content;
       const filePath    = uploadedFile?.name ?? attachedFile ?? "file";
 
       let files: Array<{ path: string; content: string }> = [];
+
+      // 1. Active workspace overview (file tree + installed deps)
+      const wsCtx = buildWsContext();
+      if (wsCtx) {
+        files.push({ path: "__workspace_context__", content: wsCtx });
+      }
+
+      // 2. Explicitly attached file (from sidebar picker or upload)
       if (fileContent) {
         files.push({ path: filePath, content: fileContent });
       }
+
+      // 3. Imported folder project (full contents)
       if (hasImportedProject && importedProject) {
-        // Build rich context from the imported project and inject it as a special file
         const projectCtx = buildProjectContext(importedProject);
         files.push({ path: "__imported_project_context__", content: projectCtx });
       }
@@ -639,7 +708,8 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Unexpected error. Please try again.", error: true }]);
     }
-  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPending, isAuto, selectedAi, agentType, detectedIntent, intentDismissed, conversationId, uploadedFile, attachedFileData, attachedFile, askAi, askAiWithContext, hasImportedProject, importedProject, currentWorkspace, wsTreeData, deps]);
 
   const handleSend  = () => { send(prompt); setPrompt(""); clearAttachment(); };
   const handleRegen = () => { const last = [...messages].reverse().find(m => m.role === "user"); if (last) send(last.content); };
@@ -679,6 +749,17 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">Chat</span>
           </div>
           <AgentSelector isPending={isPending} />
+          {/* Workspace context indicator */}
+          {currentWorkspace && wsTreeData?.tree && (
+            <span
+              title={`Workspace "${currentWorkspace.name}" is included as AI context`}
+              className="flex items-center gap-1 text-[10px] bg-violet-950/50 text-violet-400/80
+                border border-violet-800/40 px-1.5 py-0.5 rounded-md font-semibold select-none"
+            >
+              <span className="h-1 w-1 rounded-full bg-violet-400" />
+              {currentWorkspace.name}
+            </span>
+          )}
           {hasImportedProject && (
             <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary/80 border border-primary/15 px-1.5 py-0.5 rounded-md font-semibold">
               <FolderOpen className="h-2.5 w-2.5" />

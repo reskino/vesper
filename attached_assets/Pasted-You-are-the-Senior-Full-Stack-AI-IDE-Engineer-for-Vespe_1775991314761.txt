@@ -1,0 +1,40 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state:
+- Workspace management with per-project isolation and safe dependency installs (uv + venv / npm) is complete
+- Agent Selector UI is implemented and placed in Chat header (supports Orchestrator, Builder, Scholar, Search Master, etc. with Zustand store)
+- Chat input: "How can I help you?", quick action buttons (Explain code, Fix bug, Refactor, etc.), Enter to send, Ctrl+Enter to run
+- Chat header shows "Agent Idle", "Auto · 3 AIs ready", agent role hints
+
+Task:
+Upgrade the chat system so the chat box intelligently understands user messages and performs the right actions.
+- Frontend: Add lightweight intent detection (keyword/regex + optional simple LLM classification) before sending.
+- Detect common intents and map to agents/actions:
+  - "fix/refactor/debug/bug" → Code Surgeon on active file or selected code
+  - "research/explain/learn/paper" → Research Scholar
+  - "search/find/codebase" → Search Master
+  - "document/write readme/comments" → Docs Weaver
+  - "plan/coordinate/build" → Orchestrator or Builder
+  - "install/add package/dependency" → Trigger safe install in current workspace
+  - "optimize/performance/types" → Code Surgeon
+- Use currentAgent from Zustand store; if intent suggests a better agent, propose switch with confirmation.
+- Show "Detecting intent... Thinking as [Agent Name]" + suggested action chips (user can confirm or edit).
+- On backend (Python): Enhance message handler to accept intent/agent flag and route to appropriate specialist logic. Execute safe actions (read/write files in current workspace only, run uv/npm install with correct cwd, terminal commands with timeout).
+- Visual feedback: loading states, toast notifications for success/error, progress for installs.
+- Safety: Never auto-execute file edits or terminal commands without explicit user confirmation. Respect current workspace path.
+- Keep flow natural and conversational. Optimize for mobile (large targets) and slow networks (minimal latency).
+
+Follow exact response structure:
+1. Context Reference (mention completed workspace + Agent Selector and live chat behavior)
+2. Implementation Plan (numbered steps – frontend intent utils + chat input updates + backend handler)
+3. Complete Code (full files only: updated chat components, new intent detection utils, backend Python changes — clean, well-commented)
+4. Exact file paths and integration instructions (how to hook into existing chat input and Agent Selector)
+5. Testing steps (test natural commands like "fix the bug in main.py", "install requests", "research best practices for Zustand", "refactor this function" — verify correct agent routing, workspace isolation, mobile view + 3G throttle)
+6. Suggested next priority after this change
+
+Deliver only production-quality, clean, commented TypeScript + Tailwind + Python code. Ensure security (confirmation flows, workspace-bound operations). Use existing dependencies where possible.
+
+Begin.

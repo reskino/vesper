@@ -36,6 +36,12 @@ export interface InstalledDep {
   version: string;
 }
 
+export interface WorkspaceDepsInfo {
+  language: string;
+  deps:     InstalledDep[];
+  lockfile: string | null;
+}
+
 interface InstallState {
   status:  "idle" | "running" | "done" | "error";
   message: string;
@@ -44,7 +50,7 @@ interface InstallState {
 interface WorkspaceContextValue {
   /** All known workspaces */
   workspaces:      Workspace[];
-  /** The currently active workspace (null = global root, no scoping) */
+  /** The currently active workspace (null = no workspace selected) */
   currentWorkspace: Workspace | null;
   /** True while the workspace list is loading */
   isLoading:        boolean;
@@ -63,7 +69,11 @@ interface WorkspaceContextValue {
 
   /** Installed packages in the current workspace */
   deps:        InstalledDep[];
+  /** Lockfile name if present (e.g. "uv.lock", "package-lock.json") */
+  lockfile:    string | null;
   installState: InstallState;
+  /** Tool used for last install (e.g. "uv add", "npm install") */
+  lastInstallTool: string | null;
   /** Refresh the deps list */
   refreshDeps: () => Promise<void>;
 }
@@ -111,6 +121,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [currentWorkspace, setCurrentWs]    = useState<Workspace | null>(readStored);
   const [isLoading, setIsLoading]           = useState(false);
   const [deps, setDeps]                     = useState<InstalledDep[]>([]);
+  const [lockfile, setLockfile]             = useState<string | null>(null);
+  const [lastInstallTool, setLastInstallTool] = useState<string | null>(null);
   const [installState, setInstallState]     = useState<InstallState>({
     status: "idle", message: "",
   });
@@ -151,14 +163,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // ── Fetch deps ───────────────────────────────────────────────────────────
   const refreshDeps = useCallback(async () => {
-    if (!currentWorkspace) { setDeps([]); return; }
+    if (!currentWorkspace) { setDeps([]); setLockfile(null); return; }
     try {
-      const data = await apiFetch<{ deps: InstalledDep[] }>(
+      const data = await apiFetch<{ deps: InstalledDep[]; lockfile: string | null }>(
         `/workspaces/${currentWorkspace.id}/deps`,
       );
-      if (mountedRef.current) setDeps(data.deps ?? []);
+      if (!mountedRef.current) return;
+      setDeps(data.deps ?? []);
+      setLockfile(data.lockfile ?? null);
     } catch {
-      if (mountedRef.current) setDeps([]);
+      if (mountedRef.current) { setDeps([]); setLockfile(null); }
     }
   }, [currentWorkspace]);
 
@@ -169,6 +183,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setCurrentWs(ws);
     writeStored(ws);
     setDeps([]);
+    setLockfile(null);
+    setLastInstallTool(null);
     setInstallState({ status: "idle", message: "" });
   }, []);
 
@@ -193,16 +209,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!currentWorkspace) throw new Error("No workspace selected");
     setInstallState({ status: "running", message: `Installing ${pkg}…` });
     try {
-      const data = await apiFetch<{ output: string }>(
+      const data = await apiFetch<{ output: string; lockfile?: string | null; tool?: string }>(
         `/workspaces/${currentWorkspace.id}/install`,
         {
           method: "POST",
           body: JSON.stringify({ package: pkg, version: version || undefined }),
         },
       );
+      if (data.lockfile) setLockfile(data.lockfile);
+      if (data.tool) setLastInstallTool(data.tool);
       setInstallState({
         status:  "done",
-        message: data.output?.slice(-200) || `${pkg} installed successfully`,
+        message: data.output?.slice(-300) || `${pkg} installed successfully`,
       });
       await refreshDeps();
       await refreshWorkspaces();
@@ -222,6 +240,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refreshWorkspaces,
       installDep,
       deps,
+      lockfile,
+      lastInstallTool,
       installState,
       refreshDeps,
     }}>

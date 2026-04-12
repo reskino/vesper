@@ -402,9 +402,117 @@ function WorkspaceSwitcher() {
   );
 }
 
+// ── No-Workspace Onboarding Panel ────────────────────────────────────────────
+function NoWorkspacePanel() {
+  const {
+    workspaces, isLoading, createWorkspace, switchWorkspace,
+  } = useWorkspace();
+  const { toast }           = useToast();
+  const [name, setName]     = useState("");
+  const [busy, setBusy]     = useState(false);
+  const inputRef            = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      await createWorkspace(name.trim());
+      toast({ description: `Workspace "${name.trim()}" created` });
+      setName("");
+    } catch (err: any) {
+      toast({ description: err?.message ?? "Failed to create workspace", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-5 py-8 gap-6">
+      {/* Icon + headline */}
+      <div className="text-center space-y-2">
+        <div className="h-14 w-14 mx-auto rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Layers className="h-7 w-7 text-primary/70" />
+        </div>
+        <h2 className="text-sm font-bold text-foreground">Workspace Required</h2>
+        <p className="text-[11px] text-[#9898b8] leading-relaxed max-w-[220px]">
+          Each project lives in its own isolated folder with separate files and dependencies.
+        </p>
+      </div>
+
+      {/* Create new workspace */}
+      <div className="w-full space-y-2">
+        <p className="text-[10px] font-bold text-[#7878a8] uppercase tracking-widest">Create workspace</p>
+        <div className="flex gap-1.5">
+          <input
+            ref={inputRef}
+            className="flex-1 h-9 px-3 text-xs bg-[#141420] border border-[#1e1e2e]
+              focus:border-primary/50 rounded-xl outline-none text-foreground
+              placeholder:text-[#7878a8] disabled:opacity-50"
+            placeholder="Project name…"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") handleCreate(); }}
+            disabled={busy}
+          />
+          <button
+            onClick={handleCreate}
+            disabled={!name.trim() || busy}
+            className="h-9 px-3 text-xs font-bold bg-primary text-primary-foreground
+              rounded-xl hover:bg-primary/80 disabled:opacity-40 transition-colors
+              flex items-center gap-1.5 shrink-0"
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Create
+          </button>
+        </div>
+      </div>
+
+      {/* Switch to existing */}
+      {(isLoading || workspaces.length > 0) && (
+        <div className="w-full space-y-1.5">
+          <p className="text-[10px] font-bold text-[#7878a8] uppercase tracking-widest">
+            {isLoading ? "Loading…" : "Existing workspaces"}
+          </p>
+          {isLoading ? (
+            <div className="flex justify-center py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-[#7878a8]" />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {workspaces.map(ws => (
+                <button
+                  key={ws.id}
+                  onClick={() => switchWorkspace(ws)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl
+                    bg-[#141420] border border-[#1a1a24] hover:border-primary/30
+                    hover:bg-[#111118] transition-all text-left group"
+                >
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${
+                    ws.language === "python" ? "bg-green-400"
+                    : ws.language === "js" ? "bg-blue-400"
+                    : "bg-[#7878a8]"
+                  }`} />
+                  <span className="text-xs font-semibold text-foreground truncate flex-1">
+                    {ws.name}
+                  </span>
+                  <span className="text-[9px] text-[#7878a8] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    Open →
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Install Dependency Panel ──────────────────────────────────────────────────
 function InstallDepPanel({ onClose }: { onClose: () => void }) {
-  const { currentWorkspace, installDep, installState, deps, refreshDeps } = useWorkspace();
+  const { currentWorkspace, installDep, installState, deps, lockfile, lastInstallTool, refreshDeps } = useWorkspace();
   const [pkg, setPkg]         = useState("");
   const [ver, setVer]         = useState("");
   const [showDeps, setShowDeps] = useState(true);
@@ -428,24 +536,39 @@ function InstallDepPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const isRunning = installState.status === "running";
-  const lang      = currentWorkspace?.language ?? "unknown";
+  const isRunning  = installState.status === "running";
+  const lang       = currentWorkspace?.language ?? "unknown";
+
+  const lockfileColor = lockfile === "uv.lock"
+    ? "text-green-400 border-green-500/30 bg-green-500/10"
+    : lockfile === "package-lock.json"
+      ? "text-blue-400 border-blue-500/30 bg-blue-500/10"
+      : "";
 
   return (
     <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a0c]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#1a1a24]">
-        <div className="flex items-center gap-2">
-          <PackagePlus className="h-3.5 w-3.5 text-primary/70" />
-          <span className="text-[11px] font-bold text-[#9898b8] uppercase tracking-wider">Install Dependency</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <PackagePlus className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+          <span className="text-[11px] font-bold text-[#9898b8] uppercase tracking-wider">Install</span>
           {lang !== "unknown" && (
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border
               ${lang === "python"
                 ? "text-green-400 border-green-500/30 bg-green-500/10"
                 : "text-blue-400 border-blue-500/30 bg-blue-500/10"
               }`}>
-              {lang === "python" ? "uv + venv" : "npm"}
+              {lang === "python" ? "uv add" : "npm"}
             </span>
+          )}
+          {lockfile && (
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${lockfileColor} flex items-center gap-0.5`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current inline-block" />
+              {lockfile}
+            </span>
+          )}
+          {lastInstallTool && !lockfile && (
+            <span className="text-[9px] text-[#7878a8]">via {lastInstallTool}</span>
           )}
         </div>
         <button
@@ -579,24 +702,29 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
   // ── Workspace-scoped tree path ───────────────────────────────────────────
-  // If a named workspace is active, scope the tree to its subdirectory.
-  // Otherwise fall back to the global root.
-  const treePath   = currentWorkspace?.relPath ?? "";
-  const treeDepth  = 10;
+  // Only query the file tree when a workspace is actually selected.
+  // When null, we show the <NoWorkspacePanel> onboarding UI instead of
+  // loading the raw monorepo root (which would expose internal folders like
+  // artifacts/, lib/, python-backend/, etc.)
+  const treePath  = currentWorkspace?.relPath ?? "";
+  const treeDepth = 6;
+  const treeEnabled = !!currentWorkspace;
 
   const { data: treeData, isLoading, refetch } = useGetFileTree(
     { path: treePath, depth: treeDepth },
     {
       query: {
-        // Key changes when workspace changes → fresh fetch automatically
         queryKey: getGetFileTreeQueryKey({ path: treePath, depth: treeDepth }),
+        enabled:  treeEnabled,
       },
     },
   );
 
   // When workspace changes, invalidate cache and clear selection / rename state
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: getGetFileTreeQueryKey({ path: treePath, depth: treeDepth }) });
+    if (treeEnabled) {
+      queryClient.invalidateQueries({ queryKey: getGetFileTreeQueryKey({ path: treePath, depth: treeDepth }) });
+    }
     setSelectedPaths(new Set());
     setRenamingPath(null);
     setNewItem(null);
@@ -854,146 +982,146 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
         </div>
       </div>
 
-      {/* ── New-item creation input ───────────────────────────────────────── */}
-      {newItem && (
-        <div className="px-2 py-1.5 border-b border-[#1a1a24] shrink-0 bg-[#0d0d12]">
-          <p className="text-[10px] text-[#9898b8] mb-1">
-            New {newItem.type}
-            {newItem.parentPath
-              ? ` in ${newItem.parentPath}`
-              : currentWorkspace ? ` in ${currentWorkspace.name}` : " in workspace root"
-            }
-          </p>
-          <div className="flex gap-1">
-            <input
-              ref={newItemInputRef}
-              className="flex-1 text-xs bg-[#141420] border border-[#1a1a24] focus:border-primary/60 rounded px-2 py-1 outline-none text-foreground transition-colors"
-              placeholder={newItem.type === "file" ? "filename.ts" : "folder-name"}
-              value={newItemName}
-              onChange={e => setNewItemName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter") handleCreate();
-                if (e.key === "Escape") { setNewItem(null); setNewItemName(""); }
-              }}
-            />
-            <button className="h-6 px-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors" onClick={handleCreate}>
-              <Check className="h-3 w-3" />
-            </button>
-            <button className="h-6 px-1.5 text-xs border border-[#1a1a24] rounded hover:bg-[#141420] text-[#9898b8] transition-colors" onClick={() => { setNewItem(null); setNewItemName(""); }}>
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Empty workspace state ─────────────────────────────────────────── */}
-      {currentWorkspace && !isLoading && treeData?.tree && !treeData.tree.children?.length && (
-        <div className="px-3 py-4 text-center shrink-0">
-          <FolderOpen className="h-8 w-8 mx-auto mb-2 text-[#7878a8] opacity-40" />
-          <p className="text-[11px] text-[#7878a8] mb-3">"{currentWorkspace.name}" is empty</p>
-          <button
-            onClick={() => { setNewItem({ type: "file", parentPath: wsRootPath }); setNewItemName(""); }}
-            className="h-7 px-3 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/25
-              rounded-lg hover:bg-primary/20 transition-colors"
-          >
-            + New file
-          </button>
-        </div>
-      )}
-
-      {/* ── File tree ────────────────────────────────────────────────────── */}
-      <ScrollArea className={importedProject ? "h-[40%]" : "flex-1"}>
-        <div className="p-1">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-[#9898b8]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </div>
-          ) : searchResults !== null ? (
-            searchResults.length === 0 ? (
-              <p className="text-center py-8 text-[#9898b8] text-xs">No files match "{searchQuery}"</p>
-            ) : (
-              <div className="py-1">
-                {searchResults.map(file => (
-                  <button
-                    key={file.path}
-                    onClick={() => { openFileInEditor(file.path); setSearchQuery(""); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-3 text-left
-                      text-sm text-[#a0a0c0] active:bg-[#141420] transition-colors rounded-lg"
-                  >
-                    <FileIcon2 name={file.name} />
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{file.name}</p>
-                      <p className="text-[11px] text-[#9898b8] truncate">{file.path}</p>
-                    </div>
-                  </button>
-                ))}
+      {/* ── No workspace selected: show onboarding ───────────────────────── */}
+      {!currentWorkspace ? (
+        <NoWorkspacePanel />
+      ) : (
+        <>
+          {/* ── New-item creation input ─────────────────────────────────── */}
+          {newItem && (
+            <div className="px-2 py-1.5 border-b border-[#1a1a24] shrink-0 bg-[#0d0d12]">
+              <p className="text-[10px] text-[#9898b8] mb-1">
+                New {newItem.type} in {currentWorkspace.name}
+              </p>
+              <div className="flex gap-1">
+                <input
+                  ref={newItemInputRef}
+                  className="flex-1 text-xs bg-[#141420] border border-[#1a1a24] focus:border-primary/60 rounded px-2 py-1 outline-none text-foreground transition-colors"
+                  placeholder={newItem.type === "file" ? "filename.ts" : "folder-name"}
+                  value={newItemName}
+                  onChange={e => setNewItemName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Escape") { setNewItem(null); setNewItemName(""); }
+                  }}
+                />
+                <button className="h-6 px-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors" onClick={handleCreate}>
+                  <Check className="h-3 w-3" />
+                </button>
+                <button className="h-6 px-1.5 text-xs border border-[#1a1a24] rounded hover:bg-[#141420] text-[#9898b8] transition-colors" onClick={() => { setNewItem(null); setNewItemName(""); }}>
+                  <X className="h-3 w-3" />
+                </button>
               </div>
-            )
-          ) : treeData?.tree ? (
-            <TreeItem
-              node={treeData.tree}
-              depth={0}
-              activePath={activePath}
-              renamingPath={renamingPath}
-              selectedPaths={selectedPaths}
-              onSelect={handleSelect}
-              onDelete={handleDelete}
-              onNewFile={dir  => { setNewItem({ type: "file",   parentPath: dir }); setNewItemName(""); }}
-              onNewFolder={dir => { setNewItem({ type: "folder", parentPath: dir }); setNewItemName(""); }}
-              onStartRename={path => setRenamingPath(path)}
-              onConfirmRename={handleConfirmRename}
-              onCancelRename={() => setRenamingPath(null)}
-            />
-          ) : (
-            <p className="text-center py-8 text-[#9898b8] text-xs">No files found</p>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* ── Imported project section ─────────────────────────────────────── */}
-      {importedProject && (
-        <div className="flex-1 flex flex-col min-h-0 border-t border-[#1a1a24]">
-          <button
-            className="shrink-0 flex items-center justify-between px-3 py-1.5 hover:bg-[#141420] transition-colors"
-            onClick={() => setShowImported(v => !v)}
-          >
-            <div className="flex items-center gap-1.5">
-              {showImported ? <ChevronDown className="h-3 w-3 text-[#9898b8]" /> : <ChevronRight className="h-3 w-3 text-[#9898b8]" />}
-              <FolderOpen className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{importedProject.name}</span>
-            </div>
-            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 font-bold">AI context</span>
-          </button>
-          {showImported && (
-            <div className="flex-1 min-h-0">
-              <ImportedTree />
             </div>
           )}
-        </div>
-      )}
 
-      {/* ── Install dependency panel ──────────────────────────────────────── */}
-      {showInstallDep && currentWorkspace && (
-        <InstallDepPanel onClose={() => setShowInstallDep(false)} />
-      )}
+          {/* ── Empty workspace state ──────────────────────────────────── */}
+          {!isLoading && treeData?.tree && !treeData.tree.children?.length && (
+            <div className="px-3 py-6 text-center shrink-0">
+              <FolderOpen className="h-8 w-8 mx-auto mb-2 text-[#7878a8] opacity-40" />
+              <p className="text-[11px] text-[#7878a8] mb-3">"{currentWorkspace.name}" is empty</p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={() => { setNewItem({ type: "file", parentPath: wsRootPath }); setNewItemName(""); }}
+                  className="h-7 px-3 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/25 rounded-lg hover:bg-primary/20 transition-colors"
+                >
+                  + New file
+                </button>
+                <button
+                  onClick={() => setShowInstallDep(true)}
+                  className="h-7 px-3 text-[11px] font-semibold bg-[#141420] text-[#9898b8] border border-[#1e1e2e] rounded-lg hover:bg-[#1e1e2e] hover:text-foreground transition-colors"
+                >
+                  Install dep
+                </button>
+              </div>
+            </div>
+          )}
 
-      {/* No workspace selected nudge for install dep */}
-      {showInstallDep && !currentWorkspace && (
-        <div className="shrink-0 border-t border-[#1a1a24] px-3 py-3 text-center">
-          <p className="text-[11px] text-[#9898b8]">
-            Select or create a workspace first to install packages.
-          </p>
-          <button onClick={() => setShowInstallDep(false)} className="mt-1 text-[10px] text-[#7878a8] hover:text-foreground">Dismiss</button>
-        </div>
-      )}
+          {/* ── File tree ──────────────────────────────────────────────── */}
+          <ScrollArea className={importedProject ? "h-[40%]" : "flex-1"}>
+            <div className="p-1">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8 text-[#9898b8]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              ) : searchResults !== null ? (
+                searchResults.length === 0 ? (
+                  <p className="text-center py-8 text-[#9898b8] text-xs">No files match "{searchQuery}"</p>
+                ) : (
+                  <div className="py-1">
+                    {searchResults.map(file => (
+                      <button
+                        key={file.path}
+                        onClick={() => { openFileInEditor(file.path); setSearchQuery(""); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-3 text-left
+                          text-sm text-[#a0a0c0] active:bg-[#141420] transition-colors rounded-lg"
+                      >
+                        <FileIcon2 name={file.name} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground truncate">{file.name}</p>
+                          <p className="text-[11px] text-[#9898b8] truncate">{file.path}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : treeData?.tree ? (
+                <TreeItem
+                  node={treeData.tree}
+                  depth={0}
+                  activePath={activePath}
+                  renamingPath={renamingPath}
+                  selectedPaths={selectedPaths}
+                  onSelect={handleSelect}
+                  onDelete={handleDelete}
+                  onNewFile={dir  => { setNewItem({ type: "file",   parentPath: dir }); setNewItemName(""); }}
+                  onNewFolder={dir => { setNewItem({ type: "folder", parentPath: dir }); setNewItemName(""); }}
+                  onStartRename={path => setRenamingPath(path)}
+                  onConfirmRename={handleConfirmRename}
+                  onCancelRename={() => setRenamingPath(null)}
+                />
+              ) : (
+                <p className="text-center py-8 text-[#9898b8] text-xs">No files found</p>
+              )}
+            </div>
+          </ScrollArea>
 
-      {/* ── Keyboard hint ────────────────────────────────────────────────── */}
-      {multiCount === 0 && !importedProject && !isLoading && treeData?.tree && !showInstallDep && (
-        <div className="hidden md:block shrink-0 px-3 py-2 border-t border-[#1a1a24]">
-          <p className="text-[10px] text-[#7878a8] leading-relaxed">
-            Ctrl+Click or ⌘+Click to select multiple files · Workspace scoped
-          </p>
-        </div>
+          {/* ── Imported project section ───────────────────────────────── */}
+          {importedProject && (
+            <div className="flex-1 flex flex-col min-h-0 border-t border-[#1a1a24]">
+              <button
+                className="shrink-0 flex items-center justify-between px-3 py-1.5 hover:bg-[#141420] transition-colors"
+                onClick={() => setShowImported(v => !v)}
+              >
+                <div className="flex items-center gap-1.5">
+                  {showImported ? <ChevronDown className="h-3 w-3 text-[#9898b8]" /> : <ChevronRight className="h-3 w-3 text-[#9898b8]" />}
+                  <FolderOpen className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{importedProject.name}</span>
+                </div>
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 font-bold">AI context</span>
+              </button>
+              {showImported && (
+                <div className="flex-1 min-h-0">
+                  <ImportedTree />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Install dependency panel ───────────────────────────────── */}
+          {showInstallDep && (
+            <InstallDepPanel onClose={() => setShowInstallDep(false)} />
+          )}
+
+          {/* ── Keyboard hint ──────────────────────────────────────────── */}
+          {multiCount === 0 && !importedProject && !isLoading && treeData?.tree && !showInstallDep && (
+            <div className="hidden md:block shrink-0 px-3 py-2 border-t border-[#1a1a24]">
+              <p className="text-[10px] text-[#7878a8] leading-relaxed">
+                Ctrl+Click or ⌘+Click to multi-select · workspace isolated
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Import/Export modal ───────────────────────────────────────────── */}

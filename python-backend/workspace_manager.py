@@ -70,9 +70,20 @@ def _detect_language(ws_abs: str) -> str:
     p = Path(ws_abs)
     if (p / "package.json").exists():
         return "js"
-    if list(p.glob("*.py")) or (p / "requirements.txt").exists() or (p / "pyproject.toml").exists():
+    if (p / "pyproject.toml").exists() or (p / "requirements.txt").exists() or (p / "uv.lock").exists():
+        return "python"
+    if list(p.glob("*.py")):
         return "python"
     return "unknown"
+
+
+def _lockfile_status(ws_abs: str, lang: str) -> Optional[str]:
+    """Return lockfile name if it exists, else None."""
+    if lang == "python" and (Path(ws_abs) / "uv.lock").exists():
+        return "uv.lock"
+    if lang == "js" and (Path(ws_abs) / "package-lock.json").exists():
+        return "package-lock.json"
+    return None
 
 
 def _find_uv() -> Optional[str]:
@@ -142,10 +153,27 @@ def get_workspace_deps(workspace_id: str) -> Tuple[Dict[str, Any], int]:
 
     lang = _detect_language(ws_abs)
     deps: List[Dict[str, str]] = []
+    lockfile = _lockfile_status(ws_abs, lang)
 
     if lang == "python":
+        uv = _find_uv()
         venv_python = Path(ws_abs) / ".venv" / "bin" / "python"
-        if venv_python.exists():
+
+        # Prefer uv pip list (reads from the workspace venv)
+        if uv and (Path(ws_abs) / "pyproject.toml").exists():
+            try:
+                r = subprocess.run(
+                    [uv, "pip", "list", "--format=json"],
+                    capture_output=True, text=True, timeout=15, cwd=ws_abs,
+                )
+                if r.returncode == 0:
+                    raw = json.loads(r.stdout)
+                    deps = [{"name": p["name"], "version": p["version"]} for p in raw]
+            except Exception as exc:
+                logger.warning("uv pip list failed for %s: %s", slug, exc)
+
+        # Fallback: query the venv's Python interpreter
+        elif venv_python.exists():
             try:
                 r = subprocess.run(
                     [str(venv_python), "-m", "pip", "list", "--format=json"],
@@ -155,7 +183,7 @@ def get_workspace_deps(workspace_id: str) -> Tuple[Dict[str, Any], int]:
                     raw = json.loads(r.stdout)
                     deps = [{"name": p["name"], "version": p["version"]} for p in raw]
             except Exception as exc:
-                logger.warning("Failed to list Python deps for %s: %s", slug, exc)
+                logger.warning("pip list failed for %s: %s", slug, exc)
 
     elif lang == "js":
         pkg_file = Path(ws_abs) / "package.json"
@@ -170,7 +198,7 @@ def get_workspace_deps(workspace_id: str) -> Tuple[Dict[str, Any], int]:
             except Exception:
                 pass
 
-    return {"success": True, "language": lang, "deps": deps}, 200
+    return {"success": True, "language": lang, "deps": deps, "lockfile": lockfile}, 200
 
 
 def install_dependency(workspace_id: str, package: str, version: Optional[str] = None) -> Tuple[Dict[str, Any], int]:
@@ -212,42 +240,115 @@ def install_dependency(workspace_id: str, package: str, version: Optional[str] =
 # ── Private installers ────────────────────────────────────────────────────────
 
 def _install_python(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
-    venv = Path(ws_abs) / ".venv"
+    """
+    Install a Python package using uv (preferred) or pip fallback.
+
+    uv workflow (fast, lockfile-aware):
+      1. uv init --no-readme   (creates pyproject.toml + .venv + uv.lock)
+      2. uv add <pkg>          (adds to pyproject.toml, updates uv.lock, installs)
+
+    pip fallback (when uv is not available):
+      1. python3 -m venv .venv
+      2. .venv/bin/pip install <pkg>
+    """
     uv = _find_uv()
 
-    # Create venv if missing
-    if not venv.exists():
-        logger.info("Creating venv at %s", venv)
-        if uv:
-            r = subprocess.run(
-                [uv, "venv", str(venv)],
-                capture_output=True, text=True, timeout=60, cwd=ws_abs,
-            )
-        else:
-            r = subprocess.run(
-                ["python3", "-m", "venv", str(venv)],
-                capture_output=True, text=True, timeout=120, cwd=ws_abs,
-            )
-        if r.returncode != 0:
-            return {"error": f"Could not create virtual environment:\n{r.stderr[:600]}"}
-
-    # Install package
     if uv:
-        python_bin = str(venv / "bin" / "python")
-        cmd = [uv, "pip", "install", pkg_spec, "--python", python_bin]
+        return _install_python_uv(ws_abs, pkg_spec, uv)
     else:
-        cmd = [str(venv / "bin" / "pip"), "install", pkg_spec]
+        return _install_python_pip(ws_abs, pkg_spec)
 
-    logger.info("Installing Python package: %s", pkg_spec)
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=ws_abs)
+
+def _install_python_uv(ws_abs: str, pkg_spec: str, uv: str) -> Dict[str, Any]:
+    """Install via uv init + uv add (creates uv.lock, isolated .venv)."""
+    pyproject = Path(ws_abs) / "pyproject.toml"
+
+    # Step 1: init project if no pyproject.toml yet
+    if not pyproject.exists():
+        logger.info("Running uv init in %s", ws_abs)
+        r = subprocess.run(
+            [uv, "init", "--no-readme"],
+            capture_output=True, text=True, timeout=60, cwd=ws_abs,
+        )
+        if r.returncode != 0:
+            # uv init may fail if the dir already has conflicting files; fallback
+            logger.warning("uv init failed (%s), falling back to uv pip", r.stderr[:200])
+            return _install_python_uv_pip(ws_abs, pkg_spec, uv)
+
+    # Step 2: uv add — installs, updates pyproject.toml + uv.lock
+    logger.info("Running uv add %s in %s", pkg_spec, ws_abs)
+    r = subprocess.run(
+        [uv, "add", pkg_spec],
+        capture_output=True, text=True, timeout=180, cwd=ws_abs,
+    )
     if r.returncode != 0:
-        return {"error": f"Install failed:\n{r.stderr[:800]}"}
+        return {"error": f"uv add failed:\n{(r.stdout + r.stderr)[:800]}"}
+
+    lockfile = "uv.lock" if (Path(ws_abs) / "uv.lock").exists() else None
+    return {
+        "success":  True,
+        "package":  pkg_spec,
+        "language": "python",
+        "output":   (r.stdout + r.stderr)[-600:].strip(),
+        "lockfile": lockfile,
+        "tool":     "uv add",
+    }
+
+
+def _install_python_uv_pip(ws_abs: str, pkg_spec: str, uv: str) -> Dict[str, Any]:
+    """Fallback: uv venv + uv pip install (no pyproject.toml required)."""
+    venv = Path(ws_abs) / ".venv"
+    if not venv.exists():
+        r = subprocess.run(
+            [uv, "venv", str(venv)],
+            capture_output=True, text=True, timeout=60, cwd=ws_abs,
+        )
+        if r.returncode != 0:
+            return {"error": f"Could not create venv:\n{r.stderr[:600]}"}
+
+    python_bin = str(venv / "bin" / "python")
+    r = subprocess.run(
+        [uv, "pip", "install", pkg_spec, "--python", python_bin],
+        capture_output=True, text=True, timeout=120, cwd=ws_abs,
+    )
+    if r.returncode != 0:
+        return {"error": f"uv pip install failed:\n{r.stderr[:800]}"}
 
     return {
         "success":  True,
         "package":  pkg_spec,
         "language": "python",
         "output":   (r.stdout + r.stderr)[-600:].strip(),
+        "lockfile": None,
+        "tool":     "uv pip",
+    }
+
+
+def _install_python_pip(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
+    """Last-resort fallback: python3 -m venv + pip install."""
+    venv = Path(ws_abs) / ".venv"
+    if not venv.exists():
+        r = subprocess.run(
+            ["python3", "-m", "venv", str(venv)],
+            capture_output=True, text=True, timeout=120, cwd=ws_abs,
+        )
+        if r.returncode != 0:
+            return {"error": f"Could not create venv:\n{r.stderr[:600]}"}
+
+    r = subprocess.run(
+        [str(venv / "bin" / "pip"), "install", pkg_spec],
+        capture_output=True, text=True, timeout=180, cwd=ws_abs,
+    )
+    if r.returncode != 0:
+        return {"error": f"pip install failed:\n{r.stderr[:800]}"}
+
+    return {
+        "success":  True,
+        "package":  pkg_spec,
+        "language": "python",
+        "output":   (r.stdout + r.stderr)[-600:].strip(),
+        "lockfile": None,
+        "tool":     "pip",
     }
 
 
@@ -265,18 +366,21 @@ def _install_js(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
         pkg_file.write_text(json.dumps(pkg_data, indent=2))
 
     npm = shutil.which("npm") or "npm"
-    logger.info("Installing JS package: %s", pkg_spec)
+    logger.info("Installing JS package: %s in %s", pkg_spec, ws_abs)
     r = subprocess.run(
-        [npm, "install", pkg_spec, "--save", "--prefer-offline"],
-        capture_output=True, text=True, timeout=120, cwd=ws_abs,
+        [npm, "install", pkg_spec, "--save"],
+        capture_output=True, text=True, timeout=180, cwd=ws_abs,
         env={**os.environ, "NODE_ENV": "development"},
     )
     if r.returncode != 0:
         return {"error": f"npm install failed:\n{r.stderr[:800]}"}
 
+    lockfile = "package-lock.json" if (Path(ws_abs) / "package-lock.json").exists() else None
     return {
         "success":  True,
         "package":  pkg_spec,
         "language": "js",
         "output":   (r.stdout + r.stderr)[-600:].strip(),
+        "lockfile": lockfile,
+        "tool":     "npm install",
     }

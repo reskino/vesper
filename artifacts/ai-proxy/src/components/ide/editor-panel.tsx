@@ -348,7 +348,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
   // ── UI state — editor preferences persisted across sessions ──────────────
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "on"));
+  const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "off"));
   const [fontSize, setFontSizeRaw]    = useState<number>(() => lsGet<number>("vesper.editor.fontSize", 14));
   const [cursorPos, setCursorPos]     = useState({ line: 1, col: 1 });
   const [isSaving, setIsSaving]       = useState(false);
@@ -702,7 +702,6 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         "editorIndentGuide.background1":    "#1a1a2e",
         "editorIndentGuide.activeBackground1": "#2e2e4e",
         "editor.lineHighlightBackground":   "#111118",
-        "editor.lineHighlightBorder":        "#00000000",
         "editorBracketMatch.background":    "#3b2d6b40",
         "editorBracketMatch.border":        "#a78bfa60",
         "scrollbar.shadow":                 "#00000000",
@@ -968,7 +967,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Monaco editor */}
             <ResizablePanel defaultSize={showAiPanel ? 60 : 100} minSize={35}>
-              <div className="h-full bg-[#0d0d12]">
+              <div className="h-full">
                 {currentState?.loaded ? (
                   <MonacoEditor
                     height="100%"

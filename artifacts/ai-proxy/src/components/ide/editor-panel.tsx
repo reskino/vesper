@@ -21,12 +21,21 @@ import {
 import {
   FileIcon, FileCode, FileText, FileJson,
   Save, Loader2, MessageSquare, X, WrapText,
-  ZoomIn, ZoomOut, FilePlus, Zap, AlertCircle,
+  ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
 import { useIDE } from "@/contexts/ide-context";
+import { useWorkspace } from "@/contexts/workspace-context";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+
+// ── Small localStorage helpers ────────────────────────────────────────────────
+function lsGet<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(key); return v !== null ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
+}
+function lsSet(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota / private mode */ }
+}
 
 // ── Language mapping ──────────────────────────────────────────────────────────
 
@@ -274,28 +283,100 @@ function AiSidePanel({
   );
 }
 
+// ── Context-menu item type ────────────────────────────────────────────────────
+interface ContextMenu { x: number; y: number; tab: string }
+
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, setActiveFilePath } = useIDE();
+  const { currentWorkspace } = useWorkspace();
   const theRef = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const { toast } = useToast();
 
-  // ── Tab management ──────────────────────────────────────────────────────────
-  const [openTabs, setOpenTabs]       = useState<string[]>([]);
-  const [activeTab, setActiveTabRaw]  = useState<string | null>(null);
-  const [tabStates, setTabStates]     = useState<Record<string, TabState>>({});
+  // Workspace-scoped persistence key — tabs for workspace A never bleed into workspace B
+  const wsKey = currentWorkspace?.slug ?? "__no_workspace__";
+  const tabsKey = `vesper.editor.tabs.${wsKey}`;
+
+  // ── Tab management — initialised from localStorage ───────────────────────
+  const [openTabs, setOpenTabs]      = useState<string[]>(() => lsGet<string[]>(tabsKey, []));
+  const [activeTab, setActiveTabRaw] = useState<string | null>(() => {
+    const saved = lsGet<string | null>(`${tabsKey}.active`, null);
+    const tabs  = lsGet<string[]>(tabsKey, []);
+    // Guard against a stale active path that's no longer in the open list
+    return saved && tabs.includes(saved) ? saved : (tabs[0] ?? null);
+  });
+  const [tabStates, setTabStates]    = useState<Record<string, TabState>>({});
 
   const setActiveTab = useCallback((p: string | null) => {
     setActiveTabRaw(p);
     setActiveFilePath(p);
-  }, [setActiveFilePath]);
+    lsSet(`${tabsKey}.active`, p);
+  }, [setActiveFilePath, tabsKey]);
 
-  // ── UI state ────────────────────────────────────────────────────────────────
+  // Persist open tab list whenever it changes (but not on every render)
+  useEffect(() => { lsSet(tabsKey, openTabs); }, [openTabs, tabsKey]);
+
+  // Sync activeFilePath into IDEContext on first mount (restoring from localStorage)
+  useEffect(() => {
+    if (activeTab) setActiveFilePath(activeTab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally only on mount
+
+  // When the workspace changes, reload tabs from the new workspace's storage
+  const prevWsKey = useRef(wsKey);
+  useEffect(() => {
+    if (prevWsKey.current === wsKey) return;
+    prevWsKey.current = wsKey;
+    const tabs   = lsGet<string[]>(tabsKey, []);
+    const active = lsGet<string | null>(`${tabsKey}.active`, null);
+    setOpenTabs(tabs);
+    setActiveTabRaw(active && tabs.includes(active) ? active : (tabs[0] ?? null));
+    setTabStates({});
+  }, [wsKey, tabsKey]);
+
+  // ── UI state — editor preferences persisted across sessions ──────────────
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const [wordWrap, setWordWrap]       = useState<"on" | "off">("off");
-  const [fontSize, setFontSize]       = useState(14);
+  const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "off"));
+  const [fontSize, setFontSizeRaw]    = useState<number>(() => lsGet<number>("vesper.editor.fontSize", 14));
   const [cursorPos, setCursorPos]     = useState({ line: 1, col: 1 });
   const [isSaving, setIsSaving]       = useState(false);
+
+  const setWordWrap = useCallback((v: "on" | "off" | ((prev: "on" | "off") => "on" | "off")) => {
+    setWordWrapRaw(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      lsSet("vesper.editor.wordWrap", next);
+      return next;
+    });
+  }, []);
+
+  const setFontSize = useCallback((v: number | ((prev: number) => number)) => {
+    setFontSizeRaw(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      lsSet("vesper.editor.fontSize", next);
+      return next;
+    });
+  }, []);
+
+  // ── Right-click context menu ──────────────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+
+  // Dismiss context menu on Escape or click-outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onKey   = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
+    const onClick  = () => setContextMenu(null);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onClick);
+    };
+  }, [contextMenu]);
+
+  const openContextMenu = useCallback((e: React.MouseEvent, tab: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, tab });
+  }, []);
 
   // Monaco editor + Monaco API refs (so we can call them imperatively)
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
@@ -365,6 +446,32 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     // Free the cached content to avoid memory accumulation
     setTabStates(prev => { const s = { ...prev }; delete s[path]; return s; });
   }, [activeTab, openTabs, setActiveTab]);
+
+  // ── Close Others / Close All ─────────────────────────────────────────────────
+  const closeOthers = useCallback((keepPath: string) => {
+    const removed = openTabs.filter(p => p !== keepPath);
+    setOpenTabs([keepPath]);
+    setActiveTab(keepPath);
+    setTabStates(prev => {
+      const s = { ...prev };
+      removed.forEach(p => delete s[p]);
+      return s;
+    });
+  }, [openTabs, setActiveTab]);
+
+  const closeAll = useCallback(() => {
+    setOpenTabs([]);
+    setActiveTab(null);
+    setTabStates({});
+  }, [setActiveTab]);
+
+  // ── Copy file path to clipboard ───────────────────────────────────────────
+  const copyPath = useCallback((path: string) => {
+    navigator.clipboard.writeText(path).then(
+      ()  => toast({ description: "Path copied to clipboard" }),
+      ()  => toast({ description: path, variant: "destructive" }),
+    );
+  }, [toast]);
 
   // ── Derived state ───────────────────────────────────────────────────────────
   const currentState = activeTab ? tabStates[activeTab] : null;
@@ -528,6 +635,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               <div
                 key={tab}
                 onClick={() => setActiveTab(tab)}
+                onContextMenu={e => openContextMenu(e, tab)}
                 className={`flex items-center gap-1.5 px-3 h-full text-xs cursor-pointer border-r border-[#1a1a24] shrink-0 group transition-colors ${
                   isActive
                     ? "bg-[#0d0d12] text-foreground border-t-2 border-t-primary"
@@ -737,6 +845,63 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           </div>
         )}
       </div>
+
+      {/* ── Tab right-click context menu ─────────────────────────────────────── */}
+      {contextMenu && (
+        <div
+          className="fixed z-[200] min-w-[180px] py-1 rounded-xl
+            bg-[#0e0e16] border border-[#1e1e30]
+            shadow-[0_8px_40px_rgba(0,0,0,0.6)]
+            text-xs text-foreground"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseDown={e => e.stopPropagation()} // prevent click-outside dismissal when clicking items
+        >
+          {/* Close */}
+          <button
+            onClick={() => { closeTab(contextMenu.tab, { stopPropagation: () => {} }); setContextMenu(null); }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1e1e2e] transition-colors"
+          >
+            <X className="h-3 w-3 text-[#9898b8]" />
+            Close
+          </button>
+
+          {/* Close Others */}
+          {openTabs.length > 1 && (
+            <button
+              onClick={() => { closeOthers(contextMenu.tab); setContextMenu(null); }}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1e1e2e] transition-colors"
+            >
+              <FolderX className="h-3 w-3 text-[#9898b8]" />
+              Close Others
+            </button>
+          )}
+
+          {/* Close All */}
+          <button
+            onClick={() => { closeAll(); setContextMenu(null); }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1e1e2e] transition-colors"
+          >
+            <XCircle className="h-3 w-3 text-[#9898b8]" />
+            Close All
+          </button>
+
+          {/* Separator */}
+          {!contextMenu.tab.startsWith("__untitled_") && (
+            <>
+              <div className="my-1 border-t border-[#1e1e2e]" />
+
+              {/* Copy Path */}
+              <button
+                onClick={() => { copyPath(contextMenu.tab); setContextMenu(null); }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1e1e2e] transition-colors text-[#9898b8]"
+              >
+                <Copy className="h-3 w-3" />
+                Copy Path
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

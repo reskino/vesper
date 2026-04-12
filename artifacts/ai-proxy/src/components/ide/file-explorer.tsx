@@ -1111,8 +1111,8 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
       {/* ── Desktop header ───────────────────────────────────────────────── */}
       <div className="hidden md:flex flex-col border-b border-[#1a1a24] shrink-0">
         {/* Row 1: collapse + workspace-aware title + action icons */}
-        <div className="flex items-center justify-between px-2 py-1.5">
-          <div className="flex items-center gap-1 min-w-0">
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <div className="flex items-center gap-1.5 min-w-0 pr-2">
             <button
               onClick={() => toggleSidebarPanel("files")}
               className={`${iconBtn} shrink-0`}
@@ -1133,7 +1133,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {treeEnabled && (
               <button
                 className={`${iconBtn}`}

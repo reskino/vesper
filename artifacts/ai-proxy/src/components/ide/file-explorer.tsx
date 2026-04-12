@@ -948,9 +948,6 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     setCollapseAllKey(0); // reset collapse state so the new tree opens fully
   }, [treePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ref guard — prevents the first-visit auto-seed from firing twice
-  const autoSeedAttempted = useRef(false);
-
   // ── Demo project creation ─────────────────────────────────────────────────
   const createDemoProject = useCallback(async () => {
     if (isCreatingDemo) return;
@@ -992,17 +989,6 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
       setIsCreatingDemo(false);
     }
   }, [isCreatingDemo, createWorkspace, switchWorkspace, queryClient, refreshWorkspaces, reloadFileInEditor, openFileInEditor]);
-
-  // First-visit auto-seed (only once, only when no workspaces exist yet)
-  const { workspaces: allWorkspaces, isLoading: wsLoading } = useWorkspace();
-  useEffect(() => {
-    if (wsLoading) return;
-    if (allWorkspaces.length > 0) return;
-    if (localStorage.getItem(DEMO_SEEDED_KEY)) return;
-    if (autoSeedAttempted.current) return;
-    autoSeedAttempted.current = true;
-    createDemoProject();
-  }, [wsLoading, allWorkspaces.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createFileMutation = useCreateFile();
   const deleteFileMutation = useDeleteFile();
@@ -1073,7 +1059,7 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
     const newPath = parts.join("/");
     if (newPath === oldPath) return;
     try {
-      await renameFileMutation.mutateAsync({ data: { old_path: oldPath, new_path: newPath } });
+      await renameFileMutation.mutateAsync({ data: { oldPath, newPath } });
       await refetch();
       toast.success(`Renamed to "${newName}"`);
     } catch (e: any) {

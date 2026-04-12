@@ -31,11 +31,37 @@ The project uses three parallel workflows (started via the "Project" run button)
 - `python-backend/config.py` — AI provider configurations (12+ providers)
 - `python-backend/playwright_utils.py` — Browser-based AI session management
 - `python-backend/terminal_manager.py` — Shell command execution
+- `python-backend/workspace_manager.py` — Per-project workspace management + isolated dependency installation (uv/venv for Python, npm for JS)
 - `artifacts/api-server/src/index.ts` — API gateway bootstrapper
-- `artifacts/ai-proxy/src/App.tsx` — Frontend entry point
-- `artifacts/ai-proxy/src/contexts/ide-context.tsx` — Global IDE state
+- `artifacts/api-server/src/routes/proxy.ts` — All proxy routes (AI, sessions, files, terminal, workspaces, etc.)
+- `artifacts/ai-proxy/src/App.tsx` — Frontend entry point (provider tree: AgentProvider → WorkspaceProvider → IDEProvider)
+- `artifacts/ai-proxy/src/contexts/ide-context.tsx` — Global IDE state (panels, mobile nav, file opening)
 - `artifacts/ai-proxy/src/contexts/agent-context.tsx` — Shared agent type state (persisted via localStorage); exposes `useAgentMode()`
+- `artifacts/ai-proxy/src/contexts/workspace-context.tsx` — Per-project workspace state (list, current, deps, install); persisted to localStorage
 - `artifacts/ai-proxy/src/components/chat/agent-selector.tsx` — Dropdown in chat panel header for switching agent personas
+- `artifacts/ai-proxy/src/components/ide/file-explorer.tsx` — File tree scoped to active workspace; workspace switcher + Install Dependency panel
+
+## Per-Project Workspace System
+Each workspace is an isolated subdirectory at `workspaces/{slug}/` under `WORKSPACE_ROOT`.
+
+**Storage layout:**
+```
+workspaces/
+  my-app/
+    .vesper/workspace.json   ← metadata (name, language, created)
+    .venv/                   ← Python venv (created on first install)
+    src/                     ← user files
+    package.json             ← JS manifest (created on first npm install)
+    node_modules/            ← JS deps
+```
+
+**API endpoints (all proxied via api-server → Python backend):**
+- `GET /api/workspaces` — list all workspaces
+- `POST /api/workspaces/create` — `{ name }` → creates workspace dir + metadata
+- `GET /api/workspaces/{id}/deps` — list installed packages (pip list / package.json)
+- `POST /api/workspaces/{id}/install` — `{ package, version? }` → uv/pip (Python) or npm (JS)
+
+**File tree scoping:** Pass `path: "workspaces/{slug}"` to the existing `/api/files/tree` endpoint. The tree root will be the workspace directory.
 
 ## Dependencies
 - Python: flask, flask-cors, flask-sqlalchemy, playwright, openai, anthropic, gunicorn

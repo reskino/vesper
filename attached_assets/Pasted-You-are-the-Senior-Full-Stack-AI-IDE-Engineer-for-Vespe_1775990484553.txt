@@ -1,0 +1,35 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site review (April 2026):
+- Explorer now supports per-workspace isolation with dynamic file loading and safe dependency installs (uv + venv / npm) — recently completed
+- Chat header still shows static hints: "Agent Idle", "Orchestrator – 8 specialist roles", "3 AIs", "Auto · 3 AIs ready", "Builder", "Scholar", "Search Master"
+- No interactive Agent Selector dropdown or tabs yet
+- Quick actions and chat input exist but agent switching is not functional
+
+Core Vision: Seamless switching between specialized agents (Orchestrator as coordinator, plus specialists). Dark zinc/neutral theme with violet accents. Fully responsive and performant on mobile/low-end devices.
+
+Task:
+Implement a production-ready Agent Selector UI component.
+- Create typed Agent interface and constant list matching live hints: Orchestrator (default, with "8 specialist roles"), Builder, Scholar (Research Scholar), Search Master, Docs Weaver, Code Surgeon.
+- Include: id, name, icon (Lucide React or emoji fallback), description, capabilities array, accent color, roleHint.
+- Use Zustand store for currentAgent with localStorage persistence.
+- Build clean dropdown component: trigger button showing current agent + role hint, expandable menu with colored icons, name, description, capability tags.
+- Place it prominently in the Chat panel header, right next to "Agent Idle" / "Orchestrator" status or "Auto · 3 AIs" area (make it visually consistent with existing UI).
+- On selection: update current agent, close dropdown, log the switch (prepare for backend routing and smarter chat intent handling), optionally update "Agent Idle" status to "Agent: [Name] Active".
+- Fully accessible (ARIA labels, keyboard navigation), large touch targets for mobile, lightweight and fast (no heavy animations on slow networks).
+- Dark modern professional styling using Tailwind (zinc-900, zinc-700 borders, violet focus rings).
+
+Follow this exact response structure:
+1. Context Reference (mention recent workspace upgrade and live chat header agent hints)
+2. Implementation Plan (numbered steps)
+3. Complete Code (full files only: src/types/agent.ts, src/store/useAgentStore.ts, src/components/AgentSelector.tsx — clean, well-commented TypeScript + Tailwind)
+4. Exact file paths and integration instructions (precise placement in Chat header component, any updates needed to existing ChatPanel or Layout)
+5. Testing steps (desktop + mobile DevTools with 3G throttle, verify persistence after refresh, switching updates UI status, no breakage to workspace or Explorer)
+6. Suggested next priority after this change (e.g. intelligent chat intent routing)
+
+Deliver only production-quality, clean, commented code. Add zustand and lucide-react only if not already installed (note the install command). Optimize for performance and mobile. Ensure dropdown works smoothly alongside the new per-workspace Explorer.
+
+Begin.

@@ -125,6 +125,12 @@ router.get("/graph/jobs/:jobId", proxyToPython);
 router.delete("/graph/jobs/:jobId", proxyToPython);
 router.post("/graph/clear-done", proxyToPython);
 
+// Workspace routes
+router.get("/workspaces", proxyToPython);
+router.post("/workspaces/create", proxyToPython);
+router.get("/workspaces/:workspaceId/deps", proxyToPython);
+router.post("/workspaces/:workspaceId/install", proxyToPython);
+
 // Multi-agent swarm routes
 router.get("/agents", proxyToPython);
 router.post("/agents/spawn", proxyToPython);

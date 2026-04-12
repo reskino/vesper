@@ -1081,6 +1081,55 @@ def terminal_cwd():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Workspaces ───────────────────────────────────────────────────────────────
+
+@app.route("/api/workspaces", methods=["GET"])
+def workspaces_list():
+    from workspace_manager import list_workspaces
+    try:
+        return jsonify({"success": True, "workspaces": list_workspaces()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/workspaces/create", methods=["POST"])
+def workspaces_create():
+    from workspace_manager import create_workspace
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "'name' is required"}), 400
+    try:
+        return jsonify(create_workspace(name))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/workspaces/<workspace_id>/deps", methods=["GET"])
+def workspaces_deps(workspace_id):
+    from workspace_manager import get_workspace_deps
+    try:
+        body, status = get_workspace_deps(workspace_id)
+        return jsonify(body), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/workspaces/<workspace_id>/install", methods=["POST"])
+def workspaces_install(workspace_id):
+    from workspace_manager import install_dependency
+    data = request.get_json() or {}
+    package = (data.get("package") or "").strip()
+    if not package:
+        return jsonify({"error": "'package' is required"}), 400
+    version = (data.get("version") or "").strip() or None
+    try:
+        body, status = install_dependency(workspace_id, package, version)
+        return jsonify(body), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Web Scraper ──────────────────────────────────────────────────────────────
 
 @app.route("/api/scraper/scrape", methods=["POST"])

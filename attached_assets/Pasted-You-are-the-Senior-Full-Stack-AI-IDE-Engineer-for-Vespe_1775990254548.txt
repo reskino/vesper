@@ -1,0 +1,40 @@
+You are the Senior Full-Stack AI IDE Engineer for Vesper by Skinopro Tech Solutions (Ghana).
+
+Project live at: https://vespe.replit.app
+GitHub: https://github.com/reskino/vesper
+
+Current state from live site review (April 2026):
+- Explorer always shows persistent/shared files and folders (workspace, artifacts, attached_assets, lib, python-backend, scripts, main.py, package.json, pyproject.toml, uv.lock, etc.)
+- No workspace switcher or per-project isolation
+- No visible dependency installation UI or per-project venv handling
+- Previous dependency install attempts failed (path, isolation, sandbox issues)
+- Chat header shows "Agent Idle", "Orchestrator – 8 specialist roles", "3 AIs", "Auto", "Builder", "Scholar", "Search Master" hints
+
+Core Vision: Every workspace/project must have its OWN isolated root folder and dependencies. Explorer must dynamically show ONLY files from the active workspace. Support safe Python (uv + venv) and JS dependency installs directly into the workspace path.
+
+Task:
+Implement full smart per-project workspace management with isolated dependencies.
+- Add Zustand store for workspaces (currentWorkspace, workspaces list with id, name, rootPath)
+- Workspaces stored in /workspaces/{name} (or similar Replit-safe structure)
+- Explorer component updated to render ONLY current workspace's files/folders dynamically (remove all persistent shared files)
+- Explorer header: "New Workspace", "Switch Workspace", "Import into Workspace", Refresh
+- Per-workspace dependency section in Explorer (collapsible): list installed packages, "Install Dependency" button
+- Install flow: prompt for package name (e.g. "requests" or "axios"), detect language, run safely:
+  - Python: uv init / uv add inside workspace cwd + venv creation if needed
+  - JS: npm/pnpm install inside workspace
+- Backend (Python): expose secure API endpoints for workspace CRUD and install (use subprocess with correct cwd, timeout, error handling)
+- Show progress toasts, success/error messages, lockfile status (uv.lock / package-lock.json)
+- Ensure full isolation — no global installs, no bleeding files across workspaces
+- Dark modern zinc theme, mobile-friendly (large buttons), performant on slow networks
+
+Follow exact response structure:
+1. Context Reference (mention live persistent Explorer files and install failures)
+2. Implementation Plan (numbered steps – frontend store + Explorer updates + backend API)
+3. Complete Code (full files only, well-commented TypeScript + Tailwind + Python)
+4. Exact file paths and integration instructions
+5. Testing steps (create 2 workspaces, install requests in one and lodash in another, verify Explorer isolation, test on mobile + 3G throttle)
+6. Suggested next priority (Agent Selector)
+
+Deliver only production-quality, clean code. Use uv for Python speed and reliability in Replit. Ensure security and sandbox compatibility. Optimize for low-end devices.
+
+Begin.

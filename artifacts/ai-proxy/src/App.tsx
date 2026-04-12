@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { IDELayout } from "@/components/layout/ide-layout";
 import { IDEProvider } from "@/contexts/ide-context";
 import { AgentProvider } from "@/contexts/agent-context";
+import { WorkspaceProvider } from "@/contexts/workspace-context";
 
 const queryClient = new QueryClient();
 
@@ -14,9 +15,11 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AgentProvider>
-            <IDEProvider>
-              <IDELayout />
-            </IDEProvider>
+            <WorkspaceProvider>
+              <IDEProvider>
+                <IDELayout />
+              </IDEProvider>
+            </WorkspaceProvider>
           </AgentProvider>
           <Toaster />
         </WouterRouter>

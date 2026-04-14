@@ -1,4 +1,4 @@
-import { Files, Bot, Key, History, HelpCircle, Settings, Users, Network, Keyboard } from "lucide-react";
+import { Files, Bot, Key, History, HelpCircle, Settings, Users, Network, Keyboard, Globe } from "lucide-react";
 import { useIDE, type SidebarPanel } from "@/contexts/ide-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "wouter";
@@ -14,7 +14,7 @@ const PANELS: { id: Exclude<SidebarPanel, null>; icon: React.ElementType; label:
 ];
 
 export function ActivityBar() {
-  const { sidebarPanel, toggleSidebarPanel, openShortcutsModal } = useIDE();
+  const { sidebarPanel, toggleSidebarPanel, openShortcutsModal, showPreview, togglePreview, previewUrl } = useIDE();
 
   return (
     <aside className="hidden sm:flex shrink-0 w-11 flex-col items-center bg-[#080809] border-r border-[#131318] py-2 z-10">
@@ -50,9 +50,35 @@ export function ActivityBar() {
         })}
       </div>
 
-      {/* ── Bottom separator + shortcuts + settings ───────────────────── */}
+      {/* ── Bottom separator + preview + shortcuts + settings ──────────── */}
       <div className="flex flex-col items-center gap-0.5 pb-1">
         <div className="w-5 h-px bg-[#1a1a24] mb-1" />
+
+        <Tooltip delayDuration={400}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={togglePreview}
+              className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150
+                ${showPreview
+                  ? "text-emerald-400 bg-emerald-500/15"
+                  : "text-[#7878a8] hover:text-emerald-400 hover:bg-[#111118]"
+                }`}
+              aria-label="Toggle preview"
+            >
+              {showPreview && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-emerald-400 rounded-r-full" />
+              )}
+              <Globe style={{ width: 15, height: 15 }} />
+              {previewUrl && !showPreview && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400
+                  ring-2 ring-[#080809] animate-pulse" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs font-semibold">
+            Preview {previewUrl ? `(${previewUrl.replace(/https?:\/\//, "")})` : ""}
+          </TooltipContent>
+        </Tooltip>
 
         {/* Keyboard shortcuts reference */}
         <Tooltip delayDuration={400}>

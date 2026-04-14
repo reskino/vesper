@@ -98,6 +98,14 @@ interface IDEContextValue {
   showWelcomeModal: boolean;
   openWelcomeModal:  () => void;
   closeWelcomeModal: () => void;
+
+  // ── Preview panel (embedded browser for localhost ports) ─────────────────
+  showPreview: boolean;
+  previewUrl: string | null;
+  openPreview:  (url: string) => void;
+  setPreviewUrl: (url: string | null) => void;
+  closePreview: () => void;
+  togglePreview: () => void;
 }
 
 const IDEContext = createContext<IDEContextValue | null>(null);
@@ -149,6 +157,17 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const openShortcutsModal  = useCallback(() => setShowShortcutsModal(true),  []);
   const closeShortcutsModal = useCallback(() => setShowShortcutsModal(false), []);
+
+  // ── Preview panel ──────────────────────────────────────────────────────────
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl]   = useState<string | null>(null);
+
+  const openPreview = useCallback((url: string) => {
+    setPreviewUrl(url);
+    setShowPreview(true);
+  }, []);
+  const closePreview = useCallback(() => setShowPreview(false), []);
+  const togglePreview = useCallback(() => setShowPreview(v => !v), []);
 
   // ── Welcome modal ─────────────────────────────────────────────────────────
   const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(() => {
@@ -217,6 +236,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       openCommandPalette, openCommandMode, closeCommandPalette,
       showShortcutsModal, openShortcutsModal, closeShortcutsModal,
       showWelcomeModal, openWelcomeModal, closeWelcomeModal,
+      showPreview, previewUrl, openPreview, setPreviewUrl, closePreview, togglePreview,
     }}>
       {children}
     </IDEContext.Provider>

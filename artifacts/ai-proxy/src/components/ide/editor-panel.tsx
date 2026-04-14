@@ -292,7 +292,7 @@ interface ContextMenu { x: number; y: number; tab: string }
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, onReloadFileRef, onReloadMobileFileRef,
-    setActiveFilePath, openCommandPalette, openCommandMode } = useIDE();
+    setActiveFilePath, openCommandPalette, openCommandMode, openPreview } = useIDE();
   const { currentWorkspace, venvStatus, ensureVenv } = useWorkspace();
   const theRef       = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const theReloadRef = mobile ? onReloadMobileFileRef : onReloadFileRef;
@@ -1182,16 +1182,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
               <div className="flex items-center gap-1">
                 {serverUrl && (
-                  <a
-                    href={serverUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-violet-600/20 text-violet-300 hover:bg-violet-600/40 transition-colors font-mono"
-                    title={`Open ${serverUrl}`}
+                  <button
+                    onClick={() => openPreview(serverUrl)}
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/40 transition-colors font-mono"
+                    title={`Open preview: ${serverUrl}`}
                   >
                     <ExternalLink className="h-2.5 w-2.5" />
                     {serverUrl.replace("http://localhost", "localhost")}
-                  </a>
+                  </button>
                 )}
                 <button
                   className="text-[#7878a8] hover:text-emerald-400 transition-colors p-0.5 rounded"

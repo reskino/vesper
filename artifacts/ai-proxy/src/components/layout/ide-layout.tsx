@@ -20,6 +20,7 @@ import { ShortcutsModal, useShortcutsKey } from "@/components/ide/shortcuts-moda
 import { PanelErrorBoundary } from "@/components/ide/error-boundary";
 import { ChatPanel } from "@/components/ide/chat-panel";
 import { TerminalPanel } from "@/components/ide/terminal-panel";
+import { PreviewPanel } from "@/components/ide/preview-panel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 // Lazy-load heavy pages that are only shown on demand.
@@ -429,24 +430,34 @@ function CollapsedChatRail() {
 // Desktop: IDE workspace (editor + chat split + terminal)
 // ─────────────────────────────────────────────────────────────────────────────
 function DesktopWorkspace() {
-  const { showChat, showTerminal, newChatKey } = useIDE();
+  const { showChat, showTerminal, showPreview, newChatKey } = useIDE();
 
   return (
     <ResizablePanelGroup direction="vertical" className="flex-1 min-w-0 h-full">
       <ResizablePanel defaultSize={showTerminal ? 70 : 100} minSize={30}>
-        {/* Horizontal flex: resizable panels on the left, collapsed rail (if needed) on the right */}
         <div className="flex h-full min-w-0">
           <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
-            <ResizablePanel defaultSize={showChat ? 55 : 100} minSize={30}>
+            <ResizablePanel defaultSize={showChat ? (showPreview ? 35 : 55) : (showPreview ? 50 : 100)} minSize={20}>
               <PanelErrorBoundary label="Editor">
                 <EditorPanel />
               </PanelErrorBoundary>
             </ResizablePanel>
 
+            {showPreview && (
+              <>
+                <ResizableHandle className="w-px bg-border hover:bg-emerald-500/40 transition-colors cursor-col-resize" />
+                <ResizablePanel defaultSize={showChat ? 30 : 50} minSize={20} maxSize={70}>
+                  <PanelErrorBoundary label="Preview">
+                    <PreviewPanel />
+                  </PanelErrorBoundary>
+                </ResizablePanel>
+              </>
+            )}
+
             {showChat && (
               <>
                 <ResizableHandle className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize" />
-                <ResizablePanel defaultSize={45} minSize={25} maxSize={65}>
+                <ResizablePanel defaultSize={showPreview ? 35 : 45} minSize={20} maxSize={65}>
                   <PanelErrorBoundary label="Chat">
                     <ChatPanel newChatKey={newChatKey} />
                   </PanelErrorBoundary>
@@ -455,7 +466,6 @@ function DesktopWorkspace() {
             )}
           </ResizablePanelGroup>
 
-          {/* Collapsed rail appears when chat is hidden */}
           {!showChat && <CollapsedChatRail />}
         </div>
       </ResizablePanel>

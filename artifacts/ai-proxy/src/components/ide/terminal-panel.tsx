@@ -469,12 +469,9 @@ export function TerminalPanel() {
     termRef.current?.write(makePrompt(cwdRef.current));
   }, []);
 
-  // ── Smart run button ────────────────────────────────────────────────────────
-  // Use an absolute path so the workspace cwd doesn't duplicate the relative prefix
   const activeFileAbsPath = activeFilePath ? `/home/runner/workspace/${activeFilePath}` : null;
   const baseRunCmd = activeFileAbsPath ? getRunCommand(activeFileAbsPath) : null;
 
-  // Prepend auto-install if a manifest exists in the workspace root
   const runCmd = (() => {
     if (!baseRunCmd || !activeFileAbsPath) return null;
     const wsCwd = currentWorkspace
@@ -484,11 +481,9 @@ export function TerminalPanel() {
     if (["py", "pyw"].includes(ext)) {
       const req    = `${wsCwd}/requirements.txt`;
       const venvPy = `${wsCwd}/.venv/bin/python`;
-      // Install deps with venv pip, then run with venv Python — never touches Nix system Python
-      const install = `[ -f "${req}" ] && "${venvPy}" -m pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' ; `;
-      // Replace python3/python in the run command with the absolute venv python
+      const install = `[ -f "${req}" ] && "${venvPy}" -m pip install -q -r "${req}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied'`;
       const runWithVenv = baseRunCmd.replace(/^python3?(?=\s)/, `"${venvPy}"`);
-      return `${install}${runWithVenv}`;
+      return `${install}\n${runWithVenv}`;
     }
     if (["js", "mjs", "cjs", "ts", "tsx"].includes(ext)) {
       const pkg = `${wsCwd}/package.json`;
@@ -499,9 +494,10 @@ export function TerminalPanel() {
 
   const runFile = useCallback(() => {
     if (!runCmd || !termRef.current) return;
-    termRef.current.writeln(runCmd);
+    const displayCmd = runCmd.split("\n").pop() ?? runCmd;
+    termRef.current.writeln(displayCmd);
     lineRef.current = "";
-    runCommand(runCmd, 300); // longer timeout for scripts
+    runCommand(runCmd, 55);
   }, [runCmd, runCommand]);
 
   // ── Render ──────────────────────────────────────────────────────────────────

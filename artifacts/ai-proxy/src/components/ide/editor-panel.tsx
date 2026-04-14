@@ -580,20 +580,16 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     let cmd: string;
     if (ext === "py") {
       if (isServer) {
-        // Background mode: start the server, wait 6 s for startup logs, then
-        // return. The process keeps running after the HTTP response.
-        // Using a unique log file per run so concurrent runs don't collide.
         const logFile = `/tmp/vesper_run_$$.log`;
         cmd = [
-          pipInstall.replace(/ ; $/, ""),  // install step (no trailing semicolon)
+          `([ -f "${reqTxt}" ] && "${venvPy}" -m pip install -q -r "${reqTxt}" --disable-pip-version-check 2>&1 | grep -v 'already satisfied' || true)`,
           `"${venvPy}" "${absPath}" >"${logFile}" 2>&1 &`,
           `SERVER_PID=$!`,
           `sleep 6`,
           `cat "${logFile}"`,
-          `kill -0 $SERVER_PID 2>/dev/null && echo "[Server running — PID $SERVER_PID]" || echo "[Server exited]"`,
-        ].join(" ; ");
+          `if kill -0 $SERVER_PID 2>/dev/null; then echo "[Server running — PID $SERVER_PID]"; else echo "[Server exited]"; fi`,
+        ].join("\n");
       } else {
-        // Regular script — venv pip install then run, within proxy timeout.
         cmd = `${pipInstall}"${venvPy}" "${absPath}"`;
       }
     } else if (["js", "mjs", "cjs"].includes(ext)) {
@@ -605,7 +601,6 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     }
 
     const wsId = currentWorkspace?.id ?? null;
-    // Server mode returns in ~6 s; scripts get 55 s (safely under the 60 s proxy limit).
     const runTimeout = isServer ? 30 : 55;
     const toastId = toast.loading(`Running ${filename}…`);
     setIsRunning(true);
@@ -615,10 +610,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         data: { command: cmd, cwd: wsCwd, workspace_id: wsId, timeout: runTimeout },
       });
       setRunOutput({ stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode });
-      if (res.exitCode === 0) {
+      const hasServerPid = /\[Server running/.test(res.stdout ?? "");
+      if (res.exitCode === 0 && hasServerPid) {
+        toast.success(`${filename} server started`, { id: toastId, description: "Running in background" });
+      } else if (res.exitCode === 0) {
         toast.success(`${filename} finished`, { id: toastId, description: `Exit 0 · ${res.elapsedMs}ms` });
       } else if (res.exitCode === 124) {
-        toast(`${filename} stopped`, { id: toastId, description: "Server process ended" });
+        toast(`${filename} stopped`, { id: toastId, description: "Process timed out" });
       } else {
         toast.error(`${filename} exited with code ${res.exitCode}`, { id: toastId });
       }
@@ -704,10 +702,15 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
           : openTabs[(idx + 1) % openTabs.length];
         setActiveTab(next);
       }
+      // F5 — run current file
+      if (e.key === "F5" && activeTab) {
+        e.preventDefault();
+        runFile();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave, activeTab, closeTab, openNewTab, openCommandPalette, openTabs, setActiveTab]);
+  }, [handleSave, activeTab, closeTab, openNewTab, openCommandPalette, openTabs, setActiveTab, runFile]);
 
   // ── Vesper Monaco theme — zinc/violet palette ─────────────────────────────
   const handleBeforeMount = useCallback((monaco: typeof MonacoNS) => {
@@ -924,7 +927,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                     onClick={runFile}
                     disabled={isRunning}
                     className="h-6 w-6 flex items-center justify-center rounded transition-colors text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
-                    title={`Run file${pyVenvHint}`}
+                    title={`Run file (F5)${pyVenvHint}`}
                   >
                     {isRunning
                       ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -976,6 +979,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 { keys: ["Ctrl", "T"],        label: "New untitled tab" },
                 { keys: ["Ctrl", "Tab"],      label: "Next tab" },
                 { keys: ["Ctrl", "⇧", "Tab"], label: "Previous tab" },
+                { keys: ["F5"],               label: "Run file" },
                 { keys: ["Ctrl", "`"],        label: "Toggle terminal" },
                 { keys: ["Ctrl", "J"],        label: "Toggle chat" },
               ].map(({ keys, label }) => (
@@ -1066,25 +1070,31 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
 
       {/* ── Run output panel — appears when a file has been executed ─────────── */}
       {runOutput !== null && (() => {
-        // Detect a server URL in stdout/stderr (uvicorn, flask, etc.)
         const allOutput = (runOutput.stdout ?? "") + (runOutput.stderr ?? "");
         const urlMatch = allOutput.match(/https?:\/\/(?:0\.0\.0\.0|127\.0\.0\.1|localhost)(:\d+)?/);
         const serverUrl = urlMatch
           ? urlMatch[0].replace("0.0.0.0", "localhost").replace("127.0.0.1", "localhost")
           : null;
         const isTimeout = runOutput.exitCode === 124;
+        const isServerRunning = /\[Server running/.test(runOutput.stdout ?? "");
+        const copyOutput = () => {
+          navigator.clipboard?.writeText(allOutput.trim());
+          toast.success("Copied to clipboard");
+        };
         return (
           <div className="shrink-0 border-t border-[#1a1a24] bg-[#0a0a10] max-h-56 overflow-y-auto">
             <div className="flex items-center justify-between px-3 py-1 border-b border-[#1a1a24]">
               <div className="flex items-center gap-2 text-[10px] font-mono">
                 <span className={`px-1.5 py-0.5 rounded font-mono ${
-                  runOutput.exitCode === 0
+                  isServerRunning
+                    ? "bg-emerald-900/40 text-emerald-400"
+                    : runOutput.exitCode === 0
                     ? "bg-emerald-900/40 text-emerald-400"
                     : isTimeout
                     ? "bg-amber-900/40 text-amber-400"
                     : "bg-red-900/40 text-red-400"
                 }`}>
-                  {runOutput.exitCode === 0 ? "✓ Exit 0" : isTimeout ? "⏹ Stopped" : `✗ Exit ${runOutput.exitCode}`}
+                  {isServerRunning ? "● Server Running" : runOutput.exitCode === 0 ? "✓ Exit 0" : isTimeout ? "⏹ Stopped" : `✗ Exit ${runOutput.exitCode}`}
                 </span>
                 <span className="text-[#7878a8]">Output</span>
               </div>
@@ -1101,6 +1111,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                     {serverUrl.replace("http://localhost", "localhost")}
                   </a>
                 )}
+                <button
+                  className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
+                  onClick={copyOutput}
+                  title="Copy output"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
                 <button
                   className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
                   onClick={() => setRunOutput(null)}

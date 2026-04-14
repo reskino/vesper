@@ -86,7 +86,8 @@ function InlineRename({ initialValue, onConfirm, onCancel }: {
   );
 }
 
-// ── TreeItem ──────────────────────────────────────────────────────────────────
+const HIDDEN_NAMES = new Set([".venv", ".git", ".vesper", "__pycache__", "node_modules", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pypackages__", ".DS_Store"]);
+
 interface TreeItemProps {
   node: FileNode;
   depth: number;
@@ -122,8 +123,7 @@ function TreeItem({
   const isRenaming = renamingPath === node.path;
   const indent     = depth * 10 + 8;
 
-  // Hide dotfiles (but not .vesper — it's internal, just ignore it)
-  if (node.name.startsWith(".")) return null;
+  if (HIDDEN_NAMES.has(node.name)) return null;
 
   const btnHover = "h-4 w-4 flex items-center justify-center rounded hover:bg-[#1e1e2e] text-[#9898b8] hover:text-foreground transition-colors";
 
@@ -1181,13 +1181,26 @@ export function FileExplorer({ activePath }: { activePath: string | null }) {
           </div>
         </div>
 
-        {/* Row 2: workspace switcher + context path */}
+        {/* Row 2: workspace switcher + search */}
         <div className="px-2 pb-1.5 flex items-center gap-1.5">
           <WorkspaceSwitcher />
-          {currentWorkspace && (
-            <span className="text-[9px] text-[#505070] truncate">
-              workspaces/{currentWorkspace.id}
-            </span>
+          {treeEnabled && (
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[#7878a8] pointer-events-none" />
+              <input
+                className="w-full h-6 pl-6 pr-6 bg-[#141420] border border-[#1e1e2e]
+                  focus:border-primary/40 rounded-lg text-[11px] text-foreground
+                  placeholder:text-[#7878a8] outline-none transition-colors"
+                placeholder="Search files…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[#7878a8] hover:text-foreground" onClick={() => setSearchQuery("")}>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

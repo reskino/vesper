@@ -184,17 +184,17 @@ function CodeBlock({ code, language, onExecute, isExecuting }: CodeBlockProps) {
       {/* ── Header bar ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-1.5
         bg-[#0d0d16] border-b border-[#1a1a24] text-xs font-mono text-[#7878a8]">
-        <span className="text-[11px] opacity-70 select-none">{language}</span>
+        <span className="text-[11px] font-semibold select-none">{language}</span>
 
         <div className="flex items-center gap-1">
-          {/* Execute */}
           {onExecute && (
             <button
               onClick={onExecute}
               disabled={isExecuting}
-              className="flex items-center gap-1 h-6 px-2 text-[11px] rounded
-                text-[#9898b8] hover:text-foreground hover:bg-[#141420]
-                disabled:opacity-40 transition-all"
+              className="flex items-center gap-1 h-6 px-2.5 text-[11px] rounded-md
+                bg-emerald-500/10 border border-emerald-500/20
+                text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300
+                disabled:opacity-40 transition-all font-semibold"
               title="Run code"
             >
               <Play className="h-2.5 w-2.5" />
@@ -216,16 +216,17 @@ function CodeBlock({ code, language, onExecute, isExecuting }: CodeBlockProps) {
             </button>
           )}
 
-          {/* Copy */}
           <button
             onClick={handleCopy}
-            className="h-6 w-6 flex items-center justify-center rounded
-              text-[#9898b8] hover:text-foreground hover:bg-[#141420] transition-all"
+            className="flex items-center gap-1 h-6 px-2.5 text-[11px] rounded-md
+              bg-[#141420] border border-[#1e1e2e]
+              text-[#b0b0c8] hover:text-foreground hover:bg-[#1e1e30]
+              transition-all font-semibold"
             title="Copy to clipboard"
           >
             {copied
-              ? <Check className="h-2.5 w-2.5 text-green-400" />
-              : <Copy className="h-2.5 w-2.5" />
+              ? <><Check className="h-2.5 w-2.5 text-green-400" /> Copied</>
+              : <><Copy className="h-2.5 w-2.5" /> Copy</>
             }
           </button>
         </div>

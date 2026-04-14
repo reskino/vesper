@@ -23,6 +23,7 @@ import {
   FileIcon, FileCode, FileText, FileJson,
   Save, Loader2, MessageSquare, X, WrapText,
   ZoomIn, ZoomOut, FilePlus, Zap, Copy, XCircle, FolderX, Search, Play, ExternalLink,
+  RotateCcw, ChevronRight, GripVertical, Map,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -291,7 +292,7 @@ interface ContextMenu { x: number; y: number; tab: string }
 // ── Main EditorPanel ──────────────────────────────────────────────────────────
 export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const { onOpenFileRef, onOpenMobileFileRef, onReloadFileRef, onReloadMobileFileRef,
-    setActiveFilePath, openCommandPalette } = useIDE();
+    setActiveFilePath, openCommandPalette, openCommandMode } = useIDE();
   const { currentWorkspace, venvStatus, ensureVenv } = useWorkspace();
   const theRef       = mobile ? onOpenMobileFileRef : onOpenFileRef;
   const theReloadRef = mobile ? onReloadMobileFileRef : onReloadFileRef;
@@ -351,7 +352,16 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
   const [wordWrap, setWordWrapRaw]    = useState<"on" | "off">(() => lsGet<"on" | "off">("vesper.editor.wordWrap", "on"));
   const [fontSize, setFontSizeRaw]    = useState<number>(() => lsGet<number>("vesper.editor.fontSize", 14));
   const [cursorPos, setCursorPos]     = useState({ line: 1, col: 1 });
+  const [selectionInfo, setSelectionInfo] = useState<{ lines: number; chars: number } | null>(null);
   const [isSaving, setIsSaving]       = useState(false);
+  const [showMinimap, setShowMinimapRaw] = useState<boolean>(() => lsGet<boolean>("vesper.editor.minimap", !mobile));
+  const setShowMinimap = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    setShowMinimapRaw(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      lsSet("vesper.editor.minimap", next);
+      return next;
+    });
+  }, []);
 
   const setWordWrap = useCallback((v: "on" | "off" | ((prev: "on" | "off") => "on" | "off")) => {
     setWordWrapRaw(prev => {
@@ -649,12 +659,24 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Track cursor position for the status bar
     editor.onDidChangeCursorPosition((e: MonacoNS.editor.ICursorPositionChangedEvent) => {
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
-    // Ctrl/Cmd+S → save (uses the monaco API directly, no window.monaco hacks)
+    editor.onDidChangeCursorSelection((e: MonacoNS.editor.ICursorSelectionChangedEvent) => {
+      const sel = e.selection;
+      if (sel.isEmpty()) {
+        setSelectionInfo(null);
+      } else {
+        const model = editor.getModel();
+        if (model) {
+          const text = model.getValueInRange(sel);
+          const lines = sel.endLineNumber - sel.startLineNumber + 1;
+          setSelectionInfo({ lines, chars: text.length });
+        }
+      }
+    });
+
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       () => handleSave(),
@@ -688,8 +710,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         e.preventDefault();
         openNewTab();
       }
+      // Ctrl+Shift+P — command palette (command mode)
+      if (ctrl && e.key.toLowerCase() === "p" && e.shiftKey) {
+        e.preventDefault();
+        openCommandMode();
+      }
       // Ctrl+P — command palette (file search)
-      if (ctrl && e.key === "p") {
+      else if (ctrl && e.key.toLowerCase() === "p" && !e.shiftKey) {
         e.preventDefault();
         openCommandPalette();
       }
@@ -707,10 +734,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         e.preventDefault();
         runFile();
       }
+      // Escape — dismiss output panel
+      if (e.key === "Escape" && runOutput !== null && !contextMenu) {
+        setRunOutput(null);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave, activeTab, closeTab, openNewTab, openCommandPalette, openTabs, setActiveTab, runFile]);
+  }, [handleSave, activeTab, closeTab, openNewTab, openCommandPalette, openCommandMode, openTabs, setActiveTab, runFile, runOutput, contextMenu]);
 
   // ── Vesper Monaco theme — zinc/violet palette ─────────────────────────────
   const handleBeforeMount = useCallback((monaco: typeof MonacoNS) => {
@@ -768,8 +799,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     fontLigatures: !mobile, // ligatures hurt perf on low-end devices
     wordWrap,
     lineNumbers: "on",
-    // Minimap wastes GPU on small/low-end screens; disable it on mobile
-    minimap: { enabled: !mobile, scale: 1 },
+    minimap: { enabled: showMinimap, scale: 1 },
     scrollBeyondLastLine: false,
     renderWhitespace: "selection",
     bracketPairColorization: { enabled: true },
@@ -799,7 +829,31 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
     contextmenu: !mobile,       // long-press context menu conflicts with native scroll
     multiCursorModifier: "alt",
     accessibilitySupport: "off", // improves perf in Replit
-  }), [fontSize, wordWrap, mobile]);
+  }), [fontSize, wordWrap, mobile, showMinimap]);
+
+  const [dragTab, setDragTab] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent, tab: string) => {
+    setDragTab(tab);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", tab);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, targetTab: string) => {
+    e.preventDefault();
+    if (!dragTab || dragTab === targetTab) return;
+    setOpenTabs(prev => {
+      const from = prev.indexOf(dragTab);
+      const to   = prev.indexOf(targetTab);
+      if (from === -1 || to === -1) return prev;
+      const next = [...prev];
+      next.splice(from, 1);
+      next.splice(to, 0, dragTab);
+      return next;
+    });
+  }, [dragTab]);
+
+  const handleDragEnd = useCallback(() => { setDragTab(null); }, []);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -824,9 +878,15 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               <div
                 key={tab}
                 ref={isActive ? activeTabRef : undefined}
+                draggable
+                onDragStart={e => handleDragStart(e, tab)}
+                onDragOver={e => handleDragOver(e, tab)}
+                onDragEnd={handleDragEnd}
                 onClick={() => setActiveTab(tab)}
                 onContextMenu={e => openContextMenu(e, tab)}
                 className={`flex items-center gap-1.5 px-3 h-full text-xs cursor-pointer border-r border-[#1a1a24] shrink-0 group transition-colors ${
+                  dragTab === tab ? "opacity-40" : ""
+                } ${
                   isActive
                     ? "bg-[#0d0d12] text-foreground border-t-2 border-t-violet-500"
                     : "bg-[#0a0a0c] text-[#9898b8] hover:bg-[#111118] hover:text-[#a0a0c0]"
@@ -835,11 +895,9 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               >
                 <TabIcon name={name} />
                 <span className="font-medium">{name}</span>
-                {/* Unsaved indicator dot */}
                 {dirty && !isSaving && (
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Unsaved changes" />
                 )}
-                {/* Saving spinner */}
                 {dirty && isSaving && <Loader2 className="h-2.5 w-2.5 animate-spin text-[#9898b8] shrink-0" />}
                 <button
                   onClick={e => closeTab(tab, e)}
@@ -884,6 +942,15 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 title="Toggle word wrap (Alt+Z)"
               >
                 <WrapText className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => setShowMinimap(m => !m)}
+                className={`hidden md:flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                  showMinimap ? "text-primary bg-primary/10" : "text-[#9898b8] hover:text-foreground hover:bg-[#141420]"
+                }`}
+                title="Toggle minimap"
+              >
+                <Map className="h-3 w-3" />
               </button>
               <button
                 onClick={() => setFontSize(s => Math.min(s + 1, 24))}
@@ -949,6 +1016,20 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
       </div>
 
+      {/* ── Breadcrumb path ──────────────────────────────────────────────────── */}
+      {activeTab && !activeTab.startsWith("__untitled_") && (
+        <div className="flex items-center gap-1 px-3 h-6 bg-[#0a0a0e] border-b border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none overflow-hidden shrink-0">
+          {activeTab.split("/").map((seg, i, arr) => (
+            <span key={i} className="flex items-center gap-1 shrink-0">
+              {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-[#4a4a6a]" />}
+              <span className={i === arr.length - 1 ? "text-[#c0c0d8]" : "hover:text-[#a0a0c0] cursor-default"}>
+                {seg}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* ── Editor body ──────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {!activeTab ? (
@@ -974,12 +1055,13 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
             {/* Keyboard shortcut grid */}
             <div className="flex flex-col gap-1.5 w-full max-w-[280px]">
               {[
+                { keys: ["Ctrl", "P"],        label: "Quick open file" },
+                { keys: ["Ctrl", "⇧", "P"],  label: "Command palette" },
                 { keys: ["Ctrl", "S"],        label: "Save file" },
                 { keys: ["Ctrl", "W"],        label: "Close tab" },
                 { keys: ["Ctrl", "T"],        label: "New untitled tab" },
-                { keys: ["Ctrl", "Tab"],      label: "Next tab" },
-                { keys: ["Ctrl", "⇧", "Tab"], label: "Previous tab" },
                 { keys: ["F5"],               label: "Run file" },
+                { keys: ["Esc"],              label: "Dismiss output" },
                 { keys: ["Ctrl", "`"],        label: "Toggle terminal" },
                 { keys: ["Ctrl", "J"],        label: "Toggle chat" },
               ].map(({ keys, label }) => (
@@ -1112,6 +1194,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                   </a>
                 )}
                 <button
+                  className="text-[#7878a8] hover:text-emerald-400 transition-colors p-0.5 rounded"
+                  onClick={() => { setRunOutput(null); runFile(); }}
+                  disabled={isRunning}
+                  title="Re-run (F5)"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+                <button
                   className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
                   onClick={copyOutput}
                   title="Copy output"
@@ -1121,7 +1211,7 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
                 <button
                   className="text-[#7878a8] hover:text-foreground transition-colors p-0.5 rounded"
                   onClick={() => setRunOutput(null)}
-                  title="Dismiss output"
+                  title="Dismiss (Esc)"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1151,6 +1241,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
         </div>
         {activeTab && (
           <div className="flex items-center gap-3">
+            {currentState?.loaded && (
+              <span className="hidden sm:inline">{currentState.content.split("\n").length} lines</span>
+            )}
+            {selectionInfo && (
+              <span className="text-violet-300">
+                {selectionInfo.chars} chars{selectionInfo.lines > 1 ? ` (${selectionInfo.lines} lines)` : ""} selected
+              </span>
+            )}
             <span>UTF-8</span>
             <span>Spaces: 2</span>
             <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>

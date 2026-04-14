@@ -160,7 +160,11 @@ function TreeItem({
             </div>
           )}
         </div>
-        {expanded && node.children?.map((child: FileNode) => (
+        {expanded && [...(node.children ?? [])].sort((a, b) => {
+          if (a.type === "directory" && b.type !== "directory") return -1;
+          if (a.type !== "directory" && b.type === "directory") return 1;
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        }).map((child: FileNode) => (
           <TreeItem
             key={child.path}
             node={child}

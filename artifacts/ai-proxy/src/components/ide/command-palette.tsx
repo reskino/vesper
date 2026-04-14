@@ -20,7 +20,7 @@ import {
   FileCode, FileText, FileJson, FileIcon,
   Search, X, CornerDownLeft, Terminal, MessageSquare,
   Printer, FileDown, FolderInput, RotateCcw, Keyboard,
-  ChevronRight, Zap, Bot, Sparkles, FolderOpen,
+  ChevronRight, Zap, Bot, Sparkles, FolderOpen, Clock,
 } from "lucide-react";
 import { useIDE } from "@/contexts/ide-context";
 import { useWorkspace } from "@/contexts/workspace-context";
@@ -221,7 +221,19 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
   const cmdQuery      = isCommandMode ? query.slice(1).trimStart() : "";
   const fileQuery     = !isCommandMode ? query : "";
 
-  // ── File tree ──────────────────────────────────────────────────────────────
+  const RECENT_KEY = "vesper.recentFiles";
+  const recentFiles = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[]; } catch { return []; }
+  }, [open]);
+
+  const addRecent = useCallback((path: string) => {
+    try {
+      const prev = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
+      const next = [path, ...prev.filter(p => p !== path)].slice(0, 20);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
+
   const relPath = currentWorkspace?.relPath ?? "";
   const rootPath = currentWorkspace?.path ?? "";
   const { data: treeData } = useGetFileTree(
@@ -233,14 +245,21 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
   );
   const fileResults: FileNode[] = useMemo(() => {
     if (isCommandMode) return [];
-    if (!fileQuery.trim()) return allFiles.slice(0, 50);
+    if (!fileQuery.trim()) {
+      const recentSet = new Set(recentFiles);
+      const recentMatches = recentFiles
+        .map(p => allFiles.find(f => f.path === p))
+        .filter((f): f is FileNode => !!f);
+      const rest = allFiles.filter(f => !recentSet.has(f.path));
+      return [...recentMatches, ...rest].slice(0, 50);
+    }
     return allFiles
       .map(f => ({ file: f, score: fuzzyScore(fileQuery, f.name) * 2 + fuzzyScore(fileQuery, f.path) }))
       .filter(r => r.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 50)
       .map(r => r.file);
-  }, [isCommandMode, fileQuery, allFiles]);
+  }, [isCommandMode, fileQuery, allFiles, recentFiles]);
 
   // ── Commands ───────────────────────────────────────────────────────────────
   const allCommands = useMemo(() =>
@@ -281,9 +300,9 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
       onClose();
     } else {
       const file = fileResults[idx];
-      if (file) { openFileInEditor(file.path); onClose(); }
+      if (file) { addRecent(file.path); openFileInEditor(file.path); onClose(); }
     }
-  }, [isCommandMode, commandResults, fileResults, openFileInEditor, onClose]);
+  }, [isCommandMode, commandResults, fileResults, openFileInEditor, onClose, addRecent]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown")  { e.preventDefault(); setCursor(c => Math.min(c + 1, totalItems - 1)); }
@@ -347,28 +366,53 @@ export function CommandPalette({ open, onClose, initialQuery = "" }: CommandPale
         </div>
       );
     }
+    const recentSet = new Set(recentFiles);
+    let showedRecentHeader = false;
+    let showedAllHeader = false;
     return fileResults.map((file, i) => {
       const disp    = rootPath ? file.path.replace(rootPath + "/", "") : file.path;
       const relDir  = disp.includes("/") ? disp.slice(0, disp.lastIndexOf("/")) : "";
       const active  = i === cursor;
+      const isRecent = recentSet.has(file.path);
+      let header: React.ReactNode = null;
+      if (!fileQuery.trim()) {
+        if (isRecent && !showedRecentHeader) {
+          showedRecentHeader = true;
+          header = (
+            <div className="px-3 py-1 mt-1 text-[10px] font-semibold text-[#3a3a5a] uppercase tracking-widest flex items-center gap-1.5">
+              <Clock className="h-2.5 w-2.5" /> Recently Opened
+            </div>
+          );
+        }
+        if (!isRecent && !showedAllHeader) {
+          showedAllHeader = true;
+          header = (
+            <div className="px-3 py-1 mt-1 text-[10px] font-semibold text-[#3a3a5a] uppercase tracking-widest">
+              All Files
+            </div>
+          );
+        }
+      }
       return (
-        <button
-          key={file.path}
-          ref={el => { itemRefs.current[i] = el; }}
-          onClick={() => runItem(i)}
-          onMouseEnter={() => setCursor(i)}
-          aria-selected={active}
-          className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${
-            active ? "bg-violet-600/20" : "hover:bg-[#111120]"
-          }`}
-        >
-          <PaletteFileIcon name={file.name} />
-          <div className="flex-1 min-w-0">
-            <Highlighted query={fileQuery} text={file.name} className="block text-sm font-medium text-foreground truncate" />
-            {relDir && <Highlighted query={fileQuery} text={relDir} className="block text-[11px] text-[#5858a0] truncate mt-0.5" />}
-          </div>
-          {active && <CornerDownLeft className="h-3 w-3 text-[#4a4a72] shrink-0" />}
-        </button>
+        <div key={file.path}>
+          {header}
+          <button
+            ref={el => { itemRefs.current[i] = el; }}
+            onClick={() => runItem(i)}
+            onMouseEnter={() => setCursor(i)}
+            aria-selected={active}
+            className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${
+              active ? "bg-violet-600/20" : "hover:bg-[#111120]"
+            }`}
+          >
+            <PaletteFileIcon name={file.name} />
+            <div className="flex-1 min-w-0">
+              <Highlighted query={fileQuery} text={file.name} className="block text-sm font-medium text-foreground truncate" />
+              {relDir && <Highlighted query={fileQuery} text={relDir} className="block text-[11px] text-[#5858a0] truncate mt-0.5" />}
+            </div>
+            {active && <CornerDownLeft className="h-3 w-3 text-[#4a4a72] shrink-0" />}
+          </button>
+        </div>
       );
     });
   }

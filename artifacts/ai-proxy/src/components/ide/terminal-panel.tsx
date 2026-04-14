@@ -20,7 +20,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { useTerminalExec, useGetTerminalCwd, getGetTerminalCwdQueryKey } from "@workspace/api-client-react";
-import { TerminalSquare, Trash2, X, Play, Zap } from "lucide-react";
+import { TerminalSquare, Trash2, X, Play, Zap, StopCircle, Maximize2, Minimize2 } from "lucide-react";
 import { useIDE } from "@/contexts/ide-context";
 import { useTheme } from "@/contexts/theme-context";
 import { useWorkspace } from "@/contexts/workspace-context";
@@ -176,6 +176,7 @@ export function TerminalPanel() {
   const histIdxRef   = useRef(-1);
   const abortRef     = useRef<AbortController | null>(null);
   const cwdRef       = useRef("/home/runner/workspace");
+  const [isExecuting, setIsExecuting] = useState(false);
 
   // Tab-complete candidates
   const tabCandidatesRef = useRef<string[]>([]);
@@ -365,6 +366,7 @@ export function TerminalPanel() {
     term.write(`${ANSI.dim}  running…${ANSI.reset}\r`);
     const abort = new AbortController();
     abortRef.current = abort;
+    setIsExecuting(true);
 
     try {
       const result = await execMutation.mutateAsync({ data: { command: cmd, timeout } });
@@ -391,6 +393,7 @@ export function TerminalPanel() {
       term.writeln(`${ANSI.red}Error: ${String(err?.message ?? err)}${ANSI.reset}`);
     } finally {
       abortRef.current = null;
+      setIsExecuting(false);
     }
 
     term.write(makePrompt(cwdRef.current));
@@ -505,10 +508,15 @@ export function TerminalPanel() {
     <div className="flex flex-col h-full" style={{ backgroundColor: isDark ? "#080810" : "#f8f9fc" }}>
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface shrink-0 gap-2">
-        {/* Left: icon + label + cwd + runtime info */}
+        {/* Left: icon + label + workspace + cwd + runtime info */}
         <div className="flex items-center gap-2 min-w-0">
           <TerminalSquare className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
           <span className="text-emerald-500 font-bold text-xs shrink-0">TERMINAL</span>
+          {currentWorkspace && (
+            <span className="hidden sm:block bg-violet-500/15 text-violet-300 text-[10px] px-2 py-0.5 rounded-full font-mono truncate max-w-[120px]">
+              {currentWorkspace.name}
+            </span>
+          )}
           <span className="hidden sm:block bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded-full font-mono truncate max-w-[180px]">
             {tilde(cwdRef.current)}
           </span>
@@ -560,6 +568,16 @@ export function TerminalPanel() {
             ))}
           </div>
 
+          {isExecuting && (
+            <button
+              onClick={() => { abortRef.current?.abort(); termRef.current?.writeln("^C"); lineRef.current = ""; setIsExecuting(false); termRef.current?.write(makePrompt(cwdRef.current)); }}
+              title="Kill running process (Ctrl+C)"
+              className="flex items-center gap-1.5 h-6 px-2 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold transition-colors shrink-0"
+            >
+              <StopCircle className="h-3 w-3" />
+              Kill
+            </button>
+          )}
           <button
             onClick={clear}
             title="Clear (Ctrl+L)"

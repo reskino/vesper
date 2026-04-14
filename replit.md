@@ -23,8 +23,9 @@ Vesper is built as a pnpm monorepo consisting of three main services:
 *   **UI/UX**:
     *   **Toast Notifications**: Uses Sonner for sleek, custom-themed toast notifications (`bottom-right`, `rounded-xl`).
     *   **Loading Indicators**: Features animated "ThinkingDots" for AI activity and a rich 10-line code-skeleton placeholder for Monaco Editor during file loading.
-    *   **IDE Enhancements**: Custom Vesper Monaco theme, persisted editor preferences, Command Palette (`Ctrl+P`/`Ctrl+K`) for fuzzy search and commands, a keyboard shortcut reference modal, activity bar for navigation, F5 run-file shortcut.
-    *   **File Explorer**: Workspace-aware file tree with language badges, desktop search bar, explicit hidden-name filter (`.venv`, `.git`, `__pycache__`, `node_modules` hidden; `.env`/`.gitignore` visible), and dedicated panels for dependency installation.
+    *   **IDE Enhancements**: Custom Vesper Monaco theme, persisted editor preferences, Command Palette (`Ctrl+P` file search / `Ctrl+Shift+P` or `Ctrl+K` command mode) with recent-files section and fuzzy search, keyboard shortcut reference modal (`?`), activity bar, F5 run-file shortcut, auto-save after 1.5s inactivity, breadcrumb path bar, minimap toggle (persisted), tab drag-to-reorder, Escape key dismisses output panel, re-run button in output panel, enhanced status bar (selection char/line count in violet, total lines).
+    *   **File Explorer**: Workspace-aware file tree with language badges, desktop search bar, folders-first alphabetical sorting at every level, explicit hidden-name filter (`.venv`, `.git`, `__pycache__`, `node_modules` hidden; `.env`/`.gitignore` visible), and dedicated panels for dependency installation.
+    *   **Terminal**: Workspace name badge in header, kill-process button while commands execute, code-block copy/run buttons with prominent styling in markdown renderer.
     *   **Run-file system**: Detects server files (uvicorn/flask patterns) and runs them in the background (`&` + 6s startup capture) to avoid HTTP 504 proxy timeouts. Regular scripts get a 55s timeout. Output panel shows "● Server Running" status with clickable server URL and copy-output button.
     *   **Chat Export**: Allows exporting chat history to PDF, Word (.docx), or saving as Markdown to the workspace.
 

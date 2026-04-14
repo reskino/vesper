@@ -18,7 +18,7 @@
  *   newChatKey  — bump to clear the chat
  *   compact     — true inside the mobile bottom-sheet (no outer border)
  */
-import { useState, useRef, useEffect, useCallback, type ElementType } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type ElementType } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAis, getListAisQueryKey,
@@ -34,6 +34,8 @@ import {
   AlertCircle, Upload, Copy, Check, RotateCcw, Sparkles,
   FolderOpen, Search, Bug, FlaskConical, Globe, Code2,
   BookOpen, Zap, ArrowRight, ChevronsRight, Bot,
+  MessageSquare, Plus, Trash2, Clock, Play, User,
+  History, PenLine,
 } from "lucide-react";
 import { VesperLogo } from "@/components/vesper-logo";
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer";
@@ -56,6 +58,11 @@ import {
   type IntentResult, type InstallIntentResult, type RunIntentResult,
 } from "@/lib/intent-detect";
 import { useTerminalExec } from "@workspace/api-client-react";
+import {
+  listConversations, getConversation, createConversation,
+  saveMessages, deleteConversation, renameConversation,
+  type ChatMessage, type Conversation,
+} from "@/lib/chat-store";
 
 // Safety levels list (ordered)
 const SAFETY_LEVELS: SafetyLevel[] = ["conservative", "balanced", "aggressive"];
@@ -260,10 +267,43 @@ function RoutingBadge({ info }: {
   );
 }
 
+const AI_AVATAR_COLORS: Record<string, string> = {
+  claude: "from-orange-500/30 to-orange-600/10 border-orange-500/30 text-orange-400",
+  chatgpt: "from-emerald-500/30 to-emerald-600/10 border-emerald-500/30 text-emerald-400",
+  grok: "from-blue-500/30 to-blue-600/10 border-blue-500/30 text-blue-400",
+  gemini: "from-cyan-500/30 to-cyan-600/10 border-cyan-500/30 text-cyan-400",
+  groq: "from-amber-500/30 to-amber-600/10 border-amber-500/30 text-amber-400",
+  deepseek: "from-indigo-500/30 to-indigo-600/10 border-indigo-500/30 text-indigo-400",
+  pollinations: "from-pink-500/30 to-pink-600/10 border-pink-500/30 text-pink-400",
+  openrouter: "from-violet-500/30 to-violet-600/10 border-violet-500/30 text-violet-400",
+  together: "from-teal-500/30 to-teal-600/10 border-teal-500/30 text-teal-400",
+  mistral: "from-sky-500/30 to-sky-600/10 border-sky-500/30 text-sky-400",
+  cerebras: "from-rose-500/30 to-rose-600/10 border-rose-500/30 text-rose-400",
+  cohere: "from-lime-500/30 to-lime-600/10 border-lime-500/30 text-lime-400",
+};
+const DEFAULT_AI_AVATAR = "from-primary/30 to-primary/10 border-primary/30 text-primary";
+
+function getAiInitial(aiId?: string): string {
+  if (!aiId) return "AI";
+  const name = AI_NICE_NAMES[aiId] ?? aiId;
+  return name.slice(0, 2).toUpperCase();
+}
+
+function formatTimestamp(ts?: Date | string): string {
+  if (!ts) return "";
+  const d = typeof ts === "string" ? new Date(ts) : ts;
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " +
+    d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function MessageBubble({ msg, onExecute }: {
   msg: {
     role: "user" | "assistant"; content: string; aiId?: string; error?: boolean;
     routingInfo?: { aiId: string; reason: string; signals: string[]; confidence: number };
+    timestamp?: Date | string;
   };
   onExecute?: (result: any) => void;
 }) {
@@ -274,43 +314,227 @@ function MessageBubble({ msg, onExecute }: {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const ts = formatTimestamp(msg.timestamp);
+
   if (msg.role === "user") {
     return (
-      <div className="flex justify-end px-4 py-1.5">
-        <div className="max-w-[82%] md:max-w-[78%] bg-primary/20 border border-primary/25
-          rounded-2xl rounded-tr-sm px-4 py-3 text-[15px] md:text-sm text-foreground leading-relaxed">
-          {msg.content}
+      <div className="flex gap-2.5 px-4 py-2 justify-end">
+        <div className="flex flex-col items-end max-w-[82%] md:max-w-[78%]">
+          <div className="bg-primary/15 border border-primary/20
+            rounded-2xl rounded-tr-md px-4 py-2.5 text-[15px] md:text-sm text-foreground leading-relaxed
+            shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+            <MarkdownRenderer content={msg.content} />
+          </div>
+          {ts && <span className="text-[10px] text-[#5a5a7a] mt-1 mr-1 select-none">{ts}</span>}
+        </div>
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-primary/25 to-primary/10
+          border border-primary/20 flex items-center justify-center mt-0.5">
+          <User className="h-3 w-3 text-primary/70" />
         </div>
       </div>
     );
   }
 
+  const avatarClass = msg.aiId ? (AI_AVATAR_COLORS[msg.aiId] ?? DEFAULT_AI_AVATAR) : DEFAULT_AI_AVATAR;
+  const aiName = msg.aiId ? (AI_NICE_NAMES[msg.aiId] ?? msg.aiId) : null;
+
   return (
-    <div className="px-4 py-1.5 group">
-      {msg.aiId && !msg.routingInfo && (
-        <p className="text-[10px] text-[#7878a8] font-mono mb-1 pl-1">{msg.aiId}</p>
-      )}
-      <div className={`text-[15px] md:text-sm leading-relaxed ${msg.error ? "text-red-400" : "text-foreground"}`}>
-        {msg.error ? (
-          <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{msg.content}</span>
+    <div className="flex gap-2.5 px-4 py-2 group">
+      <div className={`flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br ${avatarClass}
+        border flex items-center justify-center mt-0.5
+        shadow-[0_0_8px_rgba(99,102,241,0.08)]`}>
+        <span className="text-[9px] font-bold leading-none">{getAiInitial(msg.aiId)}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        {aiName && (
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[11px] font-semibold text-[#9898b8]">{aiName}</span>
+            {msg.routingInfo && (
+              <span className="text-[9px] text-primary/50 font-medium">
+                {Math.round(msg.routingInfo.confidence * 100)}% match
+              </span>
+            )}
+          </div>
+        )}
+        <div className={`text-[15px] md:text-sm leading-relaxed ${msg.error ? "text-red-400" : "text-foreground"}`}>
+          {msg.error ? (
+            <div className="flex items-start gap-2.5 p-3 bg-red-500/8 border border-red-500/15 rounded-xl text-red-400">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{msg.content}</span>
+            </div>
+          ) : (
+            <MarkdownRenderer content={msg.content} onExecute={onExecute} />
+          )}
+        </div>
+        {msg.routingInfo && <RoutingBadge info={msg.routingInfo} />}
+        <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={copy}
+            className="flex items-center gap-1 h-5 px-1.5 rounded text-[#7878a8] hover:text-foreground
+              hover:bg-[#141420] transition-colors text-[10px]"
+            aria-label="Copy response"
+          >
+            {copied ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+          {ts && <span className="text-[10px] text-[#5a5a7a] select-none">{ts}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatHistoryDrawer({ onClose, onSelect, onNew, currentId }: {
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  currentId: string | null;
+}) {
+  const conversations = useMemo(() => listConversations(), []);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    if (editingId && editRef.current) editRef.current.focus();
+  }, [editingId]);
+
+  const handleDelete = (id: string) => {
+    deleteConversation(id);
+    if (id === currentId) onNew();
+    forceUpdate(n => n + 1);
+  };
+
+  const handleRename = (id: string) => {
+    if (editTitle.trim()) {
+      renameConversation(id, editTitle.trim());
+      forceUpdate(n => n + 1);
+    }
+    setEditingId(null);
+  };
+
+  const grouped = useMemo(() => {
+    const now = new Date();
+    const today: Conversation[] = [];
+    const yesterday: Conversation[] = [];
+    const thisWeek: Conversation[] = [];
+    const older: Conversation[] = [];
+
+    const convs = listConversations();
+    for (const c of convs) {
+      const d = new Date(c.updatedAt);
+      const diff = (now.getTime() - d.getTime()) / 86_400_000;
+      if (d.toDateString() === now.toDateString()) today.push(c);
+      else if (diff < 2) yesterday.push(c);
+      else if (diff < 7) thisWeek.push(c);
+      else older.push(c);
+    }
+    return [
+      { label: "Today", items: today },
+      { label: "Yesterday", items: yesterday },
+      { label: "This Week", items: thisWeek },
+      { label: "Older", items: older },
+    ].filter(g => g.items.length > 0);
+  }, [conversations]);
+
+  return (
+    <div className="absolute inset-0 z-50 bg-[#0a0a0f]/95 backdrop-blur-sm flex flex-col animate-in slide-in-from-left-2 duration-200">
+      <div className="flex items-center justify-between px-3 h-11 border-b border-[#1c1c2a] bg-[#0d0d14] shrink-0">
+        <div className="flex items-center gap-2">
+          <History className="h-3.5 w-3.5 text-[#7878a8]" />
+          <span className="text-[11px] font-bold text-[#7878a8] uppercase tracking-widest">History</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onNew}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-medium
+              text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-all"
+          >
+            <Plus className="h-3 w-3" /> New Chat
+          </button>
+          <button
+            onClick={onClose}
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-[#7878a8]
+              hover:text-foreground hover:bg-[#141420] transition-all"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-2" style={{ scrollbarWidth: "thin" }}>
+        {grouped.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+            <MessageSquare className="h-8 w-8 text-[#3a3a5a] mb-3" />
+            <p className="text-[13px] text-[#7878a8] font-medium">No conversations yet</p>
+            <p className="text-[11px] text-[#5a5a7a] mt-1">Start a new chat to begin</p>
           </div>
         ) : (
-          <MarkdownRenderer content={msg.content} onExecute={onExecute} />
+          grouped.map(group => (
+            <div key={group.label} className="mb-2">
+              <p className="px-3 py-1.5 text-[9px] font-bold text-[#5a5a7a] uppercase tracking-widest select-none">
+                {group.label}
+              </p>
+              {group.items.map(conv => (
+                <div
+                  key={conv.id}
+                  className={`group/item flex items-center gap-2 mx-1.5 px-2.5 py-2 rounded-lg cursor-pointer
+                    transition-all duration-150 ${
+                    conv.id === currentId
+                      ? "bg-primary/10 border border-primary/15"
+                      : "hover:bg-[#141420] border border-transparent"
+                  }`}
+                  onClick={() => { onSelect(conv.id); onClose(); }}
+                >
+                  <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${
+                    conv.id === currentId ? "text-primary" : "text-[#5a5a7a]"
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    {editingId === conv.id ? (
+                      <input
+                        ref={editRef}
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        onBlur={() => handleRename(conv.id)}
+                        onKeyDown={e => { if (e.key === "Enter") handleRename(conv.id); if (e.key === "Escape") setEditingId(null); }}
+                        className="w-full bg-transparent text-[12px] text-foreground outline-none border-b border-primary/40 pb-0.5"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <p className={`text-[12px] truncate ${
+                        conv.id === currentId ? "text-foreground font-medium" : "text-[#a0a0c0]"
+                      }`}>
+                        {conv.title}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-[#5a5a7a] mt-0.5">
+                      {conv.messages.length} message{conv.messages.length !== 1 ? "s" : ""}
+                      {" · "}
+                      {formatTimestamp(conv.updatedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title); }}
+                      className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-foreground hover:bg-[#1a1a2a] transition-colors"
+                      title="Rename"
+                    >
+                      <PenLine className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDelete(conv.id); }}
+                      className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))
         )}
-      </div>
-      {msg.routingInfo && <RoutingBadge info={msg.routingInfo} />}
-      <div className="flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={copy}
-          className="flex items-center gap-1.5 h-6 px-2 rounded-md text-[#9898b8] hover:text-foreground
-            hover:bg-[#141420] transition-colors text-xs"
-          aria-label="Copy response"
-        >
-          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
       </div>
     </div>
   );
@@ -738,7 +962,9 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
 }) {
   const { selectedAi, importedProject, setImportedProject, toggleChat,
     mobileTab, showMobileChatSheet, incrementChatUnread, activeFilePath,
-    reloadFileInEditor } = useIDE();
+    reloadFileInEditor, triggerNewChat,
+    currentConversationId, setCurrentConversationId,
+    showChatHistory, setShowChatHistory, toggleChatHistory } = useIDE();
   const queryClient = useQueryClient();
   const { agentType } = useAgentMode();
   const { currentWorkspace, deps, installDep, venvStatus } = useWorkspace();
@@ -768,12 +994,10 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   const [detectedIntent, setDetectedIntent]       = useState<IntentResult | null>(null);
   const [intentDismissed, setIntentDismissed]     = useState(false);
   const [routingLabel, setRoutingLabel]           = useState<string | null>(null);
-  // Install intent — triggers workspace dep install without an AI roundtrip
   const [installIntent, setInstallIntent]         = useState<InstallIntentResult | null>(null);
   const [installDismissed, setInstallDismissed]   = useState(false);
   const [isInstalling, setIsInstalling]           = useState(false);
 
-  // Run intent — triggers terminal exec inside the workspace .venv directly
   const [runIntent, setRunIntent]                 = useState<RunIntentResult | null>(null);
   const [runDismissed, setRunDismissed]           = useState(false);
   const [isExecutingScript, setIsExecutingScript] = useState(false);
@@ -796,6 +1020,64 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
   useEffect(() => { selectedAiRef.current = selectedAi; }, [selectedAi]);
   useEffect(() => { safetyLevelRef.current = safetyLevel; }, [safetyLevel]);
   useEffect(() => { currentWorkspaceRef.current = currentWorkspace; }, [currentWorkspace]);
+
+  // ── Persist messages to localStorage whenever they change ──────────────────
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (messages.length === 0) return;
+    clearTimeout(persistTimeoutRef.current);
+    persistTimeoutRef.current = setTimeout(() => {
+      let convId = currentConversationId;
+      if (!convId) {
+        const conv = createConversation(messages[0]?.content);
+        convId = conv.id;
+        setCurrentConversationId(convId);
+      }
+      const storable: ChatMessage[] = messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        aiId: m.aiId,
+        error: m.error,
+        routingInfo: m.routingInfo,
+        timestamp: (m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp) ?? new Date().toISOString(),
+      }));
+      saveMessages(convId, storable);
+    }, 500);
+    return () => clearTimeout(persistTimeoutRef.current);
+  }, [messages, currentConversationId, setCurrentConversationId]);
+
+  // ── Load conversation from history ──────────────────────────────────────────
+  const loadConversation = useCallback((id: string) => {
+    const conv = getConversation(id);
+    if (!conv) return;
+    setCurrentConversationId(id);
+    setMessages(conv.messages.map(m => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    })));
+    setConversationId(null);
+    setExecutionResult(null);
+    setAttachedFile(null);
+    setUploadedFile(null);
+    setPrompt("");
+    setAutoSession(null);
+  }, [setCurrentConversationId]);
+
+  // ── Restore last conversation on mount ──────────────────────────────────────
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (currentConversationId) {
+      const conv = getConversation(currentConversationId);
+      if (conv && conv.messages.length > 0) {
+        setMessages(conv.messages.map(m => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        })));
+      }
+    }
+  }, [currentConversationId]);
 
   // Reset on new chat
   useEffect(() => {
@@ -1461,8 +1743,17 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
             )}
           </div>
 
-          {/* Right: Export, Regen, Collapse */}
+          {/* Right: History, Export, Regen, Collapse */}
           <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={toggleChatHistory}
+              className={`h-6 w-6 flex items-center justify-center rounded-lg transition-all ${
+                showChatHistory ? "text-primary bg-primary/10" : "text-[#7878a8] hover:text-foreground hover:bg-[#111118]"
+              }`}
+              title="Chat history"
+            >
+              <History className="h-3 w-3" />
+            </button>
             {messages.length > 0 && (
               <>
                 <ExportMenu messages={messages} workspaceName={currentWorkspace?.name} />
@@ -1612,8 +1903,18 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         </div>
       </div>
 
+      {/* ── Chat history drawer ─────────────────────────────────────── */}
+      {showChatHistory && (
+        <ChatHistoryDrawer
+          onClose={() => setShowChatHistory(false)}
+          onSelect={(id) => loadConversation(id)}
+          onNew={() => { triggerNewChat(); setShowChatHistory(false); }}
+          currentId={currentConversationId}
+        />
+      )}
+
       {/* ── Messages ───────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+      <div className={`flex-1 overflow-y-auto ${showChatHistory ? "hidden" : ""}`} ref={scrollRef}>
         {messages.length === 0 ? (
           <EmptyState onPrompt={text => { send(text); }} connectedCount={connectedAis.length} />
         ) : (
@@ -1730,6 +2031,24 @@ export function ChatPanel({ newChatKey, compact = false, mobile = false }: {
         {/* Mobile-only agent selector row (desktop header is hidden on small screens) */}
         <div className="md:hidden flex items-center justify-between mb-2">
           <AgentSelector isPending={isPending} />
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={toggleChatHistory}
+              className={`h-8 w-8 flex items-center justify-center rounded-lg transition-all ${
+                showChatHistory ? "text-primary bg-primary/10" : "text-[#7878a8] hover:text-foreground"
+              }`}
+              title="Chat history"
+            >
+              <History className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => { triggerNewChat(); setShowChatHistory(false); }}
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-[#7878a8] hover:text-primary transition-all"
+              title="New chat"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {/* Install-intent confirmation — shown instead of agent routing strip */}
         <InstallConfirmStrip

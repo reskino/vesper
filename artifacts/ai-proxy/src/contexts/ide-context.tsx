@@ -8,7 +8,7 @@
  *          local filesystem (read entirely in-browser, never uploaded).
  */
 import {
-  createContext, useContext, useState, useCallback, useRef, type ReactNode,
+  createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode,
 } from "react";
 import type { ImportedFileNode } from "@/lib/folder-import";
 
@@ -74,6 +74,13 @@ interface IDEContextValue {
   // ── New chat trigger ───────────────────────────────────────────────────────
   newChatKey: number;
   triggerNewChat: () => void;
+
+  // ── Conversation history ────────────────────────────────────────────────────
+  currentConversationId: string | null;
+  setCurrentConversationId: (id: string | null) => void;
+  showChatHistory: boolean;
+  setShowChatHistory: (v: boolean) => void;
+  toggleChatHistory: () => void;
 
   // ── Imported local project ─────────────────────────────────────────────────
   /** Virtual file tree imported from the user's local filesystem */
@@ -215,7 +222,23 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     setShowMobileChatSheet(false);
   }, []);
 
-  const triggerNewChat = useCallback(() => setNewChatKey(k => k + 1), []);
+  const triggerNewChat = useCallback(() => {
+    setNewChatKey(k => k + 1);
+    setCurrentConversationId(null);
+  }, []);
+
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
+    try { return localStorage.getItem("vesper.currentConversation") ?? null; } catch { return null; }
+  });
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const toggleChatHistory = useCallback(() => setShowChatHistory(v => !v), []);
+
+  useEffect(() => {
+    try {
+      if (currentConversationId) localStorage.setItem("vesper.currentConversation", currentConversationId);
+      else localStorage.removeItem("vesper.currentConversation");
+    } catch {}
+  }, [currentConversationId]);
 
   return (
     <IDEContext.Provider value={{
@@ -232,6 +255,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       reloadFileInEditor, onReloadFileRef, onReloadMobileFileRef,
       activeFilePath, setActiveFilePath,
       newChatKey, triggerNewChat,
+      currentConversationId, setCurrentConversationId,
+      showChatHistory, setShowChatHistory, toggleChatHistory,
       importedProject, setImportedProject,
       showCommandPalette, paletteInitialQuery,
       openCommandPalette, openCommandMode, closeCommandPalette,

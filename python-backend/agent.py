@@ -756,6 +756,10 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
         except Exception:
             pass
 
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = work_dir + (":" + existing_pythonpath if existing_pythonpath else "")
+
     proc = subprocess.Popen(
         command,
         shell=True,
@@ -764,6 +768,7 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
         stderr=subprocess.PIPE,
         text=True,
         preexec_fn=os.setsid,
+        env=env,
     )
     _background_processes[name] = proc
 

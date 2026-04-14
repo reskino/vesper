@@ -355,7 +355,7 @@ def _install_python_pip(ws_abs: str, pkg_spec: str) -> Dict[str, Any]:
             return {"error": f"Could not create venv:\n{r.stderr[:600]}"}
 
     r = subprocess.run(
-        [str(venv / "bin" / "pip"), "install", pkg_spec],
+        [str(venv / "bin" / "pip"), "install", "--no-user", pkg_spec],
         capture_output=True, text=True, timeout=180, cwd=ws_abs,
     )
     if r.returncode != 0:

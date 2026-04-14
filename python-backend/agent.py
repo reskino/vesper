@@ -741,6 +741,27 @@ def _tool_execute(params: dict, cwd: str) -> str:
     return "\n".join(parts) if parts else "(no output)"
 
 
+def _inject_venv_pth(work_dir: str) -> None:
+    """Write a .pth file into the workspace venv so the workspace root is always
+    on sys.path — even inside uvicorn's multiprocessing-spawned subprocess."""
+    venv_dir = os.path.join(work_dir, ".venv")
+    if not os.path.isdir(venv_dir):
+        return
+    lib_dir = os.path.join(venv_dir, "lib")
+    if not os.path.isdir(lib_dir):
+        return
+    for entry in os.listdir(lib_dir):
+        site_pkgs = os.path.join(lib_dir, entry, "site-packages")
+        if os.path.isdir(site_pkgs):
+            pth_file = os.path.join(site_pkgs, "_vesper_workspace.pth")
+            try:
+                with open(pth_file, "w") as f:
+                    f.write(work_dir + "\n")
+            except Exception as exc:
+                logger.warning("Could not write .pth file: %s", exc)
+            break
+
+
 def _tool_background_exec(params: dict, cwd: str) -> str:
     command = params.get("command", "")
     name = params.get("name", command[:40])
@@ -756,9 +777,26 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
         except Exception:
             pass
 
-    env = os.environ.copy()
-    existing_pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = work_dir + (":" + existing_pythonpath if existing_pythonpath else "")
+    # Inject the workspace directory into the venv's .pth file so that ALL
+    # Python processes using that venv (including uvicorn's reloader subprocess)
+    # can import packages from the workspace root.  PYTHONPATH alone is not
+    # reliable here because Replit's sitecustomize can override sys.path before
+    # PYTHONPATH entries are added.
+    _inject_venv_pth(work_dir)
+
+    # Rewrite bare `uvicorn` invocations to use the venv's Python interpreter
+    # explicitly (`python3 -m uvicorn`). The `uvicorn` console script uses
+    # `#!/usr/bin/env python3` which resolves to the *system* Python when called
+    # directly — meaning uvicorn can't import itself or its dependencies.
+    venv_python = os.path.join(work_dir, ".venv", "bin", "python3")
+    if os.path.isfile(venv_python):
+        import re as _re
+        command = _re.sub(
+            r"(?<![/\w])uvicorn\b",
+            f"{venv_python} -m uvicorn",
+            command,
+            count=1,
+        )
 
     proc = subprocess.Popen(
         command,
@@ -768,7 +806,6 @@ def _tool_background_exec(params: dict, cwd: str) -> str:
         stderr=subprocess.PIPE,
         text=True,
         preexec_fn=os.setsid,
-        env=env,
     )
     _background_processes[name] = proc
 

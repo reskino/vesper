@@ -76,7 +76,7 @@ export function ActivityBar() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-xs font-semibold">
-            Preview {previewUrl ? `(${previewUrl.replace(/https?:\/\//, "")})` : ""}
+            Preview {previewUrl ? `(${previewUrl.replace(/https?:\/\//, "")})` : ""} <span className="opacity-60 ml-1">⌃B</span>
           </TooltipContent>
         </Tooltip>
 

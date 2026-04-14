@@ -261,7 +261,7 @@ export function TopBar() {
           shadow-[0_0_12px_rgba(99,102,241,0.15)]">
           <VesperLogo size={14} />
         </div>
-        <span className="font-bold text-[13px] text-foreground tracking-tight hidden sm:block">Vesper</span>
+        <span className="font-bold text-[13px] text-foreground tracking-tight">Vesper</span>
       </div>
 
       {/* Divider */}

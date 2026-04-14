@@ -1052,14 +1052,14 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </div>
 
-            {/* Keyboard shortcut grid */}
-            <div className="flex flex-col gap-1.5 w-full max-w-[280px]">
+            <div className="hidden sm:flex flex-col gap-1.5 w-full max-w-[280px]">
               {[
                 { keys: ["Ctrl", "P"],        label: "Quick open file" },
                 { keys: ["Ctrl", "⇧", "P"],  label: "Command palette" },
                 { keys: ["Ctrl", "S"],        label: "Save file" },
                 { keys: ["Ctrl", "W"],        label: "Close tab" },
                 { keys: ["Ctrl", "T"],        label: "New untitled tab" },
+                { keys: ["Ctrl", "B"],        label: "Toggle preview" },
                 { keys: ["F5"],               label: "Run file" },
                 { keys: ["Esc"],              label: "Dismiss output" },
                 { keys: ["Ctrl", "`"],        label: "Toggle terminal" },
@@ -1231,24 +1231,24 @@ export function EditorPanel({ mobile = false }: { mobile?: boolean }) {
       })()}
 
       {/* ── Status bar ───────────────────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center justify-between px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none">
-        <div className="flex items-center gap-3">
-          {activeTab && <span className="text-[#9898b8]">{getLangLabel(activeTab)}</span>}
-          {isDirty && !isSaving && <span className="text-amber-400 flex items-center gap-1">● Unsaved</span>}
-          {isSaving   && <span className="text-[#9898b8] flex items-center gap-1"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving…</span>}
+      <div className="shrink-0 flex items-center justify-between px-2 sm:px-3 h-5 bg-[#0a0a0c] border-t border-[#1a1a24] text-[10px] text-[#7878a8] font-mono select-none">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {activeTab && <span className="text-[#9898b8] shrink-0">{getLangLabel(activeTab)}</span>}
+          {isDirty && !isSaving && <span className="text-amber-400 flex items-center gap-1 shrink-0">● Unsaved</span>}
+          {isSaving   && <span className="text-[#9898b8] flex items-center gap-1 shrink-0"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving…</span>}
         </div>
         {activeTab && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {currentState?.loaded && (
               <span className="hidden sm:inline">{currentState.content.split("\n").length} lines</span>
             )}
             {selectionInfo && (
-              <span className="text-violet-300">
+              <span className="hidden sm:inline text-violet-300">
                 {selectionInfo.chars} chars{selectionInfo.lines > 1 ? ` (${selectionInfo.lines} lines)` : ""} selected
               </span>
             )}
-            <span>UTF-8</span>
-            <span>Spaces: 2</span>
+            <span className="hidden sm:inline">UTF-8</span>
+            <span className="hidden sm:inline">Spaces: 2</span>
             <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
           </div>
         )}

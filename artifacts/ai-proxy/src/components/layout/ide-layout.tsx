@@ -45,7 +45,7 @@ function PanelSkeleton() {
 }
 import { VesperLogo } from "@/components/vesper-logo";
 import {
-  MessageSquare, Code2, FolderOpen, TerminalSquare,
+  MessageSquare, Code2, FolderOpen, TerminalSquare, Globe,
   MessageSquarePlus, X, Sparkles, Bot,
   ShieldCheck, Clock, BookOpen, Sun, Moon, Keyboard,
 } from "lucide-react";
@@ -269,18 +269,18 @@ function MobileSettingsSheet() {
 const MOBILE_TABS: { id: MobileTab; label: string; icon: ElementType }[] = [
   { id: "chat",     label: "Chat",     icon: MessageSquare  },
   { id: "editor",   label: "Editor",   icon: Code2          },
-  { id: "agent",    label: "Agent",    icon: Bot            },
+  { id: "preview",  label: "Preview",  icon: Globe          },
   { id: "files",    label: "Explorer", icon: FolderOpen     },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
 ];
 
 function MobileNav() {
-  const { mobileTab, setMobileTab, setShowMobileChatSheet, chatUnreadCount, clearChatUnread } = useIDE();
+  const { mobileTab, setMobileTab, setShowMobileChatSheet, chatUnreadCount, clearChatUnread, previewUrl } = useIDE();
 
   const handleTab = (id: MobileTab) => {
     setMobileTab(id);
     if (id === "chat") clearChatUnread();
-    if (id !== "editor") setShowMobileChatSheet(false);
+    if (id !== "editor" && id !== "preview") setShowMobileChatSheet(false);
   };
 
   return (
@@ -295,6 +295,7 @@ function MobileNav() {
         {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
           const active = mobileTab === id;
           const showBadge = id === "chat" && chatUnreadCount > 0 && !active;
+          const showPreviewDot = id === "preview" && !!previewUrl && !active;
 
           return (
             <button
@@ -323,7 +324,6 @@ function MobileNav() {
                   />
                 </div>
 
-                {/* Unread badge — shown on Chat tab when off-tab AI responds */}
                 {showBadge && (
                   <span
                     className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1
@@ -335,6 +335,10 @@ function MobileNav() {
                   >
                     {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
                   </span>
+                )}
+                {showPreviewDot && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400
+                    ring-2 ring-[#080809] animate-pulse" />
                 )}
               </div>
 
@@ -356,7 +360,7 @@ function MobileNav() {
 // ─────────────────────────────────────────────────────────────────────────────
 function FloatingChatFAB() {
   const { mobileTab, setShowMobileChatSheet, showMobileChatSheet } = useIDE();
-  if (mobileTab !== "editor") return null;
+  if (mobileTab !== "editor" && mobileTab !== "preview") return null;
 
   return (
     <button
@@ -551,6 +555,15 @@ function MobileWorkspace() {
         </div>
       )}
 
+      {/* Preview — mounted on first visit */}
+      {mounted.has("preview") && (
+        <div className={`h-full ${show("preview")}`}>
+          <PanelErrorBoundary label="Preview">
+            <PreviewPanel />
+          </PanelErrorBoundary>
+        </div>
+      )}
+
       {/* Terminal — mounted on first visit */}
       {mounted.has("terminal") && (
         <div className={`h-full ${show("terminal")}`}>
@@ -566,7 +579,7 @@ function MobileWorkspace() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function IDELayout({ children }: { children?: React.ReactNode }) {
   const {
-    sidebarPanel, toggleTerminal, toggleChat, triggerNewChat,
+    sidebarPanel, toggleTerminal, toggleChat, togglePreview, triggerNewChat,
     showCommandPalette, paletteInitialQuery,
     openCommandPalette, openCommandMode, closeCommandPalette,
     showShortcutsModal, openShortcutsModal, closeShortcutsModal,
@@ -581,17 +594,17 @@ export function IDELayout({ children }: { children?: React.ReactNode }) {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const ctrl = e.ctrlKey || e.metaKey;
-      if (ctrl && e.key === "`") { e.preventDefault(); toggleTerminal(); }
-      if (ctrl && e.key === "j") { e.preventDefault(); toggleChat(); }
-      if (ctrl && e.key === "n") { e.preventDefault(); triggerNewChat(); }
-      // Ctrl+P — file search palette
-      if (ctrl && e.key === "p") { e.preventDefault(); openCommandPalette(); }
-      // Ctrl+K — command mode palette (VSCode style)
-      if (ctrl && e.key === "k") { e.preventDefault(); openCommandMode(); }
+      const key = e.key.toLowerCase();
+      if (ctrl && key === "`") { e.preventDefault(); toggleTerminal(); }
+      if (ctrl && key === "j") { e.preventDefault(); toggleChat(); }
+      if (ctrl && key === "b") { e.preventDefault(); togglePreview(); }
+      if (ctrl && key === "n") { e.preventDefault(); triggerNewChat(); }
+      if (ctrl && key === "p") { e.preventDefault(); openCommandPalette(); }
+      if (ctrl && key === "k") { e.preventDefault(); openCommandMode(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleTerminal, toggleChat, triggerNewChat, openCommandPalette, openCommandMode]);
+  }, [toggleTerminal, toggleChat, togglePreview, triggerNewChat, openCommandPalette, openCommandMode]);
 
   return (
     <div className="flex flex-col h-dvh w-full bg-background overflow-hidden font-sans">

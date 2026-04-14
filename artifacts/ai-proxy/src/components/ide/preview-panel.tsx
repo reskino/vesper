@@ -75,25 +75,25 @@ export function PreviewPanel() {
 
   return (
     <div className={`flex flex-col h-full bg-[#0a0a0e] ${isMaximized ? "fixed inset-0 z-[200]" : ""}`}>
-      <div className="shrink-0 flex items-center gap-1.5 px-2 py-1.5 bg-[#0d0d12] border-b border-[#1a1a24]">
-        <div className="flex items-center gap-1">
+      <div className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-1.5 bg-[#0d0d12] border-b border-[#1a1a24]">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           <button
             onClick={() => iframeRef.current?.contentWindow?.history.back()}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors"
+            className="h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors touch-manipulation"
             title="Back"
           >
             <ArrowLeft style={{ width: 13, height: 13 }} />
           </button>
           <button
             onClick={() => iframeRef.current?.contentWindow?.history.forward()}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors"
+            className="h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors touch-manipulation"
             title="Forward"
           >
             <ArrowRight style={{ width: 13, height: 13 }} />
           </button>
           <button
             onClick={handleRefresh}
-            className={`h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors
+            className={`h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors touch-manipulation
               ${isLoading ? "animate-spin" : ""}`}
             title="Refresh"
           >
@@ -108,7 +108,7 @@ export function PreviewPanel() {
               ref={inputRef}
               value={urlInput}
               onChange={e => setUrlInput(e.target.value)}
-              placeholder="localhost:8000 or enter port number..."
+              placeholder="localhost:8000 or port..."
               className="w-full h-7 pl-7 pr-2 rounded-md bg-[#0a0a0e] border border-[#1e1e2e] text-[12px] text-[#c0c0d8]
                 placeholder:text-[#4a4a6a] focus:outline-none focus:border-[#6c63ff]/50 focus:ring-1 focus:ring-[#6c63ff]/20
                 font-mono transition-colors"
@@ -118,11 +118,11 @@ export function PreviewPanel() {
 
         <div className="flex items-center gap-0.5">
           {port && (
-            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-bold mr-1">
+            <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-bold mr-1">
               :{port}
             </span>
           )}
-          <div className="flex items-center border border-[#1e1e2e] rounded-md overflow-hidden">
+          <div className="hidden sm:flex items-center border border-[#1e1e2e] rounded-md overflow-hidden">
             {([
               { id: "desktop" as Viewport, icon: Monitor },
               { id: "tablet" as Viewport,  icon: Tablet },
@@ -144,15 +144,22 @@ export function PreviewPanel() {
           </div>
 
           <button
+            onClick={handleRefresh}
+            className="h-7 w-7 sm:hidden flex items-center justify-center rounded text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors touch-manipulation"
+            title="Refresh"
+          >
+            <RotateCcw style={{ width: 13, height: 13 }} />
+          </button>
+          <button
             onClick={() => proxiedUrl && window.open(previewUrl!, "_blank")}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors"
+            className="h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors touch-manipulation"
             title="Open in new tab"
           >
             <ExternalLink style={{ width: 12, height: 12 }} />
           </button>
           <button
             onClick={() => setIsMaximized(v => !v)}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors"
+            className="hidden sm:flex h-6 w-6 items-center justify-center rounded text-[#7878a8] hover:text-[#c0c0d8] hover:bg-[#1a1a28] transition-colors"
             title={isMaximized ? "Restore" : "Maximize"}
           >
             {isMaximized
@@ -162,8 +169,8 @@ export function PreviewPanel() {
           </button>
           <button
             onClick={closePreview}
-            className="h-6 w-6 flex items-center justify-center rounded text-[#7878a8] hover:text-red-400 hover:bg-[#1a1a28] transition-colors"
-            title="Close preview"
+            className="hidden sm:flex h-6 w-6 items-center justify-center rounded text-[#7878a8] hover:text-red-400 hover:bg-[#1a1a28] transition-colors"
+            title="Close preview (Ctrl+B)"
           >
             <X style={{ width: 13, height: 13 }} />
           </button>
@@ -205,13 +212,13 @@ export function PreviewPanel() {
                 Enter a port number or URL above, or run a server to see it here
               </p>
             </div>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
               {["3000", "5000", "8000", "8080"].map(p => (
                 <button
                   key={p}
                   onClick={() => navigate(`http://localhost:${p}`)}
-                  className="px-3 py-1.5 rounded-lg bg-[#111118] border border-[#1e1e2e] text-[#8888b8] text-xs font-mono
-                    hover:border-[#6c63ff]/40 hover:text-[#c0c0d8] transition-colors"
+                  className="px-4 py-2 sm:px-3 sm:py-1.5 rounded-lg bg-[#111118] border border-[#1e1e2e] text-[#8888b8] text-xs font-mono
+                    hover:border-[#6c63ff]/40 hover:text-[#c0c0d8] transition-colors touch-manipulation"
                 >
                   :{p}
                 </button>

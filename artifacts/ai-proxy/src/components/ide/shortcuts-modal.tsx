@@ -54,6 +54,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Panels & Chat",
     shortcuts: [
       { keys: ["Ctrl", "J"],         label: "Toggle chat panel" },
+      { keys: ["Ctrl", "B"],         label: "Toggle preview" },
       { keys: ["Ctrl", "`"],         label: "Toggle terminal" },
       { keys: ["Ctrl", "N"],         label: "New chat session" },
       { keys: ["Enter"],             label: "Send message" },

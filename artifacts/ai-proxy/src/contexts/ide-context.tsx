@@ -13,7 +13,7 @@ import {
 import type { ImportedFileNode } from "@/lib/folder-import";
 
 export type SidebarPanel = "files" | "sessions" | "history" | "agent" | "agents" | "graph" | "help" | null;
-export type MobileTab     = "chat" | "editor" | "files" | "terminal" | "agent";
+export type MobileTab     = "chat" | "editor" | "files" | "terminal" | "agent" | "preview";
 export type MobileSettingsTab = "sessions" | "history" | "help";
 
 interface IDEContextValue {
@@ -119,7 +119,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [mobileTab, _setMobileTab] = useState<MobileTab>(() => {
     try {
       const v = localStorage.getItem("vesper.mobileTab");
-      if (v && ["chat","editor","files","terminal","agent"].includes(v)) return v as MobileTab;
+      if (v && ["chat","editor","files","terminal","preview"].includes(v)) return v as MobileTab;
+      if (v === "agent") return "chat" as MobileTab;
     } catch { /* SSR / private-mode guard */ }
     return "chat";
   });

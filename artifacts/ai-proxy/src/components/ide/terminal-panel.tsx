@@ -513,7 +513,7 @@ export function TerminalPanel() {
           <TerminalSquare className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
           <span className="text-emerald-500 font-bold text-xs shrink-0">TERMINAL</span>
           {currentWorkspace && (
-            <span className="hidden sm:block bg-violet-500/15 text-violet-300 text-[10px] px-2 py-0.5 rounded-full font-mono truncate max-w-[120px]">
+            <span className="bg-violet-500/15 text-violet-300 text-[10px] px-2 py-0.5 rounded-full font-mono truncate max-w-[80px] sm:max-w-[120px]">
               {currentWorkspace.name}
             </span>
           )}
@@ -544,12 +544,13 @@ export function TerminalPanel() {
             <button
               onClick={runFile}
               title={`Run: ${runCmd}`}
-              className="flex items-center gap-1.5 h-6 px-2.5 rounded-md
+              className="flex items-center gap-1.5 h-7 sm:h-6 px-2.5 rounded-md
                 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-500
-                text-[10px] font-bold transition-colors shrink-0"
+                text-[10px] font-bold transition-colors shrink-0 touch-manipulation"
             >
               <Play className="h-3 w-3" />
-              Run {activeFilePath?.split("/").pop()}
+              <span className="hidden sm:inline">Run {activeFilePath?.split("/").pop()}</span>
+              <span className="sm:hidden">Run</span>
             </button>
           )}
 
@@ -572,7 +573,7 @@ export function TerminalPanel() {
             <button
               onClick={() => { abortRef.current?.abort(); termRef.current?.writeln("^C"); lineRef.current = ""; setIsExecuting(false); termRef.current?.write(makePrompt(cwdRef.current)); }}
               title="Kill running process (Ctrl+C)"
-              className="flex items-center gap-1.5 h-6 px-2 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold transition-colors shrink-0"
+              className="flex items-center gap-1.5 h-7 sm:h-6 px-2 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold transition-colors shrink-0 touch-manipulation"
             >
               <StopCircle className="h-3 w-3" />
               Kill
@@ -581,15 +582,15 @@ export function TerminalPanel() {
           <button
             onClick={clear}
             title="Clear (Ctrl+L)"
-            className="h-6 w-6 flex items-center justify-center rounded
-              text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+            className="h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded
+              text-muted-foreground hover:text-destructive hover:bg-muted transition-colors touch-manipulation"
           >
             <Trash2 className="h-3 w-3" />
           </button>
           <button
             onClick={() => setShowTerminal(false)}
             title="Close terminal (Ctrl+`)"
-            className="h-6 w-6 flex items-center justify-center rounded
+            className="h-7 w-7 sm:h-6 sm:w-6 flex items-center justify-center rounded hidden sm:flex
               text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="h-3 w-3" />
